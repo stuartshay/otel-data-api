@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
 
 from app.auth import require_auth
 from app.models.reference import (
@@ -26,9 +27,7 @@ async def list_reference_locations(request: Request) -> list[ReferenceLocation]:
 
 
 @router.get("/{location_id}", response_model=ReferenceLocation)
-async def get_reference_location(
-    request: Request, location_id: int
-) -> ReferenceLocation:
+async def get_reference_location(request: Request, location_id: int) -> ReferenceLocation:
     """Get a single reference location by ID."""
     db = request.app.state.db
     row = await db.fetchrow(
@@ -87,7 +86,7 @@ async def update_reference_location(
         params.append(value)
         idx += 1
 
-    set_parts.append(f"updated_at = NOW()")
+    set_parts.append("updated_at = NOW()")
     params.append(location_id)
 
     row = await db.fetchrow(
@@ -101,16 +100,15 @@ async def update_reference_location(
     return ReferenceLocation(**dict(row))
 
 
-@router.delete("/{location_id}", status_code=204)
+@router.delete("/{location_id}", status_code=204, response_class=Response)
 async def delete_reference_location(
     request: Request,
     location_id: int,
     _user: dict = Depends(require_auth),
-) -> None:
+) -> Response:
     """Delete a reference location (auth required)."""
     db = request.app.state.db
-    result = await db.execute(
-        "DELETE FROM public.reference_locations WHERE id = $1", location_id
-    )
+    result = await db.execute("DELETE FROM public.reference_locations WHERE id = $1", location_id)
     if result == "DELETE 0":
         raise HTTPException(status_code=404, detail="Reference location not found")
+    return Response(status_code=204)

@@ -60,7 +60,7 @@ async def list_locations(
         f"velocity, battery, battery_status, connection_type, trigger, "
         f"timestamp, created_at "
         f"FROM public.locations {where} "
-        f'ORDER BY {sort} {order} '
+        f"ORDER BY {sort} {order} "
         f"LIMIT ${idx} OFFSET ${idx + 1}"
     )
     params.extend([limit, offset])
@@ -74,9 +74,7 @@ async def list_locations(
 async def list_devices(request: Request) -> list[DeviceInfo]:
     """List all distinct device IDs."""
     db = request.app.state.db
-    rows = await db.fetch(
-        "SELECT DISTINCT device_id FROM public.locations ORDER BY device_id"
-    )
+    rows = await db.fetch("SELECT DISTINCT device_id FROM public.locations ORDER BY device_id")
     return [DeviceInfo(device_id=row["device_id"]) for row in rows]
 
 

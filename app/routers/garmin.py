@@ -64,7 +64,7 @@ async def list_activities(
         f"(SELECT COUNT(*) FROM public.garmin_track_points t "
         f"WHERE t.activity_id = a.activity_id) AS track_point_count "
         f"FROM public.garmin_activities a {where} "
-        f'ORDER BY a.{sort} {order} '
+        f"ORDER BY a.{sort} {order} "
         f"LIMIT ${idx} OFFSET ${idx + 1}"
     )
     params.extend([limit, offset])
@@ -79,8 +79,8 @@ async def list_sports(request: Request) -> list[SportInfo]:
     """List distinct sport types with activity counts."""
     db = request.app.state.db
     rows = await db.fetch(
-        "SELECT sport, COUNT(*) AS count FROM public.garmin_activities "
-        "GROUP BY sport ORDER BY count DESC"
+        "SELECT sport, COUNT(*) AS activity_count FROM public.garmin_activities "
+        "GROUP BY sport ORDER BY activity_count DESC"
     )
     return [SportInfo(**dict(row)) for row in rows]
 

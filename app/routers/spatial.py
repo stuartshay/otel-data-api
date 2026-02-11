@@ -62,10 +62,7 @@ async def calculate_distance(
     """Calculate the distance in meters between two points using PostGIS ST_Distance."""
     db = request.app.state.db
     distance = await db.fetchval(
-        "SELECT ST_Distance("
-        "  ST_MakePoint($1, $2)::geography,"
-        "  ST_MakePoint($3, $4)::geography"
-        ")",
+        "SELECT ST_Distance(  ST_MakePoint($1, $2)::geography,  ST_MakePoint($3, $4)::geography)",
         from_lon,
         from_lat,
         to_lon,

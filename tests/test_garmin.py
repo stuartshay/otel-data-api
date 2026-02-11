@@ -17,9 +17,7 @@ async def test_list_activities_empty(client: AsyncClient, mock_db):
 
 @pytest.mark.asyncio
 async def test_get_sports(client: AsyncClient, mock_db):
-    mock_db.fetch.return_value = [
-        {"sport": "cycling", "activity_count": 15}
-    ]
+    mock_db.fetch.return_value = [{"sport": "cycling", "activity_count": 15}]
     response = await client.get("/api/v1/garmin/sports")
     assert response.status_code == 200
     data = response.json()

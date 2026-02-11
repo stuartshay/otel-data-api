@@ -46,6 +46,7 @@ ignore = [
     "C901",   # too complex
     "ARG001", # unused function argument
     "ARG002", # unused method argument
+    "UP046",  # PEP 695 generics not fully supported by Pydantic
 ]
 
 [tool.ruff.lint.isort]

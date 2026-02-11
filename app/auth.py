@@ -45,11 +45,11 @@ async def _get_jwks() -> dict[str, Any]:
 
 def _get_signing_key(token: str, jwks_data: dict[str, Any]) -> dict[str, Any]:
     """Find the signing key for the given token from JWKS."""
-    unverified_header = jwt.get_unverified_header(token)
+    unverified_header: dict[str, Any] = jwt.get_unverified_header(token)
     kid = unverified_header.get("kid")
     for key in jwks_data.get("keys", []):
         if key.get("kid") == kid:
-            return key
+            return dict(key)
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Unable to find matching signing key",

@@ -32,7 +32,11 @@ class DatabaseService:
             max_size=self._config.db_pool_max,
             command_timeout=self._config.db_connect_timeout,
         )
-        logger.info("Database pool initialized (min=%d, max=%d)", self._config.db_pool_min, self._config.db_pool_max)
+        logger.info(
+            "Database pool initialized (min=%d, max=%d)",
+            self._config.db_pool_min,
+            self._config.db_pool_max,
+        )
 
     async def close(self) -> None:
         """Close the connection pool."""
@@ -64,7 +68,8 @@ class DatabaseService:
 
     async def fetch(self, query: str, *args: Any) -> list[asyncpg.Record]:
         """Execute a query and return all rows."""
-        return await self.pool.fetch(query, *args)
+        result: list[asyncpg.Record] = await self.pool.fetch(query, *args)
+        return result
 
     async def fetchrow(self, query: str, *args: Any) -> asyncpg.Record | None:
         """Execute a query and return a single row."""
@@ -76,4 +81,5 @@ class DatabaseService:
 
     async def execute(self, query: str, *args: Any) -> str:
         """Execute a query and return the status."""
-        return await self.pool.execute(query, *args)
+        result: str = await self.pool.execute(query, *args)
+        return result

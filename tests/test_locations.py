@@ -48,7 +48,12 @@ async def test_list_locations_pagination(client: AsyncClient, mock_db):
 @pytest.mark.asyncio
 async def test_get_devices(client: AsyncClient, mock_db):
     mock_db.fetch.return_value = [
-        {"device_id": "phone", "first_seen": "2025-01-01T00:00:00+00:00", "last_seen": "2025-06-01T00:00:00+00:00", "location_count": 5000}
+        {
+            "device_id": "phone",
+            "first_seen": "2025-01-01T00:00:00+00:00",
+            "last_seen": "2025-06-01T00:00:00+00:00",
+            "location_count": 5000,
+        }
     ]
     response = await client.get("/api/v1/locations/devices")
     assert response.status_code == 200

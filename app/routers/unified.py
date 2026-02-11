@@ -46,9 +46,7 @@ async def list_unified_gps(
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
-    total = await db.fetchval(
-        f"SELECT COUNT(*) FROM unified_gps_points {where}", *params
-    )
+    total = await db.fetchval(f"SELECT COUNT(*) FROM unified_gps_points {where}", *params)
 
     rows = await db.fetch(
         f"SELECT source, identifier, latitude, longitude, timestamp, "

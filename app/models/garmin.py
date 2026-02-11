@@ -49,4 +49,4 @@ class GarminTrackPoint(BaseModel):
 
 class SportInfo(BaseModel):
     sport: str
-    count: int
+    activity_count: int

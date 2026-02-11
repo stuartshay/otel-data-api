@@ -20,7 +20,7 @@ All automation, assistants, and developers must follow
 - **Build**: `make docker-build`
 - **Run dev**: `make dev`
 - **Test**: `make test`
-- **API Docs**: http://localhost:8080/docs
+- **API Docs**: <http://localhost:8080/docs>
 
 ## Development Workflow
 

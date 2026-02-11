@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -16,23 +16,23 @@ from app.database import DatabaseService
 def _test_config() -> Config:
     """Return a Config suitable for testing."""
     return Config(
-        pgbouncer_host="localhost",
-        pgbouncer_port=5432,
-        postgres_db="test_db",
-        postgres_user="test",
-        postgres_password="test",
+        db_host="localhost",
+        db_port=5432,
+        db_name="test_db",
+        db_user="test",
+        db_password="test",
         db_pool_min=1,
         db_pool_max=2,
         db_connect_timeout=5,
         port=8080,
-        otel_exporter_endpoint="",
-        otel_service_name="otel-data-api-test",
-        otel_service_namespace="test",
-        otel_environment="test",
+        otel_endpoint="",
+        service_name="otel-data-api-test",
+        service_namespace="test",
+        environment="test",
         cognito_issuer="",
         cognito_client_id="",
         oauth2_enabled=False,
-        cors_origins="*",
+        cors_origins=("*",),
     )
 
 

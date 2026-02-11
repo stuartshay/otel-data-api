@@ -1,0 +1,150 @@
+"""Garmin activity and track point endpoints."""
+
+from __future__ import annotations
+
+from typing import Literal
+
+from fastapi import APIRouter, HTTPException, Query, Request
+
+from app.models import PaginatedResponse
+from app.models.garmin import GarminActivity, GarminTrackPoint, SportInfo
+
+router = APIRouter(prefix="/api/v1/garmin", tags=["Garmin"])
+
+ACTIVITY_SORT_WHITELIST = {"start_time", "distance_km", "duration_seconds", "sport", "created_at"}
+TRACK_SORT_WHITELIST = {"timestamp", "altitude", "speed_kmh", "heart_rate", "created_at"}
+
+
+@router.get("/activities", response_model=PaginatedResponse[GarminActivity])
+async def list_activities(
+    request: Request,
+    sport: str | None = None,
+    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)"),
+    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)"),
+    limit: int = Query(50, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    sort: str = Query("start_time", description="Sort column"),
+    order: Literal["asc", "desc"] = Query("desc"),
+) -> PaginatedResponse[GarminActivity]:
+    """List Garmin activities with filtering and pagination."""
+    db = request.app.state.db
+
+    if sort not in ACTIVITY_SORT_WHITELIST:
+        sort = "start_time"
+
+    conditions: list[str] = []
+    params: list = []
+    idx = 1
+
+    if sport:
+        conditions.append(f"sport = ${idx}")
+        params.append(sport)
+        idx += 1
+
+    if date_from:
+        conditions.append(f"start_time >= ${idx}::date")
+        params.append(date_from)
+        idx += 1
+
+    if date_to:
+        conditions.append(f"start_time < (${idx}::date + INTERVAL '1 day')")
+        params.append(date_to)
+        idx += 1
+
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    total = await db.fetchval(f"SELECT COUNT(*) FROM public.garmin_activities {where}", *params)
+
+    data_query = (
+        f"SELECT a.activity_id, a.sport, a.sub_sport, a.start_time, a.end_time, "
+        f"a.distance_km, a.duration_seconds, a.avg_heart_rate, a.max_heart_rate, "
+        f"a.avg_cadence, a.max_cadence, a.calories, a.avg_speed_kmh, a.max_speed_kmh, "
+        f"a.total_ascent_m, a.total_descent_m, a.total_distance, a.avg_pace, "
+        f"a.device_manufacturer, a.created_at, a.uploaded_at, "
+        f"(SELECT COUNT(*) FROM public.garmin_track_points t "
+        f"WHERE t.activity_id = a.activity_id) AS track_point_count "
+        f"FROM public.garmin_activities a {where} "
+        f'ORDER BY a.{sort} {order} '
+        f"LIMIT ${idx} OFFSET ${idx + 1}"
+    )
+    params.extend([limit, offset])
+    rows = await db.fetch(data_query, *params)
+
+    items = [GarminActivity(**dict(row)) for row in rows]
+    return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/sports", response_model=list[SportInfo])
+async def list_sports(request: Request) -> list[SportInfo]:
+    """List distinct sport types with activity counts."""
+    db = request.app.state.db
+    rows = await db.fetch(
+        "SELECT sport, COUNT(*) AS count FROM public.garmin_activities "
+        "GROUP BY sport ORDER BY count DESC"
+    )
+    return [SportInfo(**dict(row)) for row in rows]
+
+
+@router.get("/activities/{activity_id}", response_model=GarminActivity)
+async def get_activity(request: Request, activity_id: str) -> GarminActivity:
+    """Get a single Garmin activity by ID with track point count."""
+    db = request.app.state.db
+    row = await db.fetchrow(
+        "SELECT a.activity_id, a.sport, a.sub_sport, a.start_time, a.end_time, "
+        "a.distance_km, a.duration_seconds, a.avg_heart_rate, a.max_heart_rate, "
+        "a.avg_cadence, a.max_cadence, a.calories, a.avg_speed_kmh, a.max_speed_kmh, "
+        "a.total_ascent_m, a.total_descent_m, a.total_distance, a.avg_pace, "
+        "a.device_manufacturer, a.created_at, a.uploaded_at, "
+        "(SELECT COUNT(*) FROM public.garmin_track_points t "
+        "WHERE t.activity_id = a.activity_id) AS track_point_count "
+        "FROM public.garmin_activities a WHERE a.activity_id = $1",
+        activity_id,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    return GarminActivity(**dict(row))
+
+
+@router.get(
+    "/activities/{activity_id}/tracks",
+    response_model=PaginatedResponse[GarminTrackPoint],
+)
+async def list_track_points(
+    request: Request,
+    activity_id: str,
+    limit: int = Query(500, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
+    sort: str = Query("timestamp", description="Sort column"),
+    order: Literal["asc", "desc"] = Query("asc"),
+) -> PaginatedResponse[GarminTrackPoint]:
+    """List track points for a specific activity."""
+    db = request.app.state.db
+
+    if sort not in TRACK_SORT_WHITELIST:
+        sort = "timestamp"
+
+    # Verify activity exists
+    exists = await db.fetchval(
+        "SELECT 1 FROM public.garmin_activities WHERE activity_id = $1", activity_id
+    )
+    if not exists:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    total = await db.fetchval(
+        "SELECT COUNT(*) FROM public.garmin_track_points WHERE activity_id = $1",
+        activity_id,
+    )
+
+    rows = await db.fetch(
+        f"SELECT id, activity_id, latitude, longitude, timestamp, altitude, "
+        f"distance_from_start_km, speed_kmh, heart_rate, cadence, temperature_c, "
+        f"created_at FROM public.garmin_track_points "
+        f"WHERE activity_id = $1 ORDER BY {sort} {order} "
+        f"LIMIT $2 OFFSET $3",
+        activity_id,
+        limit,
+        offset,
+    )
+
+    items = [GarminTrackPoint(**dict(row)) for row in rows]
+    return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)

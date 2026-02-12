@@ -18,15 +18,28 @@ SORT_WHITELIST = {"id", "device_id", "timestamp", "created_at", "battery", "accu
 @router.get("", response_model=PaginatedResponse[Location])
 async def list_locations(
     request: Request,
-    device_id: str | None = None,
-    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)"),
-    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)"),
+    device_id: str | None = Query(
+        None, description="Filter by device ID", examples=["iphone_stuart"]
+    ),
+    date_from: str | None = Query(
+        None, description="Filter from date (YYYY-MM-DD)", examples=["2026-02-01"]
+    ),
+    date_to: str | None = Query(
+        None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]
+    ),
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    sort: str = Query("created_at", description="Sort column"),
+    sort: str = Query(
+        "created_at",
+        description="Sort column (id, device_id, timestamp, created_at, battery, accuracy)",
+    ),
     order: Literal["asc", "desc"] = Query("desc"),
 ) -> PaginatedResponse[Location]:
-    """List OwnTracks locations with filtering and pagination."""
+    """List OwnTracks locations with filtering and pagination.
+
+    Returns paginated GPS location data recorded by OwnTracks mobile app.
+    Filter by device ID and date range. Includes battery, accuracy, and connection metadata.
+    """
     db = request.app.state.db
 
     if sort not in SORT_WHITELIST:
@@ -82,8 +95,12 @@ async def list_devices(request: Request) -> list[DeviceInfo]:
 @router.get("/count", response_model=LocationCount)
 async def location_count(
     request: Request,
-    date: str | None = Query(None, description="Filter by date (YYYY-MM-DD)"),
-    device_id: str | None = None,
+    date: str | None = Query(
+        None, description="Filter by date (YYYY-MM-DD)", examples=["2026-02-12"]
+    ),
+    device_id: str | None = Query(
+        None, description="Filter by device ID", examples=["iphone_stuart"]
+    ),
 ) -> LocationCount:
     """Get total location count with optional filters."""
     db = request.app.state.db
@@ -125,4 +142,16 @@ async def get_location(request: Request, location_id: int) -> LocationDetail:
     # Convert raw_payload from JSON string to dict if needed
     if data.get("raw_payload") and isinstance(data["raw_payload"], str):
         data["raw_payload"] = json.loads(data["raw_payload"])
+    return LocationDetail(**data)
+    return LocationDetail(**data)
+    return LocationDetail(**data)
+    return LocationDetail(**data)
+    return LocationDetail(**data)
+    return LocationDetail(**data)
+    return LocationDetail(**data)
+    return LocationDetail(**data)
+    return LocationDetail(**data)
+    return LocationDetail(**data)
+    return LocationDetail(**data)
+    return LocationDetail(**data)
     return LocationDetail(**data)

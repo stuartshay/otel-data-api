@@ -19,6 +19,8 @@ class PaginatedResponse(BaseModel, Generic[T]):
 class ErrorResponse(BaseModel):
     detail: str
 
+    model_config = {"json_schema_extra": {"examples": [{"detail": "Resource not found"}]}}
+
 
 class HealthResponse(BaseModel):
     status: str
@@ -26,3 +28,17 @@ class HealthResponse(BaseModel):
     server_time: str | None = None
     pool_size: int | None = None
     pool_free: int | None = None
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "status": "healthy",
+                    "version": "1.7.0",
+                    "server_time": "2026-02-12T08:10:55Z",
+                    "pool_size": 10,
+                    "pool_free": 9,
+                }
+            ]
+        }
+    }

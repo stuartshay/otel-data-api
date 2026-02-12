@@ -43,8 +43,8 @@ class GarminActivity(BaseModel):
                     "activity_id": "20932993811",
                     "sport": "cycling",
                     "sub_sport": "road",
-                    "start_time": "2025-11-08T18:21:13Z",
-                    "end_time": "2025-11-08T20:16:45Z",
+                    "start_time": "2025-11-08T18:21:13+00:00",
+                    "end_time": "2025-11-08T20:16:45+00:00",
                     "distance_km": 50.6,
                     "duration_seconds": 6932,
                     "avg_heart_rate": 142,
@@ -64,8 +64,8 @@ class GarminActivity(BaseModel):
                     "max_temperature_c": 22,
                     "total_elapsed_time": 7200.5,
                     "total_timer_time": 6932.1,
-                    "created_at": "2026-02-09T23:56:37Z",
-                    "uploaded_at": "2026-02-09T23:56:37Z",
+                    "created_at": "2026-02-09T23:56:37+00:00",
+                    "uploaded_at": "2026-02-09T23:56:37+00:00",
                     "track_point_count": 10707,
                 }
             ]

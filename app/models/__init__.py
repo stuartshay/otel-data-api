@@ -35,7 +35,7 @@ class HealthResponse(BaseModel):
                 {
                     "status": "healthy",
                     "version": "1.7.0",
-                    "server_time": "2026-02-12T08:10:55Z",
+                    "server_time": "2026-02-12T08:10:55+00:00",
                     "pool_size": 10,
                     "pool_free": 9,
                 }

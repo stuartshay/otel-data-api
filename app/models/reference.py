@@ -27,8 +27,8 @@ class ReferenceLocation(BaseModel):
                     "longitude": -74.0394,
                     "radius_meters": 40,
                     "description": "Primary apartment - 40m radius",
-                    "created_at": "2026-02-03T22:49:07Z",
-                    "updated_at": "2026-02-03T22:50:01Z",
+                    "created_at": "2026-02-03T22:49:07+00:00",
+                    "updated_at": "2026-02-03T22:50:01+00:00",
                 }
             ]
         }

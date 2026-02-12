@@ -175,3 +175,130 @@ jobs:
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  # Schema detection and npm publishing
+  # Only runs on master branch pushes (after successful Docker build)
+  schema-check:
+    name: Check API Schema Changes
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+
+    outputs:
+      schema_changed: ${{ steps.detect.outputs.changed }}
+      version: ${{ steps.detect.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Node.js dependencies
+        run: npm install -g openapi-typescript@7.10.1
+
+      - name: Detect schema changes
+        id: detect
+        run: |
+          # Generate types from source code
+          bash scripts/generate-types.sh
+
+          # Check if files that affect types changed in this commit
+          CHANGED_FILES=$(git diff HEAD~1 HEAD --name-only)
+          SHOULD_PUBLISH=false
+
+          if echo "$CHANGED_FILES" | grep -q "^app/"; then
+            echo "✓ API code changed (app/ directory)"
+            SHOULD_PUBLISH=true
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q "^scripts/generate-"; then
+            echo "✓ Type generation scripts changed"
+            SHOULD_PUBLISH=true
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q "packages/otel-data-types/package.json"; then
+            echo "✓ Types package.json changed"
+            SHOULD_PUBLISH=true
+          fi
+
+          if [ "$SHOULD_PUBLISH" = true ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Schema or type generation changed — will publish"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No changes affecting types detected"
+          fi
+
+          VERSION=$(jq -r '.version' packages/otel-data-types/package.json)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Current types package version: ${VERSION}"
+
+      - name: Upload generated types
+        if: steps.detect.outputs.changed == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: generated-types
+          path: packages/otel-data-types/index.d.ts
+          retention-days: 7
+
+  publish-types:
+    name: Publish Types to npm
+    runs-on: ubuntu-latest
+    needs: schema-check
+    if: needs.schema-check.outputs.schema_changed == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Download generated types
+        uses: actions/download-artifact@v7
+        with:
+          name: generated-types
+          path: packages/otel-data-types
+
+      - name: Update package version
+        run: |
+          cd packages/otel-data-types
+          DOCKER_VERSION="1.0.${{ github.run_number }}"
+          npm version "$DOCKER_VERSION" --no-git-tag-version
+          echo "Updated package.json to version: $DOCKER_VERSION"
+
+      - name: Publish to npm
+        run: |
+          cd packages/otel-data-types
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## npm Package Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Package | \`@stuartshay/otel-data-types\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | \`1.0.${{ github.run_number }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Run # | \`${{ github.run_number }}\` |" >> $GITHUB_STEP_SUMMARY

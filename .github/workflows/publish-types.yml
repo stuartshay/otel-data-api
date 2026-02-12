@@ -1,0 +1,74 @@
+name: Publish Types Package
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+env:
+  TYPES_PKG_DIR: packages/otel-data-types
+
+jobs:
+  publish:
+    name: Generate & Publish Types
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Generate OpenAPI spec and TypeScript types
+        run: |
+          npm install -g openapi-typescript@7.10.1
+          bash scripts/generate-types.sh
+
+      - name: Set package version from release tag
+        run: |
+          # Extract version from tag (v1.0.8 → 1.0.8)
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          cd ${{ env.TYPES_PKG_DIR }}
+          npm version "$TAG_VERSION" --no-git-tag-version
+          echo "Package version: $TAG_VERSION"
+
+      - name: Publish to npm
+        run: |
+          cd ${{ env.TYPES_PKG_DIR }}
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Attach OpenAPI spec to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            docs/openapi.json \
+            --clobber
+
+      - name: Summary
+        run: |
+          echo "## npm Package Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Package | \`@stuartshay/otel-data-types\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | \`${GITHUB_REF_NAME#v}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release | \`${{ github.event.release.tag_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Spec | \`docs/openapi.json\` attached |" >> $GITHUB_STEP_SUMMARY

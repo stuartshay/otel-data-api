@@ -62,7 +62,11 @@
         "urlopen",
         "urllib",
         "uvicorn",
-        "venv"
+        "venv",
+        "openapi",
+        "codegen",
+        "npmignore",
+        "prepublish"
     ],
     "ignorePaths": [
         "node_modules",
@@ -73,6 +77,8 @@
         ".mypy_cache",
         ".ruff_cache",
         ".secrets.baseline",
+        "packages/",
+        "docs/openapi.json",
         "*.lock"
     ],
     "enabledLanguageIds": [

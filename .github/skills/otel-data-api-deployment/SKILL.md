@@ -1,9 +1,6 @@
 ---
 name: otel-data-api-deployment
-description: >-
-  Deploy and manage the otel-data-api FastAPI microservice. Covers PR merges,
-  Docker builds, k8s-gitops manifest updates, Argo CD sync, and live deployment
-  validation on k8s-pi5-cluster.
+description: Deploy and manage the otel-data-api FastAPI microservice. Covers PR merges, Docker builds, k8s-gitops manifest updates, Argo CD sync, and live deployment validation on k8s-pi5-cluster.
 ---
 
 # otel-data-api Deployment Workflow
@@ -46,23 +43,23 @@ GitHub (stuartshay/otel-data-api)
 
 ## Versioning Scheme
 
-| Component      | Format                        | Example  |
-| -------------- | ----------------------------- | -------- |
-| VERSION file   | `major.minor`                 | `1.0`    |
-| Docker tag     | `major.minor.run_number`      | `1.0.21` |
-| SHA tag        | `sha-<7char>`                 | `sha-6a6f125` |
-| Branch build   | `major.minor.run-branch`      | `1.0.22-develop` |
+| Component    | Format                   | Example          |
+| ------------ | ------------------------ | ---------------- |
+| VERSION file | `major.minor`            | `1.0`            |
+| Docker tag   | `major.minor.run_number` | `1.0.21`         |
+| SHA tag      | `sha-<7char>`            | `sha-6a6f125`    |
+| Branch build | `major.minor.run-branch` | `1.0.22-develop` |
 
 The `run_number` is the GitHub Actions workflow run number, auto-incremented
 per workflow. Master pushes produce `VERSION.run_number` tags.
 
 ## Repository References
 
-| Repo | Purpose | Key Path |
-|------|---------|----------|
-| `stuartshay/otel-data-api` | API source code | `app/`, `VERSION`, `.github/workflows/docker.yml` |
-| `stuartshay/k8s-gitops` | K8s manifests | `apps/base/otel-data-api/deployment.yaml` |
-| Docker Hub | Container registry | `stuartshay/otel-data-api` |
+| Repo                       | Purpose            | Key Path                                          |
+| -------------------------- | ------------------ | ------------------------------------------------- |
+| `stuartshay/otel-data-api` | API source code    | `app/`, `VERSION`, `.github/workflows/docker.yml` |
+| `stuartshay/k8s-gitops`    | K8s manifests      | `apps/base/otel-data-api/deployment.yaml`         |
+| Docker Hub                 | Container registry | `stuartshay/otel-data-api`                        |
 
 ## Deployment Procedure
 
@@ -181,8 +178,10 @@ gh pr create --base master --head develop \
   --title "chore: Update otel-data-api to v<NEW_VERSION>" \
   --repo stuartshay/k8s-gitops
 
-# 6. Wait for CI (Pre-commit Checks) then merge
-# k8s-gitops has required status checks — wait ~60-90 seconds
+# 6. Wait for CI checks AND GitHub Copilot code review before merge
+# CI status checks take ~60-90 seconds
+# GitHub Copilot code review takes ~5+ minutes (runs automatically)
+# All Copilot review comments must be resolved before merge is allowed
 gh pr merge <PR_NUMBER> --squash --repo stuartshay/k8s-gitops
 ```
 
@@ -262,36 +261,36 @@ kubectl get deployment otel-data-api -n otel-data-api \
 
 ### Pre-Merge Checklist
 
-| Check | Command | Expected |
-|-------|---------|----------|
-| Pre-commit hooks | `pre-commit run -a` | All passed |
-| Unit tests | `pytest tests/` | All passed |
-| Linting | `ruff check .` | No errors |
-| VERSION file format | `cat VERSION` | `major.minor` (e.g., `1.0`) |
-| No secrets | `git diff --cached` | No credentials |
+| Check               | Command             | Expected                    |
+| ------------------- | ------------------- | --------------------------- |
+| Pre-commit hooks    | `pre-commit run -a` | All passed                  |
+| Unit tests          | `pytest tests/`     | All passed                  |
+| Linting             | `ruff check .`      | No errors                   |
+| VERSION file format | `cat VERSION`       | `major.minor` (e.g., `1.0`) |
+| No secrets          | `git diff --cached` | No credentials              |
 
 ### Post-Build Checklist
 
-| Check | Command | Expected |
-|-------|---------|----------|
-| Docker image exists | `docker manifest inspect stuartshay/otel-data-api:<ver>` | JSON manifest |
-| Multi-arch | Check manifest platforms | amd64 + arm64 |
-| SHA tag matches | Compare digests of version and SHA tags | Same digest |
-| Latest tag updated | `docker manifest inspect ...latest` | Updated digest |
+| Check               | Command                                                  | Expected       |
+| ------------------- | -------------------------------------------------------- | -------------- |
+| Docker image exists | `docker manifest inspect stuartshay/otel-data-api:<ver>` | JSON manifest  |
+| Multi-arch          | Check manifest platforms                                 | amd64 + arm64  |
+| SHA tag matches     | Compare digests of version and SHA tags                  | Same digest    |
+| Latest tag updated  | `docker manifest inspect ...latest`                      | Updated digest |
 
 ### Post-Deploy Checklist
 
-| Check | Command | Expected |
-|-------|---------|----------|
-| Pod running | `kubectl get pods -n otel-data-api` | 1/1 Running |
-| Correct image | `kubectl get deploy ... -o jsonpath='{..image}'` | New version |
-| Health endpoint | `curl .../health` | `{"status":"healthy","version":"<ver>"}` |
-| Ready endpoint | `curl .../ready` | `{"status":"ready"}` |
-| Swagger UI | `curl .../docs` | HTML response |
-| API functional | `curl .../api/v1/locations?limit=1` | JSON with items |
-| OpenAPI examples | Check `openapi.json` schemas | Examples present |
-| No restarts | `kubectl get pods` | RESTARTS = 0 |
-| Argo CD synced | `argocd app get apps --core` | Synced, Healthy |
+| Check            | Command                                          | Expected                                 |
+| ---------------- | ------------------------------------------------ | ---------------------------------------- |
+| Pod running      | `kubectl get pods -n otel-data-api`              | 1/1 Running                              |
+| Correct image    | `kubectl get deploy ... -o jsonpath='{..image}'` | New version                              |
+| Health endpoint  | `curl .../health`                                | `{"status":"healthy","version":"<ver>"}` |
+| Ready endpoint   | `curl .../ready`                                 | `{"status":"ready"}`                     |
+| Swagger UI       | `curl .../docs`                                  | HTML response                            |
+| API functional   | `curl .../api/v1/locations?limit=1`              | JSON with items                          |
+| OpenAPI examples | Check `openapi.json` schemas                     | Examples present                         |
+| No restarts      | `kubectl get pods`                               | RESTARTS = 0                             |
+| Argo CD synced   | `argocd app get apps --core`                     | Synced, Healthy                          |
 
 ## Rollback Procedure
 
@@ -380,6 +379,40 @@ kubectl get secret dockerhub-registry -n otel-data-api
 kubectl describe pod -n otel-data-api -l app.kubernetes.io/name=otel-data-api
 ```
 
+### k8s-gitops Branch Protection Rules
+
+The `master` branch on `stuartshay/k8s-gitops` enforces these protections:
+
+| Rule                             | Setting                                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Required status checks           | Pre-commit Checks, Kubernetes Schema Validation, Kubernetes Best Practices, Kustomize Build Test |
+| Strict status checks             | Yes (branch must be up-to-date)                                                                  |
+| Required approving reviews       | 1                                                                                                |
+| GitHub Copilot code review       | **Yes** — automatic review on every PR (agent runtime ~5+ minutes)                               |
+| Dismiss stale reviews            | No                                                                                               |
+| Require code owner review        | No                                                                                               |
+| Required conversation resolution | **Yes** — all PR comments must be resolved before merge                                          |
+| Enforce admins                   | Yes                                                                                              |
+| Allow force pushes               | No                                                                                               |
+| Allow deletions                  | No                                                                                               |
+
+**Implications for deployments**:
+
+- PRs must pass all 4 CI checks before merge is enabled
+- At least 1 approving review is required
+- **GitHub Copilot code review** runs automatically on every PR (~5+ minutes)
+  — Copilot review comments must be resolved before merge
+- All review comments/conversations must be marked resolved
+- Even repo admins are subject to these rules (`enforce_admins: true`)
+- Branch must be up-to-date with master (strict mode) — may require rebasing
+
+To inspect current settings:
+
+```bash
+gh api repos/stuartshay/k8s-gitops/branches/master/protection \
+  | python3 -m json.tool
+```
+
 ### k8s-gitops PR Merge Conflict
 
 The develop branch may diverge from master due to squash merges. Fix with:
@@ -394,15 +427,15 @@ git push origin develop --force-with-lease
 
 ## Kubernetes Resources
 
-| Resource      | Namespace     | Details                          |
-| ------------- | ------------- | -------------------------------- |
-| Deployment    | otel-data-api | 1 replica, RollingUpdate         |
-| Service       | otel-data-api | ClusterIP :8080                  |
-| Ingress       | otel-data-api | api.lab.informationcart.com      |
-| ConfigMap     | otel-data-api | otel-data-api-config             |
-| SealedSecret  | otel-data-api | postgres-credentials             |
-| SealedSecret  | otel-data-api | dockerhub-registry               |
-| ServiceAccount| otel-data-api | otel-data-api                    |
+| Resource       | Namespace     | Details                     |
+| -------------- | ------------- | --------------------------- |
+| Deployment     | otel-data-api | 1 replica, RollingUpdate    |
+| Service        | otel-data-api | ClusterIP :8080             |
+| Ingress        | otel-data-api | api.lab.informationcart.com |
+| ConfigMap      | otel-data-api | otel-data-api-config        |
+| SealedSecret   | otel-data-api | postgres-credentials        |
+| SealedSecret   | otel-data-api | dockerhub-registry          |
+| ServiceAccount | otel-data-api | otel-data-api               |
 
 ## Quick Reference Commands
 
@@ -430,7 +463,7 @@ docker manifest inspect stuartshay/otel-data-api:<tag> 2>&1 | head -3
 
 ## Version History
 
-| Version | Date       | Changes                                            |
-| ------- | ---------- | -------------------------------------------------- |
-| 1.0.21  | 2026-02-12 | Swagger examples, test coverage, health UTC fix    |
-| 1.0.15  | 2026-02-11 | Spatial endpoint fix, OpenAPI spec regeneration     |
+| Version | Date       | Changes                                         |
+| ------- | ---------- | ----------------------------------------------- |
+| 1.0.21  | 2026-02-12 | Swagger examples, test coverage, health UTC fix |
+| 1.0.15  | 2026-02-11 | Spatial endpoint fix, OpenAPI spec regeneration |

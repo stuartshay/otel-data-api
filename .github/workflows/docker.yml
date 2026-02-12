@@ -147,7 +147,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.IMAGE_NAME }}
-          short-description: "FastAPI microservice for OwnTracks/Garmin GPS data with PostGIS"
+          short-description: 'FastAPI microservice for OwnTracks/Garmin GPS data with PostGIS'
           readme-filepath: ./README.md
 
       - name: Trigger k8s-gitops update

@@ -6,11 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 
 from app.auth import require_auth
-from app.models.reference import (
-    ReferenceLocation,
-    ReferenceLocationCreate,
-    ReferenceLocationUpdate,
-)
+from app.models.reference import ReferenceLocation, ReferenceLocationCreate, ReferenceLocationUpdate
 
 router = APIRouter(prefix="/api/v1/reference-locations", tags=["Reference Locations"])
 

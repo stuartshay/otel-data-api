@@ -17,15 +17,15 @@ spatial queries, and optional AWS Cognito JWT authentication.
 
 ## Target Infrastructure
 
-| Property | Value |
-|----------|-------|
-| Language | Python 3.12+ / FastAPI |
-| Database | PostgreSQL via PgBouncer (192.168.1.175:6432) |
-| Database Name | owntracks |
-| K8s Cluster | k8s-pi5-cluster |
-| Namespace | otel-data-api |
-| Docker Image | stuartshay/otel-data-api |
-| Auth Provider | AWS Cognito (optional) |
+| Property      | Value                                         |
+| ------------- | --------------------------------------------- |
+| Language      | Python 3.12+ / FastAPI                        |
+| Database      | PostgreSQL via PgBouncer (192.168.1.175:6432) |
+| Database Name | owntracks                                     |
+| K8s Cluster   | k8s-pi5-cluster                               |
+| Namespace     | otel-data-api                                 |
+| Docker Image  | stuartshay/otel-data-api                      |
+| Auth Provider | AWS Cognito (optional)                        |
 
 ## Development Workflow
 

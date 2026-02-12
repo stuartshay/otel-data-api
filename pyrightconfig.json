@@ -1,6 +1,13 @@
 {
-    "include": ["app", "tests"],
-    "exclude": ["venv", ".venv", "**/__pycache__"],
+    "include": [
+        "app",
+        "tests"
+    ],
+    "exclude": [
+        "venv",
+        ".venv",
+        "**/__pycache__"
+    ],
     "venvPath": ".",
     "venv": "venv",
     "pythonVersion": "3.12",

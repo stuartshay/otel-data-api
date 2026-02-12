@@ -15,7 +15,7 @@ All automation, assistants, and developers must follow
 - **Language**: Python 3.12+ / FastAPI
 - **Database**: PostgreSQL via PgBouncer (192.168.1.175:6432)
 - **Development branch**: `develop` (default working branch)
-- **Production branch**: `main` (releases only, PR-only)
+- **Production branch**: `master` (releases only, PR-only)
 - **Lint before commit**: `pre-commit run -a`
 - **Build**: `make docker-build`
 - **Run dev**: `make dev`
@@ -29,7 +29,7 @@ All automation, assistants, and developers must follow
 3. Run `pre-commit run -a`
 4. Run `make test`
 5. Commit and push to `develop` or `feature/*` branch
-6. Create PR to `main` when ready for production
+6. Create PR to `master` when ready for production
 
 ## Project Structure
 

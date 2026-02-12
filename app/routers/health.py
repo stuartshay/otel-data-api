@@ -11,7 +11,7 @@ router = APIRouter(tags=["Health"])
 
 
 def _utc_now() -> dt.datetime:
-    return dt.datetime.now(dt.timezone(dt.timedelta(0)))
+    return dt.datetime.now(dt.UTC)
 
 
 @router.get("/health")

@@ -10,22 +10,12 @@ from fastapi.responses import JSONResponse
 router = APIRouter(tags=["Health"])
 
 
-def _get_version() -> str:
-    try:
-        from pathlib import Path
-
-        version_file = Path(__file__).parent.parent.parent / "VERSION"
-        return version_file.read_text().strip()
-    except Exception:
-        return "unknown"
-
-
 @router.get("/health")
-async def health() -> dict:
+async def health(request: Request) -> dict:
     """Liveness probe — returns healthy if the service is running."""
     return {
         "status": "healthy",
-        "version": _get_version(),
+        "version": request.app.version,
         "timestamp": datetime.now(UTC).isoformat(),
     }
 
@@ -40,7 +30,7 @@ async def ready(request: Request) -> JSONResponse:
             content={
                 "status": "ready",
                 "database": db_info,
-                "version": _get_version(),
+                "version": request.app.version,
                 "timestamp": datetime.now(UTC).isoformat(),
             }
         )

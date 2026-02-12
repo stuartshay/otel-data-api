@@ -89,20 +89,22 @@ queries, and optional AWS Cognito JWT authentication.
 | `unified_gps_points` | View | Combined OwnTracks + Garmin |
 | `daily_activity_summary` | View | Aggregated daily statistics |
 
-## Phase 2 — Kubernetes Deployment (Next)
+## Phase 2 — Kubernetes Deployment (Completed)
 
 ### Tasks
 
-- [ ] Create Kubernetes manifests in `k8s-gitops/apps/base/otel-data-api/`
+- [x] Create Kubernetes manifests in `k8s-gitops/apps/base/otel-data-api/`
   - Deployment with resource limits, health probes, env vars
   - Service (ClusterIP, port 8080)
   - Ingress with TLS (cert-manager, Let's Encrypt)
   - Namespace: `otel-data-api`
-- [ ] Add Argo CD Application resource in `bootstrap/`
-- [ ] Configure Kustomize overlays in `clusters/k8s-pi5-cluster/`
-- [ ] Create Cloudflare DNS record: `api.lab.informationcart.com`
-- [ ] Add Docker build workflow (`docker.yml`) for multi-arch images
-- [ ] Verify end-to-end: otel-ui → otel-data-api → PgBouncer → PostgreSQL
+- [x] Add Argo CD Application resource in `bootstrap/`
+- [x] Configure Kustomize overlays in `clusters/k8s-pi5-cluster/`
+- [x] Create Cloudflare DNS record: `api.lab.informationcart.com`
+- [x] Add Docker build workflow (`docker.yml`) for multi-arch images
+- [x] Fix version reporting — health endpoint reads `APP_VERSION` env var set
+  by Docker build (format: `{major}.{minor}.{build_number}`)
+- [x] Verify end-to-end: otel-ui → otel-data-api → PgBouncer → PostgreSQL
 
 ### Target Configuration
 
@@ -115,7 +117,7 @@ queries, and optional AWS Cognito JWT authentication.
 | DNS | `api.lab.informationcart.com` |
 | Ingress IP | 192.168.1.100 (MetalLB) |
 
-## Phase 3 — otel-ui Integration
+## Phase 3 — otel-ui Integration (Next)
 
 ### Tasks
 

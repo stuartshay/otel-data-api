@@ -10,7 +10,7 @@ async def test_health(client: AsyncClient):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
-    assert "version" in data
+    assert data["version"] == "1.0.0"
     assert "timestamp" in data
 
 

@@ -27,7 +27,7 @@ from app.config import Config  # noqa: E402
 
 def generate_spec() -> dict:  # type: ignore[type-arg]
     """Generate OpenAPI spec from FastAPI app."""
-    config = Config()
+    config = Config.from_env()
     app = create_app(config)
     return dict(app.openapi())
 

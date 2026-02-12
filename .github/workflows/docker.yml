@@ -218,23 +218,17 @@ jobs:
           # Generate types from source code
           bash scripts/generate-types.sh
 
-          # Check if files that affect types changed in this commit
-          CHANGED_FILES=$(git diff HEAD~1 HEAD --name-only)
+          # Compare generated schema/types against committed versions
           SHOULD_PUBLISH=false
 
-          if echo "$CHANGED_FILES" | grep -q "^app/"; then
-            echo "✓ API code changed (app/ directory)"
+          if ! git diff --quiet -- packages/otel-data-types/index.d.ts docs/openapi.json 2>/dev/null; then
+            echo "✓ Generated schema/types differ from committed versions"
             SHOULD_PUBLISH=true
-          fi
-
-          if echo "$CHANGED_FILES" | grep -q "^scripts/generate-"; then
-            echo "✓ Type generation scripts changed"
+          elif [ ! -f packages/otel-data-types/index.d.ts ] || [ ! -f docs/openapi.json ]; then
+            echo "✓ Generated artifacts are new (not yet committed)"
             SHOULD_PUBLISH=true
-          fi
-
-          if echo "$CHANGED_FILES" | grep -q "packages/otel-data-types/package.json"; then
-            echo "✓ Types package.json changed"
-            SHOULD_PUBLISH=true
+          else
+            echo "No changes detected in generated schema/types"
           fi
 
           if [ "$SHOULD_PUBLISH" = true ]; then
@@ -282,9 +276,10 @@ jobs:
       - name: Update package version
         run: |
           cd packages/otel-data-types
-          DOCKER_VERSION="1.0.${{ github.run_number }}"
-          npm version "$DOCKER_VERSION" --no-git-tag-version
-          echo "Updated package.json to version: $DOCKER_VERSION"
+          BASE_VERSION=$(cat ../../VERSION)
+          PKG_VERSION="${BASE_VERSION}.${{ github.run_number }}"
+          npm version "$PKG_VERSION" --no-git-tag-version
+          echo "Updated package.json to version: $PKG_VERSION"
 
       - name: Publish to npm
         run: |
@@ -300,5 +295,6 @@ jobs:
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Package | \`@stuartshay/otel-data-types\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Version | \`1.0.${{ github.run_number }}\` |" >> $GITHUB_STEP_SUMMARY
+          PKG_VERSION=$(jq -r '.version' packages/otel-data-types/package.json)
+          echo "| Version | \`${PKG_VERSION}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Run # | \`${{ github.run_number }}\` |" >> $GITHUB_STEP_SUMMARY

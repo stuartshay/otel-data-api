@@ -28,6 +28,11 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
+if ! command -v jq &> /dev/null; then
+    echo -e "${RED}✗ jq not found. Install with: sudo apt install jq${NC}"
+    exit 1
+fi
+
 if python3 "$SCRIPT_DIR/generate-openapi-spec.py" -o "$SPEC_FILE"; then
     echo -e "${GREEN}✓ Spec generated: $SPEC_FILE${NC}"
 else
@@ -66,7 +71,7 @@ mkdir -p "$TYPES_DIR"
 OUTPUT_FILE="$TYPES_DIR/index.d.ts"
 
 # openapi-typescript v7+ works directly with OpenAPI 3.1
-if npx openapi-typescript "$SPEC_FILE" --output "$OUTPUT_FILE" --export-type 2>&1; then
+if npx openapi-typescript@7.10.1 "$SPEC_FILE" --output "$OUTPUT_FILE" --export-type 2>&1; then
     echo -e "${GREEN}✓ Types generated: $OUTPUT_FILE${NC}"
 else
     echo -e "${RED}✗ Failed to generate types${NC}"
@@ -76,7 +81,7 @@ fi
 # Step 4: Summary
 echo ""
 echo -e "${BLUE}Step 4: Summary${NC}"
-ENDPOINT_COUNT=$(grep -c "'/.*':" "$OUTPUT_FILE" 2>/dev/null || echo "0")
+ENDPOINT_COUNT=$(grep -c '"/.*":' "$OUTPUT_FILE" 2>/dev/null || echo "0")
 echo -e "  File size: $(du -h "$OUTPUT_FILE" | cut -f1)"
 echo -e "  Endpoints: ${ENDPOINT_COUNT}"
 echo ""

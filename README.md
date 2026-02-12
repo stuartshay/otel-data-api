@@ -6,16 +6,16 @@ location database with PostGIS spatial queries.
 ## Architecture
 
 ```text
-┌──────────┐     ┌──────────────┐     ┌───────────┐     ┌────────────┐
-│  otel-ui │────▶│ otel-data-api│────▶│ PgBouncer │────▶│ PostgreSQL │
-│ (React)  │     │  (FastAPI)   │     │  :6432    │     │   :5432    │
-└──────────┘     └──────────────┘     └───────────┘     └────────────┘
-                        │
-                        ▼
-                 ┌──────────────┐
-                 │  Cognito JWT │
-                 │    (Auth)    │
-                 └──────────────┘
+┌────────────┐     ┌─────────────────┐     ┌──────────────┐     ┌───────────┐     ┌────────────┐
+│ otel-data-ui│────▶│otel-data-gateway│────▶│ otel-data-api│────▶│ PgBouncer │────▶│ PostgreSQL │
+│  (React)    │     │(Apollo GraphQL) │     │  (FastAPI)   │     │  :6432    │     │  + PostGIS │
+└────────────┘     └─────────────────┘     └──────────────┘     └───────────┘     └────────────┘
+                                                  │
+                                                  ▼
+                                           ┌──────────────┐
+                                           │  Cognito JWT │
+                                           │    (Auth)    │
+                                           └──────────────┘
 ```
 
 ## Features
@@ -171,7 +171,9 @@ The API reads from these tables managed by
 
 ## Related Repositories
 
-- [otel-ui](https://github.com/stuartshay/otel-ui) — React frontend (primary consumer)
+- [otel-data-ui](https://github.com/stuartshay/otel-data-ui) — React frontend (primary consumer)
+- [otel-data-gateway](https://github.com/stuartshay/otel-data-gateway) — Apollo Server GraphQL BFF
+- [otel-ui](https://github.com/stuartshay/otel-ui) — React frontend (legacy)
 - [otel-demo](https://github.com/stuartshay/otel-demo) — Flask API (legacy)
 - [otel-worker](https://github.com/stuartshay/otel-worker) — Go gRPC distance calculator
 - [k8s-gitops](https://github.com/stuartshay/k8s-gitops) — Kubernetes deployment

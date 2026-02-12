@@ -55,7 +55,7 @@
           "Locations"
         ],
         "summary": "List Locations",
-        "description": "List OwnTracks locations with filtering and pagination.",
+        "description": "List OwnTracks locations with filtering and pagination.\n\nReturns paginated GPS location data recorded by OwnTracks mobile app.\nFilter by device ID and date range. Includes battery, accuracy, and connection metadata.",
         "operationId": "list_locations_api_v1_locations_get",
         "parameters": [
           {
@@ -71,8 +71,13 @@
                   "type": "null"
                 }
               ],
+              "description": "Filter by device ID",
+              "examples": [
+                "iphone_stuart"
+              ],
               "title": "Device Id"
-            }
+            },
+            "description": "Filter by device ID"
           },
           {
             "name": "date_from",
@@ -88,6 +93,9 @@
                 }
               ],
               "description": "Filter from date (YYYY-MM-DD)",
+              "examples": [
+                "2026-02-01"
+              ],
               "title": "Date From"
             },
             "description": "Filter from date (YYYY-MM-DD)"
@@ -106,6 +114,9 @@
                 }
               ],
               "description": "Filter to date (YYYY-MM-DD)",
+              "examples": [
+                "2026-02-12"
+              ],
               "title": "Date To"
             },
             "description": "Filter to date (YYYY-MM-DD)"
@@ -139,11 +150,11 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "Sort column",
+              "description": "Sort column (id, device_id, timestamp, created_at, battery, accuracy)",
               "default": "created_at",
               "title": "Sort"
             },
-            "description": "Sort column"
+            "description": "Sort column (id, device_id, timestamp, created_at, battery, accuracy)"
           },
           {
             "name": "order",
@@ -233,6 +244,9 @@
                 }
               ],
               "description": "Filter by date (YYYY-MM-DD)",
+              "examples": [
+                "2026-02-12"
+              ],
               "title": "Date"
             },
             "description": "Filter by date (YYYY-MM-DD)"
@@ -250,8 +264,13 @@
                   "type": "null"
                 }
               ],
+              "description": "Filter by device ID",
+              "examples": [
+                "iphone_stuart"
+              ],
               "title": "Device Id"
-            }
+            },
+            "description": "Filter by device ID"
           }
         ],
         "responses": {
@@ -327,7 +346,7 @@
           "Garmin"
         ],
         "summary": "List Activities",
-        "description": "List Garmin activities with filtering and pagination.",
+        "description": "List Garmin activities with filtering and pagination.\n\nReturns paginated Garmin cycling/running activities with track point counts.\nFilter by sport type or date range. Sort by start time, distance, duration, etc.",
         "operationId": "list_activities_api_v1_garmin_activities_get",
         "parameters": [
           {
@@ -343,8 +362,13 @@
                   "type": "null"
                 }
               ],
+              "description": "Filter by sport type",
+              "examples": [
+                "cycling"
+              ],
               "title": "Sport"
-            }
+            },
+            "description": "Filter by sport type"
           },
           {
             "name": "date_from",
@@ -360,6 +384,9 @@
                 }
               ],
               "description": "Filter from date (YYYY-MM-DD)",
+              "examples": [
+                "2025-11-01"
+              ],
               "title": "Date From"
             },
             "description": "Filter from date (YYYY-MM-DD)"
@@ -378,6 +405,9 @@
                 }
               ],
               "description": "Filter to date (YYYY-MM-DD)",
+              "examples": [
+                "2025-11-30"
+              ],
               "title": "Date To"
             },
             "description": "Filter to date (YYYY-MM-DD)"
@@ -411,11 +441,11 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "Sort column",
+              "description": "Sort column (start_time, distance_km, duration_seconds, sport, created_at)",
               "default": "start_time",
               "title": "Sort"
             },
-            "description": "Sort column"
+            "description": "Sort column (start_time, distance_km, duration_seconds, sport, created_at)"
           },
           {
             "name": "order",
@@ -497,8 +527,13 @@
             "required": true,
             "schema": {
               "type": "string",
+              "description": "Garmin activity ID",
+              "examples": [
+                "20932993811"
+              ],
               "title": "Activity Id"
-            }
+            },
+            "description": "Garmin activity ID"
           }
         ],
         "responses": {
@@ -511,6 +546,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Activity not found"
           },
           "422": {
             "description": "Validation Error",
@@ -531,7 +569,7 @@
           "Garmin"
         ],
         "summary": "List Track Points",
-        "description": "List track points for a specific activity.",
+        "description": "List track points for a specific activity.\n\nReturns GPS track points with altitude, speed, heart rate, and cadence data.\nSupports up to 10,000 points per request for full activity visualization.",
         "operationId": "list_track_points_api_v1_garmin_activities__activity_id__tracks_get",
         "parameters": [
           {
@@ -540,8 +578,13 @@
             "required": true,
             "schema": {
               "type": "string",
+              "description": "Garmin activity ID",
+              "examples": [
+                "20932993811"
+              ],
               "title": "Activity Id"
-            }
+            },
+            "description": "Garmin activity ID"
           },
           {
             "name": "limit",
@@ -549,7 +592,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 5000,
+              "maximum": 10000,
               "minimum": 1,
               "default": 500,
               "title": "Limit"
@@ -572,11 +615,11 @@
             "required": false,
             "schema": {
               "type": "string",
-              "description": "Sort column",
+              "description": "Sort column (timestamp, altitude, speed_kmh, heart_rate, created_at)",
               "default": "timestamp",
               "title": "Sort"
             },
-            "description": "Sort column"
+            "description": "Sort column (timestamp, altitude, speed_kmh, heart_rate, created_at)"
           },
           {
             "name": "order",
@@ -604,6 +647,9 @@
               }
             }
           },
+          "404": {
+            "description": "Activity not found"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -623,7 +669,7 @@
           "Unified GPS"
         ],
         "summary": "List Unified Gps",
-        "description": "Query the unified_gps_points view combining OwnTracks + Garmin data.",
+        "description": "Query the unified_gps_points view combining OwnTracks + Garmin data.\n\nMerges OwnTracks location data and Garmin track points into a single\nchronological stream. Filter by data source or date range.",
         "operationId": "list_unified_gps_api_v1_gps_unified_get",
         "parameters": [
           {
@@ -640,6 +686,9 @@
                 }
               ],
               "description": "Filter by source: owntracks or garmin",
+              "examples": [
+                "owntracks"
+              ],
               "title": "Source"
             },
             "description": "Filter by source: owntracks or garmin"
@@ -658,6 +707,9 @@
                 }
               ],
               "description": "Filter from date (YYYY-MM-DD)",
+              "examples": [
+                "2026-02-01"
+              ],
               "title": "Date From"
             },
             "description": "Filter from date (YYYY-MM-DD)"
@@ -676,6 +728,9 @@
                 }
               ],
               "description": "Filter to date (YYYY-MM-DD)",
+              "examples": [
+                "2026-02-12"
+              ],
               "title": "Date To"
             },
             "description": "Filter to date (YYYY-MM-DD)"
@@ -748,7 +803,7 @@
           "Unified GPS"
         ],
         "summary": "Daily Summary",
-        "description": "Query the daily_activity_summary view for aggregated daily stats.",
+        "description": "Query the daily_activity_summary view for aggregated daily stats.\n\nReturns per-day aggregates including OwnTracks point counts, battery stats,\nand Garmin activity metrics (distance, duration, heart rate, calories).",
         "operationId": "daily_summary_api_v1_gps_daily_summary_get",
         "parameters": [
           {
@@ -765,6 +820,9 @@
                 }
               ],
               "description": "Filter from date (YYYY-MM-DD)",
+              "examples": [
+                "2026-02-01"
+              ],
               "title": "Date From"
             },
             "description": "Filter from date (YYYY-MM-DD)"
@@ -783,6 +841,9 @@
                 }
               ],
               "description": "Filter to date (YYYY-MM-DD)",
+              "examples": [
+                "2026-02-12"
+              ],
               "title": "Date To"
             },
             "description": "Filter to date (YYYY-MM-DD)"
@@ -1043,7 +1104,7 @@
           "Spatial"
         ],
         "summary": "Find Nearby",
-        "description": "Find GPS points within a radius of a given lat/lon using PostGIS ST_DWithin.",
+        "description": "Find GPS points within a radius of a given lat/lon using PostGIS ST_DWithin.\n\nSearches both OwnTracks locations and Garmin track points within the\nspecified radius. Results are sorted by distance from the center point.",
         "operationId": "find_nearby_api_v1_spatial_nearby_get",
         "parameters": [
           {
@@ -1053,6 +1114,9 @@
             "schema": {
               "type": "number",
               "description": "Latitude of center point",
+              "examples": [
+                40.7362
+              ],
               "title": "Lat"
             },
             "description": "Latitude of center point"
@@ -1064,6 +1128,9 @@
             "schema": {
               "type": "number",
               "description": "Longitude of center point",
+              "examples": [
+                -74.0394
+              ],
               "title": "Lon"
             },
             "description": "Longitude of center point"
@@ -1096,6 +1163,9 @@
                 }
               ],
               "description": "Filter by source: owntracks or garmin",
+              "examples": [
+                "owntracks"
+              ],
               "title": "Source"
             },
             "description": "Filter by source: owntracks or garmin"
@@ -1147,7 +1217,7 @@
           "Spatial"
         ],
         "summary": "Calculate Distance",
-        "description": "Calculate the distance in meters between two points using PostGIS ST_Distance.",
+        "description": "Calculate the distance in meters between two points using PostGIS ST_Distance.\n\nUses geodesic (geography) distance for accurate results on the Earth's surface.",
         "operationId": "calculate_distance_api_v1_spatial_distance_get",
         "parameters": [
           {
@@ -1156,10 +1226,13 @@
             "required": true,
             "schema": {
               "type": "number",
-              "description": "From latitude",
+              "description": "From latitude (e.g. NYC)",
+              "examples": [
+                40.7128
+              ],
               "title": "From Lat"
             },
-            "description": "From latitude"
+            "description": "From latitude (e.g. NYC)"
           },
           {
             "name": "from_lon",
@@ -1167,10 +1240,13 @@
             "required": true,
             "schema": {
               "type": "number",
-              "description": "From longitude",
+              "description": "From longitude (e.g. NYC)",
+              "examples": [
+                -74.006
+              ],
               "title": "From Lon"
             },
-            "description": "From longitude"
+            "description": "From longitude (e.g. NYC)"
           },
           {
             "name": "to_lat",
@@ -1178,10 +1254,13 @@
             "required": true,
             "schema": {
               "type": "number",
-              "description": "To latitude",
+              "description": "To latitude (e.g. Times Square)",
+              "examples": [
+                40.758
+              ],
               "title": "To Lat"
             },
-            "description": "To latitude"
+            "description": "To latitude (e.g. Times Square)"
           },
           {
             "name": "to_lon",
@@ -1189,10 +1268,13 @@
             "required": true,
             "schema": {
               "type": "number",
-              "description": "To longitude",
+              "description": "To longitude (e.g. Times Square)",
+              "examples": [
+                -73.9855
+              ],
               "title": "To Lon"
             },
-            "description": "To longitude"
+            "description": "To longitude (e.g. Times Square)"
           }
         ],
         "responses": {
@@ -1225,7 +1307,7 @@
           "Spatial"
         ],
         "summary": "Within Reference",
-        "description": "Find all GPS points within a named reference location's radius.",
+        "description": "Find all GPS points within a named reference location's radius.\n\nLooks up a named reference location (e.g. 'home') and finds all GPS points\nfrom OwnTracks and/or Garmin data within its configured radius.",
         "operationId": "within_reference_api_v1_spatial_within_reference__name__get",
         "parameters": [
           {
@@ -1234,8 +1316,13 @@
             "required": true,
             "schema": {
               "type": "string",
+              "description": "Reference location name",
+              "examples": [
+                "home"
+              ],
               "title": "Name"
-            }
+            },
+            "description": "Reference location name"
           },
           {
             "name": "source",
@@ -1251,6 +1338,9 @@
                 }
               ],
               "description": "Filter by source: owntracks or garmin",
+              "examples": [
+                "owntracks"
+              ],
               "title": "Source"
             },
             "description": "Filter by source: owntracks or garmin"
@@ -1278,6 +1368,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Reference location not found"
           },
           "422": {
             "description": "Validation Error",
@@ -1431,7 +1524,23 @@
           }
         },
         "type": "object",
-        "title": "DailyActivitySummary"
+        "title": "DailyActivitySummary",
+        "examples": [
+          {
+            "activity_date": "2026-02-11",
+            "avg_accuracy": 4.89,
+            "avg_heart_rate": 142.0,
+            "garmin_activities": 1,
+            "garmin_sport": "cycling",
+            "max_battery": 100,
+            "min_battery": 64,
+            "owntracks_device": "iphone_stuart",
+            "owntracks_points": 1429,
+            "total_calories": 1689,
+            "total_distance_km": 50.6,
+            "total_duration_seconds": 6932
+          }
+        ]
       },
       "DeviceInfo": {
         "properties": {
@@ -1444,7 +1553,12 @@
         "required": [
           "device_id"
         ],
-        "title": "DeviceInfo"
+        "title": "DeviceInfo",
+        "examples": [
+          {
+            "device_id": "iphone_stuart"
+          }
+        ]
       },
       "DistanceResult": {
         "properties": {
@@ -1477,7 +1591,16 @@
           "to_lat",
           "to_lon"
         ],
-        "title": "DistanceResult"
+        "title": "DistanceResult",
+        "examples": [
+          {
+            "distance_meters": 5309.71,
+            "from_lat": 40.7128,
+            "from_lon": -74.006,
+            "to_lat": 40.758,
+            "to_lon": -73.9855
+          }
+        ]
       },
       "GarminActivity": {
         "properties": {
@@ -1678,6 +1801,61 @@
             ],
             "title": "Device Manufacturer"
           },
+          "avg_temperature_c": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Temperature C"
+          },
+          "min_temperature_c": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Temperature C"
+          },
+          "max_temperature_c": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Temperature C"
+          },
+          "total_elapsed_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Elapsed Time"
+          },
+          "total_timer_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Timer Time"
+          },
           "created_at": {
             "anyOf": [
               {
@@ -1719,7 +1897,38 @@
           "activity_id",
           "sport"
         ],
-        "title": "GarminActivity"
+        "title": "GarminActivity",
+        "examples": [
+          {
+            "activity_id": "20932993811",
+            "avg_cadence": 78,
+            "avg_heart_rate": 142,
+            "avg_pace": 3.513345,
+            "avg_speed_kmh": 26.3,
+            "avg_temperature_c": 18,
+            "calories": 1689,
+            "created_at": "2026-02-09T23:56:37Z",
+            "device_manufacturer": "garmin",
+            "distance_km": 50.6,
+            "duration_seconds": 6932,
+            "end_time": "2025-11-08T20:16:45Z",
+            "max_cadence": 112,
+            "max_heart_rate": 178,
+            "max_speed_kmh": 48.7,
+            "max_temperature_c": 22,
+            "min_temperature_c": 14,
+            "sport": "cycling",
+            "start_time": "2025-11-08T18:21:13Z",
+            "sub_sport": "road",
+            "total_ascent_m": 385,
+            "total_descent_m": 380,
+            "total_distance": 50598.95,
+            "total_elapsed_time": 7200.5,
+            "total_timer_time": 6932.1,
+            "track_point_count": 10707,
+            "uploaded_at": "2026-02-09T23:56:37Z"
+          }
+        ]
       },
       "GarminTrackPoint": {
         "properties": {
@@ -1831,7 +2040,23 @@
           "longitude",
           "timestamp"
         ],
-        "title": "GarminTrackPoint"
+        "title": "GarminTrackPoint",
+        "examples": [
+          {
+            "activity_id": "20932993811",
+            "altitude": 12.4,
+            "cadence": 80,
+            "created_at": "2026-02-09T23:56:37Z",
+            "distance_from_start_km": 0.0,
+            "heart_rate": 135,
+            "id": 7454,
+            "latitude": 40.71501586586237,
+            "longitude": -74.01768794283271,
+            "speed_kmh": 24.5,
+            "temperature_c": 18,
+            "timestamp": "2025-11-08T18:21:13Z"
+          }
+        ]
       },
       "HTTPValidationError": {
         "properties": {
@@ -1978,7 +2203,24 @@
           "longitude",
           "timestamp"
         ],
-        "title": "Location"
+        "title": "Location",
+        "examples": [
+          {
+            "accuracy": 7,
+            "altitude": 4,
+            "battery": 100,
+            "battery_status": 2,
+            "connection_type": "w",
+            "created_at": "2026-02-12T08:10:55Z",
+            "device_id": "iphone_stuart",
+            "id": 101160,
+            "latitude": 40.736238,
+            "longitude": -74.039405,
+            "tid": "ss",
+            "timestamp": "2026-02-12T08:10:55Z",
+            "trigger": "t"
+          }
+        ]
       },
       "LocationCount": {
         "properties": {
@@ -2013,7 +2255,13 @@
         "required": [
           "count"
         ],
-        "title": "LocationCount"
+        "title": "LocationCount",
+        "examples": [
+          {
+            "count": 45883,
+            "device_id": "iphone_stuart"
+          }
+        ]
       },
       "LocationDetail": {
         "properties": {
@@ -2158,7 +2406,32 @@
           "longitude",
           "timestamp"
         ],
-        "title": "LocationDetail"
+        "title": "LocationDetail",
+        "examples": [
+          {
+            "accuracy": 7,
+            "altitude": 4,
+            "battery": 100,
+            "battery_status": 2,
+            "connection_type": "w",
+            "created_at": "2026-02-12T08:10:55Z",
+            "device_id": "iphone_stuart",
+            "id": 101160,
+            "latitude": 40.736238,
+            "longitude": -74.039405,
+            "raw_payload": {
+              "_type": "location",
+              "acc": 7,
+              "batt": 100,
+              "lat": 40.736238,
+              "lon": -74.039405,
+              "tid": "ss"
+            },
+            "tid": "ss",
+            "timestamp": "2026-02-12T08:10:55Z",
+            "trigger": "t"
+          }
+        ]
       },
       "NearbyPoint": {
         "properties": {
@@ -2197,7 +2470,17 @@
           "distance_meters",
           "timestamp"
         ],
-        "title": "NearbyPoint"
+        "title": "NearbyPoint",
+        "examples": [
+          {
+            "distance_meters": 0.4,
+            "id": 35144,
+            "latitude": 40.736202,
+            "longitude": -74.039404,
+            "source": "owntracks",
+            "timestamp": "2026-02-02T10:30:53Z"
+          }
+        ]
       },
       "PaginatedResponse_GarminActivity_": {
         "properties": {
@@ -2389,7 +2672,19 @@
           "latitude",
           "longitude"
         ],
-        "title": "ReferenceLocation"
+        "title": "ReferenceLocation",
+        "examples": [
+          {
+            "created_at": "2026-02-03T22:49:07Z",
+            "description": "Primary apartment - 40m radius",
+            "id": 1,
+            "latitude": 40.7362,
+            "longitude": -74.0394,
+            "name": "home",
+            "radius_meters": 40,
+            "updated_at": "2026-02-03T22:50:01Z"
+          }
+        ]
       },
       "ReferenceLocationCreate": {
         "properties": {
@@ -2428,7 +2723,16 @@
           "latitude",
           "longitude"
         ],
-        "title": "ReferenceLocationCreate"
+        "title": "ReferenceLocationCreate",
+        "examples": [
+          {
+            "description": "Downtown office building",
+            "latitude": 40.7128,
+            "longitude": -74.006,
+            "name": "office",
+            "radius_meters": 100
+          }
+        ]
       },
       "ReferenceLocationUpdate": {
         "properties": {
@@ -2489,7 +2793,13 @@
           }
         },
         "type": "object",
-        "title": "ReferenceLocationUpdate"
+        "title": "ReferenceLocationUpdate",
+        "examples": [
+          {
+            "description": "Updated radius for office building",
+            "radius_meters": 75
+          }
+        ]
       },
       "SportInfo": {
         "properties": {
@@ -2507,7 +2817,13 @@
           "sport",
           "activity_count"
         ],
-        "title": "SportInfo"
+        "title": "SportInfo",
+        "examples": [
+          {
+            "activity_count": 20,
+            "sport": "cycling"
+          }
+        ]
       },
       "UnifiedGpsPoint": {
         "properties": {
@@ -2597,7 +2913,19 @@
           "longitude",
           "timestamp"
         ],
-        "title": "UnifiedGpsPoint"
+        "title": "UnifiedGpsPoint",
+        "examples": [
+          {
+            "accuracy": 7,
+            "battery": 100,
+            "created_at": "2026-02-12T08:11:55Z",
+            "identifier": "iphone_stuart",
+            "latitude": 40.736238,
+            "longitude": -74.039405,
+            "source": "owntracks",
+            "timestamp": "2026-02-12T08:11:55Z"
+          }
+        ]
       },
       "ValidationError": {
         "properties": {
@@ -2661,7 +2989,24 @@
           "total_points",
           "points"
         ],
-        "title": "WithinReferenceResult"
+        "title": "WithinReferenceResult",
+        "examples": [
+          {
+            "points": [
+              {
+                "distance_meters": 0.4,
+                "id": 35144,
+                "latitude": 40.736202,
+                "longitude": -74.039404,
+                "source": "owntracks",
+                "timestamp": "2026-02-02T10:30:53Z"
+              }
+            ],
+            "radius_meters": 40,
+            "reference_name": "home",
+            "total_points": 2
+          }
+        ]
       }
     },
     "securitySchemes": {

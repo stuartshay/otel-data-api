@@ -15,14 +15,24 @@ router = APIRouter(prefix="/api/v1/gps", tags=["Unified GPS"])
 @router.get("/unified", response_model=PaginatedResponse[UnifiedGpsPoint])
 async def list_unified_gps(
     request: Request,
-    source: str | None = Query(None, description="Filter by source: owntracks or garmin"),
-    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)"),
-    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)"),
+    source: str | None = Query(
+        None, description="Filter by source: owntracks or garmin", examples=["owntracks"]
+    ),
+    date_from: str | None = Query(
+        None, description="Filter from date (YYYY-MM-DD)", examples=["2026-02-01"]
+    ),
+    date_to: str | None = Query(
+        None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]
+    ),
     limit: int = Query(100, ge=1, le=5000),
     offset: int = Query(0, ge=0),
     order: Literal["asc", "desc"] = Query("desc"),
 ) -> PaginatedResponse[UnifiedGpsPoint]:
-    """Query the unified_gps_points view combining OwnTracks + Garmin data."""
+    """Query the unified_gps_points view combining OwnTracks + Garmin data.
+
+    Merges OwnTracks location data and Garmin track points into a single
+    chronological stream. Filter by data source or date range.
+    """
     db = request.app.state.db
 
     conditions: list[str] = []
@@ -66,11 +76,19 @@ async def list_unified_gps(
 @router.get("/daily-summary", response_model=list[DailyActivitySummary])
 async def daily_summary(
     request: Request,
-    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)"),
-    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)"),
+    date_from: str | None = Query(
+        None, description="Filter from date (YYYY-MM-DD)", examples=["2026-02-01"]
+    ),
+    date_to: str | None = Query(
+        None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]
+    ),
     limit: int = Query(30, ge=1, le=365),
 ) -> list[DailyActivitySummary]:
-    """Query the daily_activity_summary view for aggregated daily stats."""
+    """Query the daily_activity_summary view for aggregated daily stats.
+
+    Returns per-day aggregates including OwnTracks point counts, battery stats,
+    and Garmin activity metrics (distance, duration, heart rate, calories).
+    """
     db = request.app.state.db
 
     conditions: list[str] = []

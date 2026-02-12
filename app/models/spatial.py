@@ -19,6 +19,25 @@ class UnifiedGpsPoint(BaseModel):
     heart_rate: int | None = None
     created_at: datetime | None = None
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "source": "owntracks",
+                    "identifier": "iphone_stuart",
+                    "latitude": 40.736238,
+                    "longitude": -74.039405,
+                    "timestamp": "2026-02-12T08:11:55Z",
+                    "accuracy": 7,
+                    "battery": 100,
+                    "speed_kmh": None,
+                    "heart_rate": None,
+                    "created_at": "2026-02-12T08:11:55Z",
+                }
+            ]
+        }
+    }
+
 
 class DailyActivitySummary(BaseModel):
     activity_date: str | None = None
@@ -34,6 +53,27 @@ class DailyActivitySummary(BaseModel):
     avg_heart_rate: float | None = None
     total_calories: int | None = None
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "activity_date": "2026-02-11",
+                    "owntracks_device": "iphone_stuart",
+                    "owntracks_points": 1429,
+                    "min_battery": 64,
+                    "max_battery": 100,
+                    "avg_accuracy": 4.89,
+                    "garmin_sport": "cycling",
+                    "garmin_activities": 1,
+                    "total_distance_km": 50.6,
+                    "total_duration_seconds": 6932,
+                    "avg_heart_rate": 142.0,
+                    "total_calories": 1689,
+                }
+            ]
+        }
+    }
+
 
 class NearbyPoint(BaseModel):
     source: str
@@ -43,6 +83,21 @@ class NearbyPoint(BaseModel):
     distance_meters: float
     timestamp: datetime
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "source": "owntracks",
+                    "id": 35144,
+                    "latitude": 40.736202,
+                    "longitude": -74.039404,
+                    "distance_meters": 0.40,
+                    "timestamp": "2026-02-02T10:30:53Z",
+                }
+            ]
+        }
+    }
+
 
 class DistanceResult(BaseModel):
     distance_meters: float
@@ -51,9 +106,45 @@ class DistanceResult(BaseModel):
     to_lat: float
     to_lon: float
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "distance_meters": 5309.71,
+                    "from_lat": 40.7128,
+                    "from_lon": -74.006,
+                    "to_lat": 40.758,
+                    "to_lon": -73.9855,
+                }
+            ]
+        }
+    }
+
 
 class WithinReferenceResult(BaseModel):
     reference_name: str
     radius_meters: int
     total_points: int
     points: list[NearbyPoint]
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "reference_name": "home",
+                    "radius_meters": 40,
+                    "total_points": 2,
+                    "points": [
+                        {
+                            "source": "owntracks",
+                            "id": 35144,
+                            "latitude": 40.736202,
+                            "longitude": -74.039404,
+                            "distance_meters": 0.40,
+                            "timestamp": "2026-02-02T10:30:53Z",
+                        }
+                    ],
+                }
+            ]
+        }
+    }

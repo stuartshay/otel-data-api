@@ -10,16 +10,16 @@ queries, and optional AWS Cognito JWT authentication.
 ## Architecture
 
 ```text
-┌──────────┐     ┌──────────────┐     ┌───────────┐     ┌────────────┐
-│  otel-ui │────▶│ otel-data-api│────▶│ PgBouncer │────▶│ PostgreSQL │
-│ (React)  │     │  (FastAPI)   │     │  :6432    │     │   :5432    │
-└──────────┘     └──────────────┘     └───────────┘     └────────────┘
-                        │
-                        ▼
-                 ┌──────────────┐
-                 │  Cognito JWT │
-                 │    (Auth)    │
-                 └──────────────┘
+┌────────────┐     ┌─────────────────┐     ┌──────────────┐     ┌───────────┐     ┌────────────┐
+│ otel-data-ui│────▶│otel-data-gateway│────▶│ otel-data-api│────▶│ PgBouncer │────▶│ PostgreSQL │
+│  (React)    │     │(Apollo GraphQL) │     │  (FastAPI)   │     │  :6432    │     │  + PostGIS │
+└────────────┘     └─────────────────┘     └──────────────┘     └───────────┘     └────────────┘
+                                                  │
+                                                  ▼
+                                           ┌──────────────┐
+                                           │  Cognito JWT │
+                                           │    (Auth)    │
+                                           └──────────────┘
 ```
 
 ### Tech Stack
@@ -117,15 +117,18 @@ queries, and optional AWS Cognito JWT authentication.
 | DNS | `api.lab.informationcart.com` |
 | Ingress IP | 192.168.1.100 (MetalLB) |
 
-## Phase 3 — otel-ui Integration (Next)
+## Phase 3 — Frontend Integration (Completed)
 
 ### Tasks
 
-- [ ] Update otel-ui to use `otel-data-api` as backend
-- [ ] Replace `VITE_API_BASE_URL` with new API endpoint
-- [ ] Test all frontend features against new API
-- [ ] Migrate away from legacy `otel-demo` endpoints
-- [ ] Update otel-ui documentation
+- [x] Build `otel-data-gateway` (Apollo Server 5 GraphQL BFF) to wrap REST API
+- [x] Build `otel-data-ui` (React 19 + Vite 7) consuming GraphQL gateway
+- [x] Deploy gateway to k8s-pi5-cluster (namespace: `otel-data-gateway`)
+- [x] Deploy UI to k8s-pi5-cluster (namespace: `otel-data-ui`)
+- [x] Create DNS records: `gateway.lab.informationcart.com`, `dataui.lab.informationcart.com`
+- [x] Garmin detail page redesign — added temperature/timing fields to API, gateway, and UI
+- [x] Add Swagger examples with real production data to all Pydantic models
+- [x] Add endpoint-level OpenAPI examples for query parameters
 
 ## Phase 4 — Enhancements
 
@@ -143,8 +146,10 @@ queries, and optional AWS Cognito JWT authentication.
 
 | Repository | Purpose |
 |-----------|---------|
-| [otel-ui](https://github.com/stuartshay/otel-ui) | React frontend (primary consumer) |
-| [otel-demo](https://github.com/stuartshay/otel-demo) | Flask API (legacy, to be replaced) |
+| [otel-data-ui](https://github.com/stuartshay/otel-data-ui) | React frontend (primary consumer) |
+| [otel-data-gateway](https://github.com/stuartshay/otel-data-gateway) | Apollo Server GraphQL BFF |
+| [otel-ui](https://github.com/stuartshay/otel-ui) | React frontend (legacy) |
+| [otel-demo](https://github.com/stuartshay/otel-demo) | Flask API (legacy, replaced) |
 | [otel-worker](https://github.com/stuartshay/otel-worker) | Go gRPC distance calculator |
 | [k8s-gitops](https://github.com/stuartshay/k8s-gitops) | Kubernetes deployment manifests |
 | [homelab-database-migrations](https://github.com/stuartshay/homelab-database-migrations) | Database schema migrations |

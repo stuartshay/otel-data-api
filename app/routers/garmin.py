@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+import fastapi
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.models import PaginatedResponse
@@ -18,15 +19,26 @@ TRACK_SORT_WHITELIST = {"timestamp", "altitude", "speed_kmh", "heart_rate", "cre
 @router.get("/activities", response_model=PaginatedResponse[GarminActivity])
 async def list_activities(
     request: Request,
-    sport: str | None = None,
-    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)"),
-    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)"),
+    sport: str | None = Query(None, description="Filter by sport type", examples=["cycling"]),
+    date_from: str | None = Query(
+        None, description="Filter from date (YYYY-MM-DD)", examples=["2025-11-01"]
+    ),
+    date_to: str | None = Query(
+        None, description="Filter to date (YYYY-MM-DD)", examples=["2025-11-30"]
+    ),
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    sort: str = Query("start_time", description="Sort column"),
+    sort: str = Query(
+        "start_time",
+        description="Sort column (start_time, distance_km, duration_seconds, sport, created_at)",
+    ),
     order: Literal["asc", "desc"] = Query("desc"),
 ) -> PaginatedResponse[GarminActivity]:
-    """List Garmin activities with filtering and pagination."""
+    """List Garmin activities with filtering and pagination.
+
+    Returns paginated Garmin cycling/running activities with track point counts.
+    Filter by sport type or date range. Sort by start time, distance, duration, etc.
+    """
     db = request.app.state.db
 
     if sort not in ACTIVITY_SORT_WHITELIST:
@@ -87,8 +99,15 @@ async def list_sports(request: Request) -> list[SportInfo]:
     return [SportInfo(**dict(row)) for row in rows]
 
 
-@router.get("/activities/{activity_id}", response_model=GarminActivity)
-async def get_activity(request: Request, activity_id: str) -> GarminActivity:
+@router.get(
+    "/activities/{activity_id}",
+    response_model=GarminActivity,
+    responses={404: {"description": "Activity not found"}},
+)
+async def get_activity(
+    request: Request,
+    activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
+) -> GarminActivity:
     """Get a single Garmin activity by ID with track point count."""
     db = request.app.state.db
     row = await db.fetchrow(
@@ -112,16 +131,24 @@ async def get_activity(request: Request, activity_id: str) -> GarminActivity:
 @router.get(
     "/activities/{activity_id}/tracks",
     response_model=PaginatedResponse[GarminTrackPoint],
+    responses={404: {"description": "Activity not found"}},
 )
 async def list_track_points(
     request: Request,
-    activity_id: str,
+    activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
     limit: int = Query(500, ge=1, le=10000),
     offset: int = Query(0, ge=0),
-    sort: str = Query("timestamp", description="Sort column"),
+    sort: str = Query(
+        "timestamp",
+        description="Sort column (timestamp, altitude, speed_kmh, heart_rate, created_at)",
+    ),
     order: Literal["asc", "desc"] = Query("asc"),
 ) -> PaginatedResponse[GarminTrackPoint]:
-    """List track points for a specific activity."""
+    """List track points for a specific activity.
+
+    Returns GPS track points with altitude, speed, heart rate, and cadence data.
+    Supports up to 10,000 points per request for full activity visualization.
+    """
     db = request.app.state.db
 
     if sort not in TRACK_SORT_WHITELIST:

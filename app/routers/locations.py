@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from typing import Literal
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.models import PaginatedResponse
 from app.models.locations import DeviceInfo, Location, LocationCount, LocationDetail
@@ -118,14 +119,10 @@ async def get_location(request: Request, location_id: int) -> LocationDetail:
         location_id,
     )
     if not row:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=404, detail="Location not found")
 
     data = dict(row)
     # Convert raw_payload from JSON string to dict if needed
     if data.get("raw_payload") and isinstance(data["raw_payload"], str):
-        import json
-
         data["raw_payload"] = json.loads(data["raw_payload"])
     return LocationDetail(**data)

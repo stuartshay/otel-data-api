@@ -60,7 +60,9 @@ async def list_activities(
         f"a.distance_km, a.duration_seconds, a.avg_heart_rate, a.max_heart_rate, "
         f"a.avg_cadence, a.max_cadence, a.calories, a.avg_speed_kmh, a.max_speed_kmh, "
         f"a.total_ascent_m, a.total_descent_m, a.total_distance, a.avg_pace, "
-        f"a.device_manufacturer, a.created_at, a.uploaded_at, "
+        f"a.device_manufacturer, a.avg_temperature_c, a.min_temperature_c, "
+        f"a.max_temperature_c, a.total_elapsed_time, a.total_timer_time, "
+        f"a.created_at, a.uploaded_at, "
         f"(SELECT COUNT(*) FROM public.garmin_track_points t "
         f"WHERE t.activity_id = a.activity_id) AS track_point_count "
         f"FROM public.garmin_activities a {where} "
@@ -94,7 +96,9 @@ async def get_activity(request: Request, activity_id: str) -> GarminActivity:
         "a.distance_km, a.duration_seconds, a.avg_heart_rate, a.max_heart_rate, "
         "a.avg_cadence, a.max_cadence, a.calories, a.avg_speed_kmh, a.max_speed_kmh, "
         "a.total_ascent_m, a.total_descent_m, a.total_distance, a.avg_pace, "
-        "a.device_manufacturer, a.created_at, a.uploaded_at, "
+        "a.device_manufacturer, a.avg_temperature_c, a.min_temperature_c, "
+        "a.max_temperature_c, a.total_elapsed_time, a.total_timer_time, "
+        "a.created_at, a.uploaded_at, "
         "(SELECT COUNT(*) FROM public.garmin_track_points t "
         "WHERE t.activity_id = a.activity_id) AS track_point_count "
         "FROM public.garmin_activities a WHERE a.activity_id = $1",
@@ -112,7 +116,7 @@ async def get_activity(request: Request, activity_id: str) -> GarminActivity:
 async def list_track_points(
     request: Request,
     activity_id: str,
-    limit: int = Query(500, ge=1, le=5000),
+    limit: int = Query(500, ge=1, le=10000),
     offset: int = Query(0, ge=0),
     sort: str = Query("timestamp", description="Sort column"),
     order: Literal["asc", "desc"] = Query("asc"),

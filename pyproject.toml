@@ -69,10 +69,13 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["."]
+branch = true
+source = ["app"]
 omit = ["tests/*", "venv/*", "setup.py"]
 
 [tool.coverage.report]
+fail_under = 85
+show_missing = true
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

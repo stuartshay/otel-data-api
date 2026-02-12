@@ -27,6 +27,11 @@ class GarminActivity(BaseModel):
     total_distance: float | None = None
     avg_pace: float | None = None
     device_manufacturer: str | None = None
+    avg_temperature_c: int | None = None
+    min_temperature_c: int | None = None
+    max_temperature_c: int | None = None
+    total_elapsed_time: float | None = None
+    total_timer_time: float | None = None
     created_at: datetime | None = None
     uploaded_at: datetime | None = None
     track_point_count: int | None = None

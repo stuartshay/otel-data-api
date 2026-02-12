@@ -1,0 +1,38 @@
+{
+    "name": "@stuartshay/otel-data-types",
+    "version": "1.0.0",
+    "description": "TypeScript types for otel-data-api — Auto-generated from OpenAPI 3.1 specification",
+    "types": "index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./index.d.ts"
+        }
+    },
+    "files": [
+        "index.d.ts",
+        "README.md"
+    ],
+    "scripts": {
+        "prepublishOnly": "echo 'Types should be generated before publishing'"
+    },
+    "keywords": [
+        "otel-data-api",
+        "opentelemetry",
+        "typescript",
+        "types",
+        "api",
+        "fastapi",
+        "openapi"
+    ],
+    "author": "Stuart Shay",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/stuartshay/otel-data-api.git",
+        "directory": "packages/otel-data-types"
+    },
+    "homepage": "https://github.com/stuartshay/otel-data-api/tree/master/packages/otel-data-types",
+    "publishConfig": {
+        "access": "public"
+    }
+}

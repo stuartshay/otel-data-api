@@ -61,6 +61,19 @@ per workflow. Master pushes produce `VERSION.run_number` tags.
 | `stuartshay/k8s-gitops`    | K8s manifests      | `apps/base/otel-data-api/deployment.yaml`         |
 | Docker Hub                 | Container registry | `stuartshay/otel-data-api`                        |
 
+## Downstream Consumers
+
+Changes to otel-data-api can impact these downstream services:
+
+| Consumer                       | Type             | Impact                                                   |
+| ------------------------------ | ---------------- | -------------------------------------------------------- |
+| `stuartshay/otel-data-gateway` | GraphQL BFF      | Resolvers call REST endpoints — breaking changes cascade |
+| `stuartshay/otel-data-ui`      | React frontend   | Consumes API via gateway — schema changes affect UI      |
+| `@stuartshay/otel-types` (npm) | TypeScript types | Auto-published from OpenAPI spec on schema change        |
+
+**Before breaking changes**: Verify that modified endpoints are not consumed
+by the gateway resolvers (`src/datasources/OtelDataAPI.ts`) or UI components.
+
 ## Deployment Procedure
 
 ### Step 1: Pre-Deployment Checks
@@ -68,8 +81,14 @@ per workflow. Master pushes produce `VERSION.run_number` tags.
 Before merging any PR, verify:
 
 ```bash
-# 1. Pre-commit hooks pass
+# 0. Always rebase develop onto master before committing/pushing
 cd /home/ubuntu/git/otel-data-api
+git fetch origin master
+git rebase origin/master
+# Resolve any conflicts, then: git rebase --continue
+# If rebased, push with: git push origin develop --force-with-lease
+
+# 1. Pre-commit hooks pass
 pre-commit run -a
 
 # 2. Tests pass
@@ -89,6 +108,7 @@ curl -s http://localhost:8080/health | python3 -m json.tool
 
 **Checklist**:
 
+- [ ] Rebased onto master (`git fetch origin master && git rebase origin/master`)
 - [ ] Pre-commit hooks pass (`pre-commit run -a`)
 - [ ] Tests pass (`pytest tests/`)
 - [ ] Linter clean (`ruff check .`)
@@ -110,6 +130,20 @@ gh pr merge <PR_NUMBER> --squash --repo stuartshay/otel-data-api
 - Use squash merge to maintain clean commit history
 - Branch protection requires status checks to pass
 
+#### Post-Merge: Rebase develop onto master
+
+Squash merges create a new commit on master that doesn't exist on develop,
+causing branch divergence. Always rebase develop after merging:
+
+```bash
+git checkout develop
+git fetch origin master
+git rebase origin/master
+git push origin develop --force-with-lease
+```
+
+Skipping this causes merge conflicts on the next PR.
+
 ### Step 3: Wait for Docker Build
 
 The merge triggers `.github/workflows/docker.yml` which:
@@ -124,10 +158,15 @@ The merge triggers `.github/workflows/docker.yml` which:
 **Verification**:
 
 ```bash
-# Check GitHub Actions (wait ~4-5 minutes after merge)
+# Check GitHub Actions status and get run_number via CLI (preferred)
+gh run list --workflow docker.yml --repo stuartshay/otel-data-api --limit 3
+# The run_number in the output is appended to VERSION to form the Docker tag
+# e.g., run_number=22 → Docker tag 1.0.22
+
+# Or check via browser (wait ~4-5 minutes after merge)
 # https://github.com/stuartshay/otel-data-api/actions/workflows/docker.yml
 
-# Find the new image tag by scanning Docker Hub
+# Fallback: scan Docker Hub if run_number is unknown
 for i in $(seq 20 30); do
   result=$(docker manifest inspect stuartshay/otel-data-api:1.0.$i 2>&1 | head -1)
   if [[ "$result" == "{" ]]; then echo "FOUND: 1.0.$i"; fi
@@ -377,6 +416,27 @@ kubectl get secret dockerhub-registry -n otel-data-api
 
 # Check events
 kubectl describe pod -n otel-data-api -l app.kubernetes.io/name=otel-data-api
+```
+
+### otel-data-api Branch Protection Rules
+
+The `master` branch on `stuartshay/otel-data-api` enforces these protections:
+
+| Rule                             | Setting                         |
+| -------------------------------- | ------------------------------- |
+| Required status checks           | Pre-commit Checks, Python Tests |
+| Strict status checks             | Yes (branch must be up-to-date) |
+| Required approving reviews       | 0                               |
+| Required conversation resolution | No                              |
+| Enforce admins                   | No                              |
+| Allow force pushes               | No                              |
+| Allow deletions                  | No                              |
+
+To inspect current settings:
+
+```bash
+gh api repos/stuartshay/otel-data-api/branches/master/protection \
+  | python3 -m json.tool
 ```
 
 ### k8s-gitops Branch Protection Rules

@@ -39,8 +39,8 @@ class Location(BaseModel):
                     "battery_status": 2,
                     "connection_type": "w",
                     "trigger": "t",
-                    "timestamp": "2026-02-12T08:10:55Z",
-                    "created_at": "2026-02-12T08:10:55Z",
+                    "timestamp": "2026-02-12T08:10:55+00:00",
+                    "created_at": "2026-02-12T08:10:55+00:00",
                 }
             ]
         }

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import datetime as dt
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 router = APIRouter(tags=["Health"])
+
+
+def _utc_now() -> dt.datetime:
+    return dt.datetime.now(dt.UTC)
 
 
 @router.get("/health")
@@ -16,7 +20,7 @@ async def health(request: Request) -> dict:
     return {
         "status": "healthy",
         "version": request.app.version,
-        "timestamp": datetime.now(UTC).isoformat(),
+        "timestamp": _utc_now().isoformat(),
     }
 
 
@@ -31,7 +35,7 @@ async def ready(request: Request) -> JSONResponse:
                 "status": "ready",
                 "database": db_info,
                 "version": request.app.version,
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": _utc_now().isoformat(),
             }
         )
     except Exception as exc:

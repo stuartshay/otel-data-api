@@ -125,6 +125,8 @@ make test-cov
 pytest tests/test_health.py -v
 ```
 
+Coverage is enforced with a minimum 85% line coverage for `app/` (configured in `pyproject.toml`).
+
 ## Docker
 
 ```bash

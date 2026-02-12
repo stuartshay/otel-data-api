@@ -27,12 +27,12 @@ class UnifiedGpsPoint(BaseModel):
                     "identifier": "iphone_stuart",
                     "latitude": 40.736238,
                     "longitude": -74.039405,
-                    "timestamp": "2026-02-12T08:11:55Z",
+                    "timestamp": "2026-02-12T08:11:55+00:00",
                     "accuracy": 7,
                     "battery": 100,
                     "speed_kmh": None,
                     "heart_rate": None,
-                    "created_at": "2026-02-12T08:11:55Z",
+                    "created_at": "2026-02-12T08:11:55+00:00",
                 }
             ]
         }

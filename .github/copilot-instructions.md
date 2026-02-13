@@ -31,13 +31,13 @@ spatial queries, and optional AWS Cognito JWT authentication.
 
 ### Branch Strategy
 
-⚠️ **CRITICAL RULE**: NEVER commit directly to `main` branch. All changes
+⚠️ **CRITICAL RULE**: NEVER commit directly to `master` branch. All changes
 MUST go through `develop` or `feature/*` branches.
 
-- **main**: Protected branch, production-only (PR required, direct commits
+- **master**: Protected branch, production-only (PR required, direct commits
   FORBIDDEN)
 - **develop**: Primary development branch (work here by default)
-- **feature/\***: Feature branches (use for isolated features, PR to `main`)
+- **feature/\***: Feature branches (use for isolated features, PR to `master`)
 
 ### Before Starting Any Work
 
@@ -48,7 +48,7 @@ MUST go through `develop` or `feature/*` branches.
 git checkout develop && git fetch origin && git pull origin develop
 
 # If creating a new feature branch:
-git checkout main && git fetch origin && git pull origin main
+git checkout master && git fetch origin && git pull origin master
 git checkout -b feature/my-feature
 ```
 
@@ -62,8 +62,8 @@ git checkout -b feature/my-feature
 6. Test endpoints: `curl http://localhost:8080/health`
 7. Run `pre-commit run -a` before commit
 8. Commit and push to `develop` or `feature/*` branch
-9. Create PR to `main` when ready for deployment
-10. **NEVER**: `git push origin main` or commit directly to main
+9. Create PR to `master` when ready for deployment
+10. **NEVER**: `git push origin master` or commit directly to master
 
 ## Writing Code
 
@@ -92,7 +92,7 @@ git checkout -b feature/my-feature
 
 ## Safety Rules (Do Not)
 
-- ⛔ **NEVER commit directly to main branch** - ALWAYS use develop or feature
+- ⛔ **NEVER commit directly to master branch** - ALWAYS use develop or feature
   branches
 - Do not commit secrets or `.env` files
 - Do not use `latest` Docker tags in deployments

@@ -40,5 +40,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
 
-# Run with uvicorn
-CMD ["uvicorn", "run:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2"]
+# Run with uvicorn (newrelic-admin wraps for APM when license key is set)
+CMD ["newrelic-admin", "run-program", "uvicorn", "run:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2"]

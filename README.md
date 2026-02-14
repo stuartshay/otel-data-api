@@ -158,6 +158,7 @@ make docker-run
 | `COGNITO_CLIENT_ID` | — | Cognito client ID |
 | `CORS_ORIGINS` | `*` | Allowed CORS origins |
 | `OTEL_SERVICE_NAME` | `otel-data-api` | OTel service name |
+| `NEW_RELIC_LICENSE_KEY` | — | New Relic license key (optional) |
 
 ## Database Schema
 

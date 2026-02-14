@@ -35,6 +35,7 @@
         "kustomization",
         "markdownlint",
         "mypy",
+        "newrelic",
         "opencontainers",
         "OWNTRACKS",
         "owntracks",

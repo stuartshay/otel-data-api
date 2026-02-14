@@ -15,6 +15,19 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
 
+logger = logging.getLogger("otel-data-api")
+
+# --- New Relic (optional, env-gated) ---
+if os.getenv("NEW_RELIC_LICENSE_KEY"):
+    try:
+        import newrelic.agent  # pyright: ignore[reportMissingImports]
+
+        newrelic.agent.initialize()
+        newrelic.agent.register_application(timeout=10)
+        logger.info("New Relic agent initialized")
+    except Exception:
+        logger.exception("New Relic agent failed to initialize — continuing without it")
+
 config = Config.from_env()
 app = create_app(config)
 

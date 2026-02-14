@@ -24,7 +24,20 @@ if os.getenv("NEW_RELIC_LICENSE_KEY"):
 
         newrelic.agent.initialize()
         newrelic.agent.register_application(timeout=10)
-        logger.info("New Relic agent initialized")
+
+        # Enable log-trace correlation by replacing the root log formatter
+        # with NewRelicContextFormatter, which injects trace.id, span.id,
+        # and entity metadata into every log record.
+        from newrelic.agent import NewRelicContextFormatter  # pyright: ignore[reportMissingImports]
+
+        for handler in logging.root.handlers:
+            handler.setFormatter(
+                NewRelicContextFormatter(
+                    "%(asctime)s %(levelname)s [%(name)s] %(message)s",
+                ),
+            )
+
+        logger.info("New Relic agent initialized with trace correlation")
     except Exception:
         logger.exception("New Relic agent failed to initialize — continuing without it")
 

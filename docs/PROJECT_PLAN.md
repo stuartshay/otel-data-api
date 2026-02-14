@@ -134,7 +134,13 @@ queries, and optional AWS Cognito JWT authentication.
 
 ### Tasks
 
-- [ ] Add OpenTelemetry trace correlation (response headers, log injection)
+- [x] Add OpenTelemetry trace correlation (response headers, log injection)
+  - Added `TraceCorrelationMiddleware` injecting `X-Trace-Id` / `X-Span-Id`
+    response headers from New Relic agent trace context
+  - Enabled `NewRelicContextFormatter` for log-trace correlation (injects
+    `trace.id`, `span.id`, `entity.name` into log records)
+  - CORS `expose_headers` configured for frontend access to trace headers
+  - 3 unit tests covering NR-active, NR-absent, and graceful fallback
 - [ ] Add `/api/v1/locations` write endpoints (POST for ingesting data)
 - [ ] Add rate limiting middleware
 - [ ] Add response caching for expensive spatial queries

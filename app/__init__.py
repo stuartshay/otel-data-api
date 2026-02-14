@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.auth import configure_auth
 from app.config import Config
 from app.database import DatabaseService
+from app.middleware import SPAN_ID_HEADER, TRACE_ID_HEADER, TraceCorrelationMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,9 @@ def create_app(config: Config) -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Trace correlation — injects X-Trace-Id / X-Span-Id response headers
+    app.add_middleware(TraceCorrelationMiddleware)
+
     # CORS
     if config.cors_origins:
         app.add_middleware(
@@ -50,6 +54,7 @@ def create_app(config: Config) -> FastAPI:
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
+            expose_headers=[TRACE_ID_HEADER, SPAN_ID_HEADER],
         )
 
     # Auth

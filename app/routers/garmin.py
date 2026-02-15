@@ -136,18 +136,27 @@ async def get_activity(
 async def list_track_points(
     request: Request,
     activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
-    limit: int = Query(500, ge=1, le=10000),
+    limit: int = Query(500, ge=1, le=25000),
     offset: int = Query(0, ge=0),
     sort: str = Query(
         "timestamp",
         description="Sort column (timestamp, altitude, speed_kmh, heart_rate, created_at)",
     ),
     order: Literal["asc", "desc"] = Query("asc"),
+    simplify: float | None = Query(
+        None,
+        ge=0.000001,
+        le=0.01,
+        description="Douglas-Peucker simplification tolerance in degrees. "
+        "When set, returns the full route simplified via PostGIS ST_Simplify, "
+        "ignoring limit/offset. Recommended: 0.00001 (~1m), 0.00005 (~5m).",
+    ),
 ) -> PaginatedResponse[GarminTrackPoint]:
     """List track points for a specific activity.
 
     Returns GPS track points with altitude, speed, heart rate, and cadence data.
-    Supports up to 10,000 points per request for full activity visualization.
+    Use the `simplify` parameter to apply Douglas-Peucker line simplification
+    for efficient map rendering of the complete route.
     """
     db = request.app.state.db
 
@@ -165,6 +174,39 @@ async def list_track_points(
         "SELECT COUNT(*) FROM public.garmin_track_points WHERE activity_id = $1",
         activity_id,
     )
+
+    if simplify is not None:
+        rows = await db.fetch(
+            "WITH simplified AS ("
+            "  SELECT ST_Simplify("
+            "    ST_MakeLine(ST_MakePoint(longitude, latitude) ORDER BY timestamp ASC),"
+            "    $2"
+            "  ) AS geom"
+            "  FROM public.garmin_track_points"
+            "  WHERE activity_id = $1"
+            "), simplified_coords AS ("
+            "  SELECT (dp).geom AS geom"
+            "  FROM simplified, LATERAL ST_DumpPoints(geom) AS dp"
+            "), matched AS ("
+            "  SELECT gtp.id, gtp.activity_id, gtp.latitude, gtp.longitude, "
+            "  gtp.timestamp, gtp.altitude, gtp.distance_from_start_km, gtp.speed_kmh, "
+            "  gtp.heart_rate, gtp.cadence, gtp.temperature_c, gtp.created_at, "
+            "  ROW_NUMBER() OVER (PARTITION BY sc.geom ORDER BY gtp.timestamp, gtp.id) AS rn "
+            "  FROM public.garmin_track_points gtp "
+            "  INNER JOIN simplified_coords sc "
+            "    ON ST_DWithin(ST_MakePoint(gtp.longitude, gtp.latitude), sc.geom, 1e-06) "
+            "  WHERE gtp.activity_id = $1"
+            ") "
+            "SELECT id, activity_id, latitude, longitude, "
+            "timestamp, altitude, distance_from_start_km, speed_kmh, "
+            "heart_rate, cadence, temperature_c, created_at "
+            "FROM matched WHERE rn = 1 "
+            f"ORDER BY timestamp {order}",
+            activity_id,
+            simplify,
+        )
+        items = [GarminTrackPoint(**dict(row)) for row in rows]
+        return PaginatedResponse(items=items, total=total, limit=len(items), offset=0)
 
     rows = await db.fetch(
         f"SELECT id, activity_id, latitude, longitude, timestamp, altitude, "

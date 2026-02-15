@@ -149,3 +149,57 @@ async def test_list_track_points_activity_not_found(client: AsyncClient, mock_db
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Activity not found"}
+
+
+@pytest.mark.asyncio
+async def test_list_track_points_simplify(client: AsyncClient, mock_db):
+    mock_db.fetchval.side_effect = [1, 100]
+    mock_db.fetch.return_value = [_track_row(), _track_row()]
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/tracks?simplify=0.00001")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 100
+    assert data["limit"] == 2
+    assert data["offset"] == 0
+    assert len(data["items"]) == 2
+
+    query, *params = mock_db.fetch.await_args.args
+    assert "ST_Simplify" in query
+    assert "ST_DWithin" in query
+    assert "rn = 1" in query
+    assert params == ["20932993811", 0.00001]
+
+
+@pytest.mark.asyncio
+async def test_list_track_points_simplify_respects_order(client: AsyncClient, mock_db):
+    mock_db.fetchval.side_effect = [1, 50]
+    mock_db.fetch.return_value = [_track_row()]
+
+    response = await client.get(
+        "/api/v1/garmin/activities/20932993811/tracks?simplify=0.0001&order=desc"
+    )
+
+    assert response.status_code == 200
+    query = mock_db.fetch.await_args.args[0]
+    assert "ORDER BY timestamp desc" in query
+
+
+@pytest.mark.asyncio
+async def test_list_track_points_simplify_not_found(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = None
+
+    response = await client.get("/api/v1/garmin/activities/missing/tracks?simplify=0.00001")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Activity not found"}
+
+
+@pytest.mark.asyncio
+async def test_list_track_points_simplify_validation(client: AsyncClient, mock_db):
+    response = await client.get("/api/v1/garmin/activities/20932993811/tracks?simplify=0.1")
+    assert response.status_code == 422
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/tracks?simplify=0.0000001")
+    assert response.status_code == 422

@@ -159,6 +159,11 @@ make docker-run
 | `CORS_ORIGINS` | `*` | Allowed CORS origins |
 | `OTEL_SERVICE_NAME` | `otel-data-api` | OTel service name |
 | `NEW_RELIC_LICENSE_KEY` | — | New Relic license key (optional) |
+| `NEW_RELIC_APP_NAME` | `otel-data-api` | New Relic application name |
+| `NEW_RELIC_APPLICATION_LOGGING_ENABLED` | `true` | Enable NR log collection |
+| `NEW_RELIC_APPLICATION_LOGGING_FORWARDING_ENABLED` | `true` | Forward logs to NR |
+| `NEW_RELIC_LOG` | `stdout` | NR agent log destination |
+| `NEW_RELIC_DISTRIBUTED_TRACING_ENABLED` | `true` | Enable distributed tracing |
 
 ## Database Schema
 

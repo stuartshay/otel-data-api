@@ -24,12 +24,13 @@ All automation, assistants, and developers must follow
 
 ## Development Workflow
 
-1. Switch to develop: `git checkout develop && git pull`
-2. Make changes to API code in `app/`
-3. Run `pre-commit run -a`
-4. Run `make test`
-5. Commit and push to `develop` or `feature/*` branch
-6. Create PR to `master` when ready for production
+1. Switch to develop: `git checkout develop && git pull origin develop`
+2. **Rebase from master**: `git fetch origin master && git rebase origin/master`
+3. Make changes to API code in `app/`
+4. Run `pre-commit run -a`
+5. Run `make test`
+6. Commit and push to `develop` or `feature/*` branch
+7. Create PR to `master` when ready for production
 
 ## Project Structure
 

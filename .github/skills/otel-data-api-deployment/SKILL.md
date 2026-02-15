@@ -74,6 +74,63 @@ Changes to otel-data-api can impact these downstream services:
 **Before breaking changes**: Verify that modified endpoints are not consumed
 by the gateway resolvers (`src/datasources/OtelDataAPI.ts`) or UI components.
 
+## Agent-Assisted Deployment Flow
+
+When an agent executes a deployment, it **MUST pause at every PR** for user
+review before proceeding. The agent never merges PRs autonomously.
+
+### Flow Overview
+
+```text
+1. Pre-deployment checks (rebase, pre-commit, tests)
+2. Commit & push to develop
+3. Create PR (develop → master)
+   ⏸️ PAUSE — Present PR link, CI status, and diff summary to user
+   → User reviews and merges PR
+4. Wait for Docker build CI to complete → determine version tag
+5. k8s-gitops auto-creates version update PR via repository_dispatch
+   ⏸️ PAUSE — Present auto-created PR link, CI status, and diff to user
+   → User reviews and merges k8s-gitops PR
+6. Validate Argo CD sync and live deployment
+7. If Copilot review comments exist on any PR:
+   - Analyze each comment for validity
+   - Fix valid suggestions, dismiss invalid ones with rationale
+   - Push fixes and reply to threads
+   ⏸️ PAUSE — Present updated PR for re-review if changes were made
+```
+
+### PAUSE Point Requirements
+
+At each ⏸️ PAUSE, the agent must present:
+
+| Item              | Details                                                |
+| ----------------- | ------------------------------------------------------ |
+| PR link           | Full GitHub URL                                        |
+| Branch            | Source → target (e.g., `develop` → `master`)           |
+| Changes summary   | Files changed and brief description                    |
+| CI status         | All check names with pass/fail/pending                 |
+| Review status     | Approved / pending / changes requested                 |
+| Mergeable         | Yes/No with merge state                                |
+| Blocking items    | Any unresolved conversations or failing checks         |
+
+The agent **waits for the user to confirm the merge** before proceeding to
+the next step. Never assume a PR is merged — verify via API after user
+confirmation.
+
+### k8s-gitops Auto-PR Mechanism
+
+When the Docker build completes, the CI workflow dispatches a
+`repository_dispatch` event (type: `otel-data-api-release`) to
+`stuartshay/k8s-gitops`. This triggers an automated workflow that:
+
+1. Creates a branch `update-otel-data-api-<version>`
+2. Runs `update-version.sh <version>` to update VERSION, deployment.yaml
+3. Creates a PR to `master` with title "Update otel-data-api to v\<version\>"
+4. CI checks and Copilot review run automatically
+
+The agent should check for this auto-created PR rather than manually creating
+one. Use: `gh pr list --repo stuartshay/k8s-gitops --state open`
+
 ## Deployment Procedure
 
 ### Step 1: Pre-Deployment Checks
@@ -521,9 +578,43 @@ curl -s https://api.lab.informationcart.com/health | python3 -m json.tool
 docker manifest inspect stuartshay/otel-data-api:<tag> 2>&1 | head -3
 ```
 
+## Multi-Service Coordinated Deployments
+
+When deploying changes that span multiple services (e.g., a new API parameter
+consumed by the gateway and UI), **deployment order matters**:
+
+1. **otel-data-api first** — Backend must support the new feature before
+   consumers send it
+2. **otel-data-gateway second** — Gateway must pass the parameter through
+   before the UI sends it
+3. **otel-data-ui last** — UI can then use the new feature
+
+Each service follows its own deployment cycle with PR review pauses:
+
+```text
+For each service (API → Gateway → UI):
+  1. Pre-deployment checks on develop branch
+  2. Commit, push, create source repo PR
+     ⏸️ PAUSE — User reviews source PR
+  3. User merges → Docker build CI runs
+  4. Wait for CI → k8s-gitops auto-creates version PR
+     ⏸️ PAUSE — User reviews k8s-gitops PR
+  5. User merges → Argo CD syncs
+  6. Validate live deployment before proceeding to next service
+```
+
+Total pause points per service: **2** (source PR + k8s-gitops PR)
+Total pause points for 3-service deploy: **6**
+
+**Key pattern**: New additive parameters (query params, GraphQL fields) are
+backward-compatible — the upstream service simply ignores unknown parameters
+until updated. This makes the rollout safe even if there's a delay between
+deployments.
+
 ## Version History
 
-| Version | Date       | Changes                                         |
-| ------- | ---------- | ----------------------------------------------- |
-| 1.0.21  | 2026-02-12 | Swagger examples, test coverage, health UTC fix |
-| 1.0.15  | 2026-02-11 | Spatial endpoint fix, OpenAPI spec regeneration |
+| Version | Date       | Changes                                           |
+| ------- | ---------- | ------------------------------------------------- |
+| 1.0.29  | 2026-02-15 | PostGIS ST_Simplify for Garmin track downsampling |
+| 1.0.21  | 2026-02-12 | Swagger examples, test coverage, health UTC fix   |
+| 1.0.15  | 2026-02-11 | Spatial endpoint fix, OpenAPI spec regeneration   |

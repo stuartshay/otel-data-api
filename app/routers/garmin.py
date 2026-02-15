@@ -185,17 +185,23 @@ async def list_track_points(
             "  FROM public.garmin_track_points"
             "  WHERE activity_id = $1"
             "), simplified_coords AS ("
-            "  SELECT ST_X((dp).geom) AS lon, ST_Y((dp).geom) AS lat"
+            "  SELECT (dp).geom AS geom"
             "  FROM simplified, LATERAL ST_DumpPoints(geom) AS dp"
+            "), matched AS ("
+            "  SELECT gtp.id, gtp.activity_id, gtp.latitude, gtp.longitude, "
+            "  gtp.timestamp, gtp.altitude, gtp.distance_from_start_km, gtp.speed_kmh, "
+            "  gtp.heart_rate, gtp.cadence, gtp.temperature_c, gtp.created_at, "
+            "  ROW_NUMBER() OVER (PARTITION BY sc.geom ORDER BY gtp.timestamp, gtp.id) AS rn "
+            "  FROM public.garmin_track_points gtp "
+            "  INNER JOIN simplified_coords sc "
+            "    ON ST_DWithin(ST_MakePoint(gtp.longitude, gtp.latitude), sc.geom, 1e-06) "
+            "  WHERE gtp.activity_id = $1"
             ") "
-            "SELECT gtp.id, gtp.activity_id, gtp.latitude, gtp.longitude, "
-            "gtp.timestamp, gtp.altitude, gtp.distance_from_start_km, gtp.speed_kmh, "
-            "gtp.heart_rate, gtp.cadence, gtp.temperature_c, gtp.created_at "
-            "FROM public.garmin_track_points gtp "
-            "INNER JOIN simplified_coords sc "
-            "ON gtp.longitude = sc.lon AND gtp.latitude = sc.lat "
-            "WHERE gtp.activity_id = $1 "
-            "ORDER BY gtp.timestamp",
+            "SELECT id, activity_id, latitude, longitude, "
+            "timestamp, altitude, distance_from_start_km, speed_kmh, "
+            "heart_rate, cadence, temperature_c, created_at "
+            "FROM matched WHERE rn = 1 "
+            f"ORDER BY timestamp {order}",
             activity_id,
             simplify,
         )

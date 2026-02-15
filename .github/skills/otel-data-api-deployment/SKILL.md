@@ -127,7 +127,6 @@ When the Docker build completes, the CI workflow dispatches a
 2. Runs `update-version.sh <version>` to update VERSION, deployment.yaml
 3. Creates a PR to `master` with title "Update otel-data-api to v\<version\>"
 4. CI checks and Copilot review run automatically
-5. Auto-approve workflow provides the required review
 
 The agent should check for this auto-created PR rather than manually creating
 one. Use: `gh pr list --repo stuartshay/k8s-gitops --state open`

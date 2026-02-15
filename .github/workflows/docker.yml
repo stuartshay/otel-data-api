@@ -161,11 +161,16 @@ jobs:
         continue-on-error: true
 
       - name: Record New Relic deployment marker
-        if: github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/master' && steps.push.outputs.should_push == 'true'
         env:
           NEW_RELIC_API_KEY: ${{ secrets.NEW_RELIC_API_KEY }}
           NEW_RELIC_APP_GUID: ${{ secrets.NEW_RELIC_APP_GUID }}
         run: |
+          if [[ -z "${NEW_RELIC_API_KEY}" || -z "${NEW_RELIC_APP_GUID}" ]]; then
+            echo "⚠️ Skipping: NEW_RELIC_API_KEY or NEW_RELIC_APP_GUID not configured"
+            exit 0
+          fi
+
           VERSION="${{ steps.version.outputs.version }}"
           DESCRIPTION="${{ env.IMAGE_NAME }} v${VERSION}"
 

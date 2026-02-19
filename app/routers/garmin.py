@@ -193,7 +193,7 @@ async def list_track_points(
             "  gtp.heart_rate, gtp.cadence, gtp.temperature_c, gtp.created_at, "
             "  ROW_NUMBER() OVER ("
             "    PARTITION BY gtp.longitude, gtp.latitude "
-            "    ORDER BY gtp.timestamp, gtp.id"
+            "    ORDER BY gtp.timestamp, (gtp.altitude IS NOT NULL) DESC, gtp.id"
             "  ) AS rn "
             "  FROM public.garmin_track_points gtp "
             "  INNER JOIN simplified_coords sc "

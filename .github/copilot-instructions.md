@@ -52,6 +52,13 @@ git checkout master && git fetch origin && git pull origin master
 git checkout -b feature/my-feature
 ```
 
+**ALWAYS rebase feature branches onto the latest protected branch before creating a PR:**
+
+```bash
+# For feature branches only (do NOT rebase the shared develop branch):
+git fetch origin master && git rebase origin/master
+```
+
 ### Daily Workflow
 
 1. **ALWAYS** start from `develop` or create a feature branch
@@ -62,8 +69,10 @@ git checkout -b feature/my-feature
 6. Test endpoints: `curl http://localhost:8080/health`
 7. Run `pre-commit run -a` before commit
 8. Commit and push to `develop` or `feature/*` branch
-9. Create PR to `master` when ready for deployment
-10. **NEVER**: `git push origin master` or commit directly to master
+9. **For feature branches**: rebase onto latest `master` before PR:
+   `git fetch origin master && git rebase origin/master`
+10. Create PR to `master` when ready for deployment
+11. **NEVER**: `git push origin master` or commit directly to master
 
 ## Writing Code
 

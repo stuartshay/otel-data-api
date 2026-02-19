@@ -75,7 +75,7 @@ async def list_activities(
         f"a.device_manufacturer, a.avg_temperature_c, a.min_temperature_c, "
         f"a.max_temperature_c, a.total_elapsed_time, a.total_timer_time, "
         f"a.created_at, a.uploaded_at, "
-        f"(SELECT COUNT(*) FROM public.garmin_track_points t "
+        f"(SELECT COUNT(DISTINCT t.timestamp) FROM public.garmin_track_points t "
         f"WHERE t.activity_id = a.activity_id) AS track_point_count "
         f"FROM public.garmin_activities a {where} "
         f"ORDER BY a.{sort} {order} "
@@ -118,7 +118,7 @@ async def get_activity(
         "a.device_manufacturer, a.avg_temperature_c, a.min_temperature_c, "
         "a.max_temperature_c, a.total_elapsed_time, a.total_timer_time, "
         "a.created_at, a.uploaded_at, "
-        "(SELECT COUNT(*) FROM public.garmin_track_points t "
+        "(SELECT COUNT(DISTINCT t.timestamp) FROM public.garmin_track_points t "
         "WHERE t.activity_id = a.activity_id) AS track_point_count "
         "FROM public.garmin_activities a WHERE a.activity_id = $1",
         activity_id,

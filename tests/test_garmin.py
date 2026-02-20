@@ -169,6 +169,7 @@ async def test_list_track_points_simplify(client: AsyncClient, mock_db):
     assert "ST_Simplify" in query
     assert "gtp.longitude = sc.lng AND gtp.latitude = sc.lat" in query
     assert "rn = 1" in query
+    assert "gtp.timestamp, (gtp.altitude IS NOT NULL) DESC, gtp.id" in query
     assert params == ["20932993811", 0.00001]
 
 

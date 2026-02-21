@@ -109,6 +109,36 @@ class GarminTrackPoint(BaseModel):
     }
 
 
+class GarminChartPoint(BaseModel):
+    timestamp: datetime
+    altitude: float | None = None
+    distance_from_start_km: float | None = None
+    speed_kmh: float | None = None
+    heart_rate: int | None = None
+    cadence: int | None = None
+    temperature_c: int | None = None
+    latitude: float
+    longitude: float
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "timestamp": "2025-11-08T18:21:13Z",
+                    "altitude": 12.4,
+                    "distance_from_start_km": 0.0,
+                    "speed_kmh": 24.5,
+                    "heart_rate": 135,
+                    "cadence": 80,
+                    "temperature_c": 18,
+                    "latitude": 40.71501586586237,
+                    "longitude": -74.01768794283271,
+                }
+            ]
+        }
+    }
+
+
 class SportInfo(BaseModel):
     sport: str
     activity_count: int

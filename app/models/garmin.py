@@ -120,6 +120,24 @@ class GarminChartPoint(BaseModel):
     latitude: float
     longitude: float
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "timestamp": "2025-11-08T18:21:13Z",
+                    "altitude": 12.4,
+                    "distance_from_start_km": 0.0,
+                    "speed_kmh": 24.5,
+                    "heart_rate": 135,
+                    "cadence": 80,
+                    "temperature_c": 18,
+                    "latitude": 40.71501586586237,
+                    "longitude": -74.01768794283271,
+                }
+            ]
+        }
+    }
+
 
 class SportInfo(BaseModel):
     sport: str

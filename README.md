@@ -14,16 +14,12 @@ location database with PostGIS spatial queries.
 ## Architecture
 
 ```mermaid
-%%{init: {
-    "theme": "neutral",
-    "flowchart": { "curve": "linear" },
-    "themeCSS": ".mermaid .mermaidToolbar { display: none; }"
-}}%%
-flowchart LR
-    ui["otel-data-ui<br/> (React)"] --> gateway["otel-data-gateway<br/> (Apollo GraphQL BFF)"]
-    gateway --> api["otel-data-api<br/> (FastAPI)"]
+%%{init: {"theme": "neutral", "flowchart": {"curve": "linear"}}}%%
+flowchart TD
+    ui["otel-data-ui<br/>(React)"] --> gateway["otel-data-gateway<br/>(Apollo GraphQL BFF)"]
+    gateway --> api["otel-data-api<br/>(FastAPI)"]
     api --> pool["PgBouncer<br/>:6432"]
-    pool --> db["PostgreSQL<br/> + PostGIS"]
+    pool --> db["PostgreSQL<br/>+ PostGIS"]
     api -.->|optional auth| cognito["Cognito JWT<br/>(Auth, optional)"]
 ```
 

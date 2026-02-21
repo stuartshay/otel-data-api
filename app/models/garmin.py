@@ -109,6 +109,18 @@ class GarminTrackPoint(BaseModel):
     }
 
 
+class GarminChartPoint(BaseModel):
+    timestamp: datetime
+    altitude: float | None = None
+    distance_from_start_km: float | None = None
+    speed_kmh: float | None = None
+    heart_rate: int | None = None
+    cadence: int | None = None
+    temperature_c: int | None = None
+    latitude: float
+    longitude: float
+
+
 class SportInfo(BaseModel):
     sport: str
     activity_count: int

@@ -178,9 +178,7 @@ async def test_list_track_points_simplify_respects_order(client: AsyncClient, mo
     mock_db.fetchval.side_effect = [1, 50]
     mock_db.fetch.return_value = [_track_row()]
 
-    response = await client.get(
-        "/api/v1/garmin/activities/20932993811/tracks?simplify=0.0001&order=desc"
-    )
+    response = await client.get("/api/v1/garmin/activities/20932993811/tracks?simplify=0.0001&order=desc")
 
     assert response.status_code == 200
     query = mock_db.fetch.await_args.args[0]
@@ -204,3 +202,48 @@ async def test_list_track_points_simplify_validation(client: AsyncClient, mock_d
 
     response = await client.get("/api/v1/garmin/activities/20932993811/tracks?simplify=0.0000001")
     assert response.status_code == 422
+
+
+def _chart_row() -> dict:
+    return {
+        "timestamp": "2025-11-08T18:21:13+00:00",
+        "altitude": 12.4,
+        "distance_from_start_km": 0.0,
+        "speed_kmh": 24.5,
+        "heart_rate": 135,
+        "cadence": 80,
+        "temperature_c": 18,
+        "latitude": 40.715,
+        "longitude": -74.017,
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_chart_data_success(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = [_chart_row(), _chart_row()]
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/chart-data")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 2
+    assert data[0]["latitude"] == 40.715
+    assert data[0]["altitude"] == 12.4
+    assert data[0]["speed_kmh"] == 24.5
+
+    query = mock_db.fetch.await_args.args[0]
+    assert "ranked" in query
+    assert "rn = 1" in query
+    assert "ORDER BY timestamp ASC" in query
+
+
+@pytest.mark.asyncio
+async def test_get_chart_data_not_found(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = None
+
+    response = await client.get("/api/v1/garmin/activities/nonexistent/chart-data")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Activity not found"}

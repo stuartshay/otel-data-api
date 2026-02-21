@@ -1,21 +1,26 @@
 # OTel Data API
 
+[![Lint](https://github.com/stuartshay/otel-data-api/actions/workflows/lint.yml/badge.svg)](https://github.com/stuartshay/otel-data-api/actions/workflows/lint.yml)
+[![Docker](https://github.com/stuartshay/otel-data-api/actions/workflows/docker.yml/badge.svg)](https://github.com/stuartshay/otel-data-api/actions/workflows/docker.yml)
+[![Publish Types](https://github.com/stuartshay/otel-data-api/actions/workflows/publish-types.yml/badge.svg)](https://github.com/stuartshay/otel-data-api/actions/workflows/publish-types.yml)
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-stuartshay%2Fotel--data--api-blue?logo=docker)](https://hub.docker.com/repository/docker/stuartshay/otel-data-api)
+[![npm](https://img.shields.io/npm/v/@stuartshay/otel-data-types?logo=npm&label=otel-data-types)](https://www.npmjs.com/package/@stuartshay/otel-data-types)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-latest-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+
 FastAPI microservice providing read/write access to the OwnTracks + Garmin
 location database with PostGIS spatial queries.
 
 ## Architecture
 
-```text
-┌────────────┐     ┌─────────────────┐     ┌──────────────┐     ┌───────────┐     ┌────────────┐
-│ otel-data-ui│────▶│otel-data-gateway│────▶│ otel-data-api│────▶│ PgBouncer │────▶│ PostgreSQL │
-│  (React)    │     │(Apollo GraphQL) │     │  (FastAPI)   │     │  :6432    │     │  + PostGIS │
-└────────────┘     └─────────────────┘     └──────────────┘     └───────────┘     └────────────┘
-                                                  │
-                                                  ▼
-                                           ┌──────────────┐
-                                           │  Cognito JWT │
-                                           │    (Auth)    │
-                                           └──────────────┘
+```mermaid
+%%{init: {"theme": "neutral", "flowchart": {"curve": "linear"}}}%%
+flowchart LR
+    ui["otel-data-ui<br/>(React)"] --> gateway["otel-data-gateway<br/>(Apollo GraphQL BFF)"]
+    gateway --> api["otel-data-api<br/>(FastAPI)"]
+    api -.->|optional auth| cognito["Cognito JWT<br/>(Auth, optional)"]
+    api --> pool["PgBouncer<br/>:6432"]
+    pool --> db["PostgreSQL<br/>+ PostGIS"]
 ```
 
 ## Features

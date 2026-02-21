@@ -8,7 +8,7 @@ import fastapi
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.models import PaginatedResponse
-from app.models.garmin import GarminActivity, GarminTrackPoint, SportInfo
+from app.models.garmin import GarminActivity, GarminChartPoint, GarminTrackPoint, SportInfo
 
 router = APIRouter(prefix="/api/v1/garmin", tags=["Garmin"])
 
@@ -20,12 +20,8 @@ TRACK_SORT_WHITELIST = {"timestamp", "altitude", "speed_kmh", "heart_rate", "cre
 async def list_activities(
     request: Request,
     sport: str | None = Query(None, description="Filter by sport type", examples=["cycling"]),
-    date_from: str | None = Query(
-        None, description="Filter from date (YYYY-MM-DD)", examples=["2025-11-01"]
-    ),
-    date_to: str | None = Query(
-        None, description="Filter to date (YYYY-MM-DD)", examples=["2025-11-30"]
-    ),
+    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2025-11-01"]),
+    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2025-11-30"]),
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     sort: str = Query(
@@ -164,9 +160,7 @@ async def list_track_points(
         sort = "timestamp"
 
     # Verify activity exists
-    exists = await db.fetchval(
-        "SELECT 1 FROM public.garmin_activities WHERE activity_id = $1", activity_id
-    )
+    exists = await db.fetchval("SELECT 1 FROM public.garmin_activities WHERE activity_id = $1", activity_id)
     if not exists:
         raise HTTPException(status_code=404, detail="Activity not found")
 
@@ -234,3 +228,44 @@ async def list_track_points(
 
     items = [GarminTrackPoint(**dict(row)) for row in rows]
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get(
+    "/activities/{activity_id}/chart-data",
+    response_model=list[GarminChartPoint],
+    responses={404: {"description": "Activity not found"}},
+)
+async def get_chart_data(
+    request: Request,
+    activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
+) -> list[GarminChartPoint]:
+    """Return all track points for chart rendering (no pagination).
+
+    Provides the complete time-series data (altitude, speed, heart rate, cadence)
+    for an activity, deduplicated by timestamp. Designed for client-side charting
+    without pagination limits.
+    """
+    db = request.app.state.db
+
+    exists = await db.fetchval("SELECT 1 FROM public.garmin_activities WHERE activity_id = $1", activity_id)
+    if not exists:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    rows = await db.fetch(
+        "WITH ranked AS ("
+        "  SELECT latitude, longitude, timestamp, altitude, "
+        "  distance_from_start_km, speed_kmh, heart_rate, cadence, temperature_c, "
+        "  ROW_NUMBER() OVER ("
+        "    PARTITION BY timestamp "
+        "    ORDER BY (altitude IS NOT NULL) DESC, id DESC"
+        "  ) AS rn "
+        "  FROM public.garmin_track_points "
+        "  WHERE activity_id = $1"
+        ") "
+        "SELECT latitude, longitude, timestamp, altitude, "
+        "distance_from_start_km, speed_kmh, heart_rate, cadence, temperature_c "
+        "FROM ranked WHERE rn = 1 ORDER BY timestamp ASC",
+        activity_id,
+    )
+
+    return [GarminChartPoint(**dict(row)) for row in rows]

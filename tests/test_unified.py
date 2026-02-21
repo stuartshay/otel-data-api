@@ -53,8 +53,7 @@ async def test_list_unified_gps_with_filters(client: AsyncClient, mock_db):
     mock_db.fetch.return_value = [_unified_row()]
 
     response = await client.get(
-        "/api/v1/gps/unified?source=owntracks&date_from=2026-02-01&date_to=2026-02-12"
-        "&limit=25&offset=10&order=asc"
+        "/api/v1/gps/unified?source=owntracks&date_from=2026-02-01&date_to=2026-02-12&limit=25&offset=10&order=asc"
     )
 
     assert response.status_code == 200
@@ -78,9 +77,7 @@ async def test_list_unified_gps_with_filters(client: AsyncClient, mock_db):
 async def test_daily_summary_with_filters(client: AsyncClient, mock_db):
     mock_db.fetch.return_value = [_daily_summary_row()]
 
-    response = await client.get(
-        "/api/v1/gps/daily-summary?date_from=2026-02-01&date_to=2026-02-12&limit=7"
-    )
+    response = await client.get("/api/v1/gps/daily-summary?date_from=2026-02-01&date_to=2026-02-12&limit=7")
 
     assert response.status_code == 200
     data = response.json()

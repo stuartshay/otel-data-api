@@ -18,15 +18,9 @@ SORT_WHITELIST = {"id", "device_id", "timestamp", "created_at", "battery", "accu
 @router.get("", response_model=PaginatedResponse[Location])
 async def list_locations(
     request: Request,
-    device_id: str | None = Query(
-        None, description="Filter by device ID", examples=["iphone_stuart"]
-    ),
-    date_from: str | None = Query(
-        None, description="Filter from date (YYYY-MM-DD)", examples=["2026-02-01"]
-    ),
-    date_to: str | None = Query(
-        None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]
-    ),
+    device_id: str | None = Query(None, description="Filter by device ID", examples=["iphone_stuart"]),
+    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2026-02-01"]),
+    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]),
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     sort: str = Query(
@@ -95,12 +89,8 @@ async def list_devices(request: Request) -> list[DeviceInfo]:
 @router.get("/count", response_model=LocationCount)
 async def location_count(
     request: Request,
-    date: str | None = Query(
-        None, description="Filter by date (YYYY-MM-DD)", examples=["2026-02-12"]
-    ),
-    device_id: str | None = Query(
-        None, description="Filter by device ID", examples=["iphone_stuart"]
-    ),
+    date: str | None = Query(None, description="Filter by date (YYYY-MM-DD)", examples=["2026-02-12"]),
+    device_id: str | None = Query(None, description="Filter by device ID", examples=["iphone_stuart"]),
 ) -> LocationCount:
     """Get total location count with optional filters."""
     db = request.app.state.db

@@ -83,6 +83,5 @@ class Config:
         """Validate database configuration."""
         if not self.db_user or not self.db_password:
             raise RuntimeError(
-                "Database credentials not configured. "
-                "Set POSTGRES_USER and POSTGRES_PASSWORD environment variables."
+                "Database credentials not configured. Set POSTGRES_USER and POSTGRES_PASSWORD environment variables."
             )

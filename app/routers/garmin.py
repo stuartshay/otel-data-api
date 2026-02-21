@@ -20,12 +20,8 @@ TRACK_SORT_WHITELIST = {"timestamp", "altitude", "speed_kmh", "heart_rate", "cre
 async def list_activities(
     request: Request,
     sport: str | None = Query(None, description="Filter by sport type", examples=["cycling"]),
-    date_from: str | None = Query(
-        None, description="Filter from date (YYYY-MM-DD)", examples=["2025-11-01"]
-    ),
-    date_to: str | None = Query(
-        None, description="Filter to date (YYYY-MM-DD)", examples=["2025-11-30"]
-    ),
+    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2025-11-01"]),
+    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2025-11-30"]),
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     sort: str = Query(
@@ -164,9 +160,7 @@ async def list_track_points(
         sort = "timestamp"
 
     # Verify activity exists
-    exists = await db.fetchval(
-        "SELECT 1 FROM public.garmin_activities WHERE activity_id = $1", activity_id
-    )
+    exists = await db.fetchval("SELECT 1 FROM public.garmin_activities WHERE activity_id = $1", activity_id)
     if not exists:
         raise HTTPException(status_code=404, detail="Activity not found")
 

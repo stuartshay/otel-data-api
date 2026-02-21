@@ -16,9 +16,7 @@ async def find_nearby(
     lat: float = Query(..., description="Latitude of center point", examples=[40.7362]),
     lon: float = Query(..., description="Longitude of center point", examples=[-74.0394]),
     radius_meters: int = Query(1000, ge=1, le=100000, description="Search radius in meters"),
-    source: str | None = Query(
-        None, description="Filter by source: owntracks or garmin", examples=["owntracks"]
-    ),
+    source: str | None = Query(None, description="Filter by source: owntracks or garmin", examples=["owntracks"]),
     limit: int = Query(100, ge=1, le=5000),
 ) -> list[NearbyPoint]:
     """Find GPS points within a radius of a given lat/lon using PostGIS ST_DWithin.
@@ -95,9 +93,7 @@ async def calculate_distance(
 async def within_reference(
     request: Request,
     name: str = fastapi.Path(description="Reference location name", examples=["home"]),
-    source: str | None = Query(
-        None, description="Filter by source: owntracks or garmin", examples=["owntracks"]
-    ),
+    source: str | None = Query(None, description="Filter by source: owntracks or garmin", examples=["owntracks"]),
     limit: int = Query(100, ge=1, le=5000),
 ) -> WithinReferenceResult:
     """Find all GPS points within a named reference location's radius.
@@ -108,8 +104,7 @@ async def within_reference(
     db = request.app.state.db
 
     ref = await db.fetchrow(
-        "SELECT id, name, latitude, longitude, radius_meters, geog "
-        "FROM public.reference_locations WHERE name = $1",
+        "SELECT id, name, latitude, longitude, radius_meters, geog FROM public.reference_locations WHERE name = $1",
         name,
     )
     if not ref:
@@ -140,9 +135,7 @@ async def within_reference(
         )
 
     if not queries:
-        return WithinReferenceResult(
-            reference_name=name, radius_meters=radius, total_points=0, points=[]
-        )
+        return WithinReferenceResult(reference_name=name, radius_meters=radius, total_points=0, points=[])
 
     combined = " UNION ALL ".join(queries)
     full_query = f"{combined} ORDER BY distance_meters ASC LIMIT $4"

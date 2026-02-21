@@ -73,7 +73,8 @@
         "codegen",
         "npmignore",
         "Peucker",
-        "prepublish"
+        "prepublish",
+        "bierner"
     ],
     "ignorePaths": [
         "node_modules",

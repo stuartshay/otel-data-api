@@ -13,17 +13,13 @@ location database with PostGIS spatial queries.
 
 ## Architecture
 
-```text
-┌────────────┐     ┌─────────────────┐     ┌──────────────┐     ┌───────────┐     ┌────────────┐
-│ otel-data-ui│────▶│otel-data-gateway│────▶│ otel-data-api│────▶│ PgBouncer │────▶│ PostgreSQL │
-│  (React)    │     │(Apollo GraphQL) │     │  (FastAPI)   │     │  :6432    │     │  + PostGIS │
-└────────────┘     └─────────────────┘     └──────────────┘     └───────────┘     └────────────┘
-                                                  │
-                                                  ▼
-                                           ┌──────────────┐
-                                           │  Cognito JWT │
-                                           │    (Auth)    │
-                                           └──────────────┘
+```mermaid
+flowchart LR
+    ui["otel-data-ui<br/> (React)"] --> gateway["otel-data-gateway<br/> (Apollo GraphQL BFF)"]
+    gateway --> api["otel-data-api<br/> (FastAPI)"]
+    api --> pool["PgBouncer<br/>:6432"]
+    pool --> db["PostgreSQL<br/> + PostGIS"]
+    api -.->|optional auth| cognito["Cognito JWT<br/>(Auth, optional)"]
 ```
 
 ## Features

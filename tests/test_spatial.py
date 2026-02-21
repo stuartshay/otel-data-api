@@ -30,9 +30,7 @@ def _reference_row() -> dict:
 async def test_find_nearby_default_uses_both_sources(client: AsyncClient, mock_db):
     mock_db.fetch.return_value = [_nearby_row("owntracks", 1), _nearby_row("garmin", 2)]
 
-    response = await client.get(
-        "/api/v1/spatial/nearby?lat=40.7362&lon=-74.0394&radius_meters=1000&limit=2"
-    )
+    response = await client.get("/api/v1/spatial/nearby?lat=40.7362&lon=-74.0394&radius_meters=1000&limit=2")
 
     assert response.status_code == 200
     data = response.json()

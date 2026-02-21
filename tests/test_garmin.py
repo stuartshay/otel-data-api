@@ -178,9 +178,7 @@ async def test_list_track_points_simplify_respects_order(client: AsyncClient, mo
     mock_db.fetchval.side_effect = [1, 50]
     mock_db.fetch.return_value = [_track_row()]
 
-    response = await client.get(
-        "/api/v1/garmin/activities/20932993811/tracks?simplify=0.0001&order=desc"
-    )
+    response = await client.get("/api/v1/garmin/activities/20932993811/tracks?simplify=0.0001&order=desc")
 
     assert response.status_code == 200
     query = mock_db.fetch.await_args.args[0]

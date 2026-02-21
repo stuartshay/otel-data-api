@@ -93,8 +93,4 @@ class LocationCount(BaseModel):
     date: str | None = None
     device_id: str | None = None
 
-    model_config = {
-        "json_schema_extra": {
-            "examples": [{"count": 45883, "date": None, "device_id": "iphone_stuart"}]
-        }
-    }
+    model_config = {"json_schema_extra": {"examples": [{"count": 45883, "date": None, "device_id": "iphone_stuart"}]}}

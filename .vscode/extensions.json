@@ -7,6 +7,7 @@
         "davidanson.vscode-markdownlint",
         "redhat.vscode-yaml",
         "eamodio.gitlens",
-        "ms-azuretools.vscode-docker"
+        "ms-azuretools.vscode-docker",
+        "bierner.markdown-mermaid"
     ]
 }

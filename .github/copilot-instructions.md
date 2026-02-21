@@ -111,6 +111,13 @@ diverge from master.
 - Use `require_auth` dependency for protected endpoints
 - Use `get_current_user` for optional user context
 
+### Spell Checking (cspell)
+
+- The `cspell.json` `words` list **MUST always be sorted in strict alphabetical
+  order** (case-insensitive)
+- When adding a new word, insert it in its correct alphabetical position — do
+  not append it to the end of the list
+
 ## Local Development Services
 
 ⚠️ **ALWAYS start local services in hot-reload mode.** Never use `make start`

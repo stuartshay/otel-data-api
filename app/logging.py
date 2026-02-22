@@ -34,23 +34,41 @@ def _add_service_context(config: Config) -> structlog.types.Processor:
     return _processor
 
 
-def _add_new_relic_context(
+def _add_trace_context(
     logger: Any,
     method_name: str,
     event_dict: structlog.types.EventDict,
 ) -> structlog.types.EventDict:
-    """Inject New Relic trace.id and span.id when the agent is active."""
-    try:
-        import newrelic.agent  # pyright: ignore[reportMissingImports]
+    """Inject trace.id and span.id from OTel SDK or New Relic agent."""
+    trace_id: str | None = None
+    span_id: str | None = None
 
-        trace_id = newrelic.agent.current_trace_id()
-        span_id = newrelic.agent.current_span_id()
-        if trace_id:
-            event_dict["trace.id"] = trace_id
-        if span_id:
-            event_dict["span.id"] = span_id
+    # Prefer OTel-native context
+    try:
+        from opentelemetry import trace as otel_trace
+
+        span = otel_trace.get_current_span()
+        ctx = span.get_span_context()
+        if ctx and ctx.trace_id:
+            trace_id = format(ctx.trace_id, "032x")
+            span_id = format(ctx.span_id, "016x")
     except Exception:  # noqa: BLE001
-        pass  # New Relic not available — skip silently
+        pass
+
+    # Fallback to New Relic agent
+    if not trace_id:
+        try:
+            import newrelic.agent  # pyright: ignore[reportMissingImports]
+
+            trace_id = newrelic.agent.current_trace_id()
+            span_id = newrelic.agent.current_span_id()
+        except Exception:  # noqa: BLE001
+            pass
+
+    if trace_id:
+        event_dict["trace.id"] = trace_id
+    if span_id:
+        event_dict["span.id"] = span_id
     return event_dict
 
 
@@ -73,7 +91,7 @@ def configure_logging(config: Config) -> None:
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         _add_service_context(config),
-        _add_new_relic_context,
+        _add_trace_context,
     ]
 
     if config.log_format == "console":

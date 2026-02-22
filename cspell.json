@@ -40,6 +40,8 @@
         "htmlcov",
         "httpx",
         "informationcart",
+        "Instrumentor",
+        "instrumentors",
         "invis",
         "isort",
         "kilometre",

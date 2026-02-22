@@ -78,7 +78,7 @@ jobs:
                   covered=$(jq -r '.totals.covered_branches' output/coverage.json)
                   total=$(jq -r '.totals.num_branches' output/coverage.json)
                   missing=$(jq -r '.totals.missing_branches' output/coverage.json)
-                  pct=$(jq -r '(.totals.covered_branches / .totals.num_branches * 100) | floor' output/coverage.json)
+                  pct=$(jq -r 'if .totals.num_branches == 0 then 100 else ((.totals.covered_branches / .totals.num_branches * 100) | floor) end' output/coverage.json)
                   threshold=85
                 fi
                 icon="✅"

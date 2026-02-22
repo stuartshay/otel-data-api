@@ -1,6 +1,46 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    ":semanticCommits"
+  ],
+  "timezone": "America/New_York",
+  "schedule": ["before 6am on Monday"],
+  "labels": ["dependencies"],
+  "pre-commit": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "Group OpenTelemetry core packages together",
+      "matchPackagePatterns": ["^opentelemetry"],
+      "excludePackagePatterns": ["^opentelemetry-instrumentation"],
+      "groupName": "opentelemetry-core"
+    },
+    {
+      "description": "Group OpenTelemetry instrumentation packages together",
+      "matchPackagePatterns": ["^opentelemetry-instrumentation"],
+      "groupName": "opentelemetry-instrumentation"
+    },
+    {
+      "description": "Group Pydantic packages together",
+      "matchPackageNames": ["pydantic", "pydantic-settings"],
+      "groupName": "pydantic"
+    },
+    {
+      "description": "Group GitHub Actions updates together",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions"
+    },
+    {
+      "description": "Disable automerge for Docker base image updates",
+      "matchDatasources": ["docker"],
+      "automerge": false
+    },
+    {
+      "description": "Automerge minor and patch updates",
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    }
   ]
 }

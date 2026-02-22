@@ -1,4 +1,4 @@
-name: Lint and Validate
+name: Lint, Validate and Test
 
 on:
   push:
@@ -51,11 +51,50 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest --cov=app --cov-report=xml --cov-report=term-missing tests/
+          mkdir -p output
+          pytest --cov=app --cov-report=xml:output/coverage.xml --cov-report=term-missing --cov-report=json:output/coverage.json tests/
 
       - name: Verify imports
         run: |
           python -c "from app import create_app; print('✓ App factory imports successfully')"
+
+      - name: Coverage Report
+        if: always()
+        run: |
+          if [ -f output/coverage.json ]; then
+            {
+              echo "## Test Coverage Report"
+              echo ""
+              echo "| Category | Covered | Missing | Percentage |"
+              echo "|----------|---------|---------|------------|"
+              for key in statements branches; do
+                if [ "$key" = "statements" ]; then
+                  covered=$(jq -r '.totals.covered_lines' output/coverage.json)
+                  total=$(jq -r '.totals.num_statements' output/coverage.json)
+                  missing=$(jq -r '.totals.missing_lines' output/coverage.json)
+                  pct=$(jq -r '.totals.percent_covered_display' output/coverage.json)
+                  threshold=85
+                else
+                  covered=$(jq -r '.totals.covered_branches' output/coverage.json)
+                  total=$(jq -r '.totals.num_branches' output/coverage.json)
+                  missing=$(jq -r '.totals.missing_branches' output/coverage.json)
+                  pct=$(jq -r 'if .totals.num_branches == 0 then 100 else ((.totals.covered_branches / .totals.num_branches * 100) | floor) end' output/coverage.json)
+                  threshold=85
+                fi
+                icon="✅"
+                if awk "BEGIN {exit !($pct < $threshold)}"; then icon="⚠️"; fi
+                echo "| ${icon} ${key^} | ${covered}/${total} | ${missing} | ${pct}% |"
+              done
+              echo ""
+              echo "_Threshold: 85% (enforced by pyproject.toml)_"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Test Coverage Report"
+              echo ""
+              echo "⚠️ No coverage data generated"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   docker-lint:
     name: Dockerfile Lint
@@ -68,6 +107,7 @@ jobs:
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: Dockerfile
+          failure-threshold: style
 
   security:
     name: Security Scan

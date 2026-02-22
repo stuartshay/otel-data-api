@@ -11,7 +11,7 @@ LABEL org.opencontainers.image.description="FastAPI microservice for GPS data wi
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.version="${APP_VERSION}"
 LABEL org.opencontainers.image.created="${BUILD_DATE}"
-LABEL com.github.actions.build_number="${BUILD_NUMBER}"
+LABEL com.github.actions.build-number="${BUILD_NUMBER}"
 
 # Set working directory
 WORKDIR /app

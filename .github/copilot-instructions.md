@@ -19,7 +19,7 @@ spatial queries, and optional AWS Cognito JWT authentication.
 
 | Property      | Value                                         |
 | ------------- | --------------------------------------------- |
-| Language      | Python 3.12+ / FastAPI                        |
+| Language      | Python 3.14+ / FastAPI                        |
 | Database      | PostgreSQL via PgBouncer (192.168.1.175:6432) |
 | Database Name | owntracks                                     |
 | K8s Cluster   | k8s-pi5-cluster                               |
@@ -146,6 +146,7 @@ otel-data-api/
 │   ├── database.py          # asyncpg DatabaseService
 │   ├── middleware.py        # Request logging middleware
 │   ├── models/              # Pydantic response models
+│   │   ├── __init__.py      # Shared models (PaginatedResponse, StatusResponse)
 │   │   ├── garmin.py
 │   │   ├── locations.py
 │   │   ├── reference.py
@@ -162,7 +163,7 @@ otel-data-api/
 ├── scripts/                 # Utility scripts
 ├── pyproject.toml           # Python project config, ruff/mypy/pytest settings
 ├── requirements.txt         # Python dependencies
-├── Dockerfile               # Container image (Python 3.12 slim)
+├── Dockerfile               # Container image (Python 3.14 slim)
 ├── Makefile                 # Build automation
 └── setup.sh                 # Dev environment bootstrap
 ```

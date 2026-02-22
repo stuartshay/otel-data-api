@@ -22,13 +22,15 @@ async def list_activities(
     sport: str | None = Query(None, description="Filter by sport type", examples=["cycling"]),
     date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2025-11-01"]),
     date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2025-11-30"]),
-    limit: int = Query(50, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=1000, description="Maximum number of activities to return per page"),
+    offset: int = Query(0, ge=0, description="Number of activities to skip for pagination"),
     sort: str = Query(
         "start_time",
         description="Sort column (start_time, distance_km, duration_seconds, sport, created_at)",
     ),
-    order: Literal["asc", "desc"] = Query("desc"),
+    order: Literal["asc", "desc"] = Query(
+        "desc", description="Sort direction: asc (oldest first) or desc (newest first)"
+    ),
 ) -> PaginatedResponse[GarminActivity]:
     """List Garmin activities with filtering and pagination.
 
@@ -132,13 +134,15 @@ async def get_activity(
 async def list_track_points(
     request: Request,
     activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
-    limit: int = Query(500, ge=1, le=25000),
-    offset: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=25000, description="Maximum number of track points to return per page"),
+    offset: int = Query(0, ge=0, description="Number of track points to skip for pagination"),
     sort: str = Query(
         "timestamp",
         description="Sort column (timestamp, altitude, speed_kmh, heart_rate, created_at)",
     ),
-    order: Literal["asc", "desc"] = Query("asc"),
+    order: Literal["asc", "desc"] = Query(
+        "asc", description="Sort direction: asc (earliest first) or desc (latest first)"
+    ),
     simplify: float | None = Query(
         None,
         ge=0.000001,

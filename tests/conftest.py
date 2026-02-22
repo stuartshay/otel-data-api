@@ -70,7 +70,7 @@ def app(config: Config, mock_db: AsyncMock) -> FastAPI:
 
 
 @pytest.fixture()
-async def client(app: FastAPI) -> AsyncGenerator[AsyncClient, None]:
+async def client(app: FastAPI) -> AsyncGenerator[AsyncClient]:
     """Async HTTP client for testing."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

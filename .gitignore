@@ -71,3 +71,4 @@ node_modules/
 # Project specific
 reports/
 tmp/
+output/

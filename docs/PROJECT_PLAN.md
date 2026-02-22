@@ -34,7 +34,7 @@ queries, and optional AWS Cognito JWT authentication.
 | Validation | Pydantic | 2.10.6 |
 | Auth | python-jose + Cognito | PKCE/JWT |
 | Observability | OpenTelemetry | 1.30.0 |
-| Container | Docker (python:3.12-slim) | — |
+| Container | Docker (python:3.14-slim) | — |
 
 ## Phase 1 — Initial Scaffolding (Completed)
 
@@ -47,7 +47,7 @@ queries, and optional AWS Cognito JWT authentication.
 - [x] Cognito JWT authentication (optional, controlled by `OAUTH2_ENABLED`)
 - [x] PostGIS spatial queries (nearby, distance, geofencing)
 - [x] 10 unit tests covering all routers
-- [x] Docker image (python:3.12-slim, non-root user)
+- [x] Docker image (python:3.14-slim, non-root user)
 - [x] CI pipeline (GitHub Actions: pre-commit, pytest, hadolint, pip-audit)
 - [x] Pre-commit hooks (ruff, mypy, pyright, markdownlint, shellcheck, detect-secrets)
 - [x] Makefile with dev, test, lint, docker, and db-test targets

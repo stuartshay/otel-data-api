@@ -18,9 +18,11 @@ async def list_unified_gps(
     source: str | None = Query(None, description="Filter by source: owntracks or garmin", examples=["owntracks"]),
     date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2026-02-01"]),
     date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]),
-    limit: int = Query(100, ge=1, le=5000),
-    offset: int = Query(0, ge=0),
-    order: Literal["asc", "desc"] = Query("desc"),
+    limit: int = Query(100, ge=1, le=5000, description="Maximum number of GPS points to return per page"),
+    offset: int = Query(0, ge=0, description="Number of GPS points to skip for pagination"),
+    order: Literal["asc", "desc"] = Query(
+        "desc", description="Sort direction: asc (oldest first) or desc (newest first)"
+    ),
 ) -> PaginatedResponse[UnifiedGpsPoint]:
     """Query the unified_gps_points view combining OwnTracks + Garmin data.
 
@@ -72,7 +74,7 @@ async def daily_summary(
     request: Request,
     date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2026-02-01"]),
     date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]),
-    limit: int = Query(30, ge=1, le=365),
+    limit: int = Query(30, ge=1, le=365, description="Maximum number of daily summaries to return"),
 ) -> list[DailyActivitySummary]:
     """Query the daily_activity_summary view for aggregated daily stats.
 

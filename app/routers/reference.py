@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fastapi
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 
@@ -23,7 +24,10 @@ async def list_reference_locations(request: Request) -> list[ReferenceLocation]:
 
 
 @router.get("/{location_id}", response_model=ReferenceLocation)
-async def get_reference_location(request: Request, location_id: int) -> ReferenceLocation:
+async def get_reference_location(
+    request: Request,
+    location_id: int = fastapi.Path(description="Unique reference location ID"),
+) -> ReferenceLocation:
     """Get a single reference location by ID."""
     db = request.app.state.db
     row = await db.fetchrow(
@@ -62,8 +66,8 @@ async def create_reference_location(
 @router.put("/{location_id}", response_model=ReferenceLocation)
 async def update_reference_location(
     request: Request,
-    location_id: int,
-    body: ReferenceLocationUpdate,
+    location_id: int = fastapi.Path(description="Unique reference location ID"),
+    body: ReferenceLocationUpdate = fastapi.Body(...),
     _user: dict = Depends(require_auth),
 ) -> ReferenceLocation:
     """Update a reference location (auth required)."""
@@ -99,7 +103,7 @@ async def update_reference_location(
 @router.delete("/{location_id}", status_code=204, response_class=Response)
 async def delete_reference_location(
     request: Request,
-    location_id: int,
+    location_id: int = fastapi.Path(description="Unique reference location ID"),
     _user: dict = Depends(require_auth),
 ) -> Response:
     """Delete a reference location (auth required)."""

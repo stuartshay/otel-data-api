@@ -21,7 +21,7 @@ def create_app(config: Config) -> FastAPI:
     """Create and configure the FastAPI application."""
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         # Startup
         db = DatabaseService(config)
         try:

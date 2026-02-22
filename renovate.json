@@ -38,10 +38,9 @@
       "automerge": false
     },
     {
-      "description": "Automerge minor and patch updates with required status checks",
+      "description": "Automerge minor and patch updates",
       "matchUpdateTypes": ["minor", "patch"],
-      "automerge": true,
-      "requiredStatusChecks": null
+      "automerge": true
     }
   ]
 }

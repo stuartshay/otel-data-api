@@ -19,7 +19,7 @@ spatial queries, and optional AWS Cognito JWT authentication.
 
 | Property      | Value                                         |
 | ------------- | --------------------------------------------- |
-| Language      | Python 3.12+ / FastAPI                        |
+| Language      | Python 3.14+ / FastAPI                        |
 | Database      | PostgreSQL via PgBouncer (192.168.1.175:6432) |
 | Database Name | owntracks                                     |
 | K8s Cluster   | k8s-pi5-cluster                               |
@@ -134,6 +134,72 @@ When starting the full local stack, start services in this order:
 1. `otel-data-api` — `make dev` (port 8080)
 2. `otel-data-gateway` — `make dev` (port 4000)
 3. `otel-data-ui` — `make dev` (port 5173)
+
+## Project Structure
+
+```text
+otel-data-api/
+├── app/
+│   ├── __init__.py          # App factory (create_app)
+│   ├── auth.py              # Cognito JWT auth
+│   ├── config.py            # Pydantic settings (Config)
+│   ├── database.py          # asyncpg DatabaseService
+│   ├── middleware.py        # Request logging middleware
+│   ├── models/              # Pydantic response models
+│   │   ├── __init__.py      # Shared models (PaginatedResponse, StatusResponse)
+│   │   ├── garmin.py
+│   │   ├── locations.py
+│   │   ├── reference.py
+│   │   └── spatial.py
+│   └── routers/             # FastAPI route handlers
+│       ├── garmin.py        # /api/v1/garmin/*
+│       ├── health.py        # /health, /ready
+│       ├── locations.py     # /api/v1/locations/*
+│       ├── reference.py     # /api/v1/reference-locations/*
+│       ├── spatial.py       # /api/v1/spatial/*
+│       └── unified.py       # /api/v1/gps/*
+├── tests/                   # pytest test suite (async, uses mock_db)
+├── packages/otel-data-types/ # TypeScript type definitions (npm)
+├── scripts/                 # Utility scripts
+├── pyproject.toml           # Python project config, ruff/mypy/pytest settings
+├── requirements.txt         # Python dependencies
+├── Dockerfile               # Container image (Python 3.14 slim)
+├── Makefile                 # Build automation
+└── setup.sh                 # Dev environment bootstrap
+```
+
+## CI/CD Pipelines
+
+Four workflows run on push/PR to `master` and `develop`:
+
+| Workflow | File | Checks |
+|----------|------|--------|
+| Lint and Validate | `lint.yml` | pre-commit (ruff, mypy, cspell, markdownlint), pytest, Dockerfile lint (hadolint), pip-audit |
+| Docker | `docker.yml` | Build Docker image, push to Docker Hub on master |
+| Publish Types | `publish-types.yml` | Build and publish TypeScript types to npm |
+| Auto Approve | `auto-approve.yml` | Auto-approves PRs from stuartshay, renovate[bot], dependabot[bot] |
+
+**Replicate CI locally before pushing:**
+
+```bash
+pre-commit run --all-files   # Runs all lint/format/type checks
+make test                    # Runs pytest with coverage
+```
+
+## Testing Conventions
+
+- Tests live in `tests/` using `pytest` with `pytest-asyncio`
+- All tests are `async` and decorated with `@pytest.mark.asyncio`
+- Use `mock_db` fixture (AsyncMock of DatabaseService) to avoid real DB
+- Use `client` fixture (AsyncClient wrapping the test app) for HTTP requests
+- Use `app` fixture to get a FastAPI app with mocked DB injected
+- Coverage must be ≥ 85% for `app/` (enforced in `pyproject.toml`)
+
+```bash
+make test          # Run tests with coverage
+make test-cov      # Run tests with HTML coverage report
+pytest tests/test_health.py -v   # Run a specific test file
+```
 
 ## Safety Rules (Do Not)
 

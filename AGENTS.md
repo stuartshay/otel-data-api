@@ -12,7 +12,7 @@ All automation, assistants, and developers must follow
 
 ## Quick Reference
 
-- **Language**: Python 3.12+ / FastAPI
+- **Language**: Python 3.14+ / FastAPI
 - **Database**: PostgreSQL via PgBouncer (192.168.1.175:6432)
 - **Development branch**: `develop` (default working branch)
 - **Production branch**: `master` (releases only, PR-only)

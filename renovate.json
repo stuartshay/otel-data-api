@@ -12,9 +12,15 @@
   },
   "packageRules": [
     {
-      "description": "Group OpenTelemetry packages together",
+      "description": "Group OpenTelemetry core packages together",
       "matchPackagePatterns": ["^opentelemetry"],
-      "groupName": "opentelemetry"
+      "excludePackagePatterns": ["^opentelemetry-instrumentation"],
+      "groupName": "opentelemetry-core"
+    },
+    {
+      "description": "Group OpenTelemetry instrumentation packages together",
+      "matchPackagePatterns": ["^opentelemetry-instrumentation"],
+      "groupName": "opentelemetry-instrumentation"
     },
     {
       "description": "Group Pydantic packages together",

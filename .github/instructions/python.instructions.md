@@ -4,12 +4,16 @@ applyTo: "app/**/*.py"
 
 ## FastAPI Router Pattern
 
-New routers go in `app/routers/`. Register them in `app/__init__.py` with a
-versioned prefix:
+New routers go in `app/routers/`. Define the prefix in the `APIRouter`
+constructor and register in `app/__init__.py` without an additional prefix:
 
 ```python
+# app/routers/my_router.py
+router = APIRouter(prefix="/api/v1/my-resource", tags=["My Resource"])
+
+# app/__init__.py
 from app.routers import my_router
-app.include_router(my_router.router, prefix="/api/v1")
+app.include_router(my_router.router)
 ```
 
 ## Response Models

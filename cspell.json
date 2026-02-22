@@ -37,6 +37,7 @@
         "htmlcov",
         "httpx",
         "informationcart",
+        "invis",
         "isort",
         "kustomization",
         "markdownlint",

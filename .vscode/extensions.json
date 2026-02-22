@@ -8,6 +8,7 @@
         "redhat.vscode-yaml",
         "eamodio.gitlens",
         "ms-azuretools.vscode-docker",
-        "bierner.markdown-mermaid"
+        "bierner.markdown-mermaid",
+        "be5invis.toml"
     ]
 }

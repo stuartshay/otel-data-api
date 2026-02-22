@@ -12,6 +12,10 @@ DOCKER_TAG := latest
 VENV_DIR := venv
 PID_FILE := .otel-data-api.pid
 LOG_FILE := logs/otel-data-api.log
+PYTEST_CACHE_DIR ?= /tmp/.pytest_cache
+PYTEST ?= pytest
+# Use -o to override pytest ini option for cache_dir (works across pytest versions)
+PYTEST_COMMON_OPTS := -o cache_dir=$(PYTEST_CACHE_DIR)
 
 # Colors
 RED := \033[0;31m
@@ -140,11 +144,23 @@ type-check: ## Run mypy type checking
 
 test: ## Run pytest tests
 	@echo "$(YELLOW)Running tests...$(NC)"
-	@. $(VENV_DIR)/bin/activate && pytest tests/
+	@. $(VENV_DIR)/bin/activate && $(PYTEST) $(PYTEST_COMMON_OPTS) tests/
 	@echo "$(GREEN)✓ Tests complete$(NC)"
 
 test-cov: ## Run tests with coverage
-	@. $(VENV_DIR)/bin/activate && pytest --cov=app --cov-report=term-missing tests/
+	@. $(VENV_DIR)/bin/activate && $(PYTEST) $(PYTEST_COMMON_OPTS) --cov=app --cov-report=term-missing tests/
+
+test-cov-html: ## Run tests with coverage and generate HTML report in output/coverage-html
+	@mkdir -p output
+	@. $(VENV_DIR)/bin/activate && $(PYTEST) $(PYTEST_COMMON_OPTS) --cov=app --cov-report=html:output/coverage-html --cov-report=term-missing tests/
+
+test-file: ## Run a specific test file, e.g. make test-file FILE=tests/test_app.py
+	@test -n "$(FILE)" || (echo "$(RED)✗ Please provide FILE=...$(NC)" && exit 1)
+	@. $(VENV_DIR)/bin/activate && $(PYTEST) $(PYTEST_COMMON_OPTS) $(FILE)
+
+test-mark: ## Run tests matching a pytest -m expression, e.g. make test-mark MARK=slow
+	@test -n "$(MARK)" || (echo "$(RED)✗ Please provide MARK=...$(NC)" && exit 1)
+	@. $(VENV_DIR)/bin/activate && $(PYTEST) $(PYTEST_COMMON_OPTS) -m "$(MARK)" tests/
 
 # =============================================================================
 # Database

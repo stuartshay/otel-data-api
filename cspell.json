@@ -8,6 +8,7 @@
         "ASGI",
         "asyncio",
         "asyncpg",
+        "autouse",
         "bierner",
         "buildcache",
         "buildx",

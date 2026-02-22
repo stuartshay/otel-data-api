@@ -185,12 +185,20 @@ export SCRIPT_DB_TABLES
 
 db-test: ## Test database connection
 	@echo "$(YELLOW)Testing database connection...$(NC)"
+	@if [ ! -f .env ]; then \
+		echo "$(RED)✗ .env file not found. Run './setup.sh' to create it.$(NC)"; \
+		exit 1; \
+	fi
 	@set -a; . ./.env; set +a; \
 	. $(VENV_DIR)/bin/activate && \
 	python3 -c "$$SCRIPT_DB_TEST"
 
 db-tables: ## List database tables
 	@echo "$(YELLOW)Listing database tables...$(NC)"
+	@if [ ! -f .env ]; then \
+		echo "$(RED)✗ .env file not found. Run './setup.sh' to create it.$(NC)"; \
+		exit 1; \
+	fi
 	@set -a; . ./.env; set +a; \
 	. $(VENV_DIR)/bin/activate && \
 	python3 -c "$$SCRIPT_DB_TABLES"
@@ -212,6 +220,10 @@ dependencies: ## Check for outdated Python packages
 
 openapi: ## Generate OpenAPI schema to output directory
 	@echo "$(YELLOW)Generating OpenAPI schema...$(NC)"
+	@if [ ! -f .env ]; then \
+		echo "$(RED)✗ .env file not found. Run './setup.sh' to create it.$(NC)"; \
+		exit 1; \
+	fi
 	@mkdir -p output
 	@set -a; . ./.env; set +a; \
 	. $(VENV_DIR)/bin/activate && \

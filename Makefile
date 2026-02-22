@@ -148,7 +148,8 @@ test: ## Run pytest tests
 	@echo "$(GREEN)✓ Tests complete$(NC)"
 
 test-cov: ## Run tests with coverage
-	@. $(VENV_DIR)/bin/activate && $(PYTEST) $(PYTEST_COMMON_OPTS) --cov=app --cov-report=term-missing tests/
+	@mkdir -p output
+	@. $(VENV_DIR)/bin/activate && $(PYTEST) $(PYTEST_COMMON_OPTS) --cov=app --cov-report=term-missing --cov-report=json:output/coverage.json tests/
 
 test-cov-html: ## Run tests with coverage and generate HTML report in output/coverage-html
 	@mkdir -p output

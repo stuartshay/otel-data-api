@@ -18,6 +18,7 @@ build/
 .coverage
 htmlcov/
 coverage.xml
+coverage.json
 *.cover
 .hypothesis/
 

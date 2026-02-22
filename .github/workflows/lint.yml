@@ -51,7 +51,8 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest --cov=app --cov-report=xml --cov-report=term-missing --cov-report=json tests/
+          mkdir -p output
+          pytest --cov=app --cov-report=xml:output/coverage.xml --cov-report=term-missing --cov-report=json:output/coverage.json tests/
 
       - name: Verify imports
         run: |
@@ -60,7 +61,7 @@ jobs:
       - name: Coverage Report
         if: always()
         run: |
-          if [ -f coverage.json ]; then
+          if [ -f output/coverage.json ]; then
             {
               echo "## Test Coverage Report"
               echo ""
@@ -68,16 +69,16 @@ jobs:
               echo "|----------|---------|---------|------------|"
               for key in statements branches; do
                 if [ "$key" = "statements" ]; then
-                  covered=$(jq -r '.totals.covered_lines' coverage.json)
-                  total=$(jq -r '.totals.num_statements' coverage.json)
-                  missing=$(jq -r '.totals.missing_lines' coverage.json)
-                  pct=$(jq -r '.totals.percent_covered_display' coverage.json)
+                  covered=$(jq -r '.totals.covered_lines' output/coverage.json)
+                  total=$(jq -r '.totals.num_statements' output/coverage.json)
+                  missing=$(jq -r '.totals.missing_lines' output/coverage.json)
+                  pct=$(jq -r '.totals.percent_covered_display' output/coverage.json)
                   threshold=85
                 else
-                  covered=$(jq -r '.totals.covered_branches' coverage.json)
-                  total=$(jq -r '.totals.num_branches' coverage.json)
-                  missing=$(jq -r '.totals.missing_branches' coverage.json)
-                  pct=$(jq -r '(.totals.covered_branches / .totals.num_branches * 100) | floor' coverage.json)
+                  covered=$(jq -r '.totals.covered_branches' output/coverage.json)
+                  total=$(jq -r '.totals.num_branches' output/coverage.json)
+                  missing=$(jq -r '.totals.missing_branches' output/coverage.json)
+                  pct=$(jq -r '(.totals.covered_branches / .totals.num_branches * 100) | floor' output/coverage.json)
                   threshold=85
                 fi
                 icon="✅"

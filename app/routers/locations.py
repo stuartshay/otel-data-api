@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Literal
 
+import fastapi
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.models import PaginatedResponse
@@ -21,13 +22,15 @@ async def list_locations(
     device_id: str | None = Query(None, description="Filter by device ID", examples=["iphone_stuart"]),
     date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2026-02-01"]),
     date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]),
-    limit: int = Query(50, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=1000, description="Maximum number of locations to return per page"),
+    offset: int = Query(0, ge=0, description="Number of locations to skip for pagination"),
     sort: str = Query(
         "created_at",
         description="Sort column (id, device_id, timestamp, created_at, battery, accuracy)",
     ),
-    order: Literal["asc", "desc"] = Query("desc"),
+    order: Literal["asc", "desc"] = Query(
+        "desc", description="Sort direction: asc (oldest first) or desc (newest first)"
+    ),
 ) -> PaginatedResponse[Location]:
     """List OwnTracks locations with filtering and pagination.
 
@@ -115,7 +118,10 @@ async def location_count(
 
 
 @router.get("/{location_id}", response_model=LocationDetail)
-async def get_location(request: Request, location_id: int) -> LocationDetail:
+async def get_location(
+    request: Request,
+    location_id: int = fastapi.Path(description="Unique location record ID"),
+) -> LocationDetail:
     """Get a single location by ID, including raw payload."""
     db = request.app.state.db
     row = await db.fetchrow(
@@ -132,16 +138,4 @@ async def get_location(request: Request, location_id: int) -> LocationDetail:
     # Convert raw_payload from JSON string to dict if needed
     if data.get("raw_payload") and isinstance(data["raw_payload"], str):
         data["raw_payload"] = json.loads(data["raw_payload"])
-    return LocationDetail(**data)
-    return LocationDetail(**data)
-    return LocationDetail(**data)
-    return LocationDetail(**data)
-    return LocationDetail(**data)
-    return LocationDetail(**data)
-    return LocationDetail(**data)
-    return LocationDetail(**data)
-    return LocationDetail(**data)
-    return LocationDetail(**data)
-    return LocationDetail(**data)
-    return LocationDetail(**data)
     return LocationDetail(**data)

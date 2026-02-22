@@ -4,30 +4,36 @@ from __future__ import annotations
 
 from typing import Generic, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 T = TypeVar("T")
 
 
 class PaginatedResponse(BaseModel, Generic[T]):
-    items: list[T]
-    total: int
-    limit: int
-    offset: int
+    """Wrapper for paginated list responses."""
+
+    items: list[T] = Field(description="List of items in the current page")
+    total: int = Field(description="Total number of items matching the query")
+    limit: int = Field(description="Maximum number of items per page")
+    offset: int = Field(description="Number of items skipped from the start")
 
 
 class ErrorResponse(BaseModel):
-    detail: str
+    """Standard error response returned for 4xx/5xx status codes."""
+
+    detail: str = Field(description="Human-readable error message")
 
     model_config = {"json_schema_extra": {"examples": [{"detail": "Resource not found"}]}}
 
 
 class HealthResponse(BaseModel):
-    status: str
-    version: str | None = None
-    server_time: str | None = None
-    pool_size: int | None = None
-    pool_free: int | None = None
+    """Service health and readiness status."""
+
+    status: str = Field(description="Service health status (healthy or unhealthy)")
+    version: str | None = Field(default=None, description="Application version from VERSION file")
+    server_time: str | None = Field(default=None, description="Current server time in ISO 8601 format")
+    pool_size: int | None = Field(default=None, description="Total database connection pool size")
+    pool_free: int | None = Field(default=None, description="Number of idle connections in the pool")
 
     model_config = {
         "json_schema_extra": {

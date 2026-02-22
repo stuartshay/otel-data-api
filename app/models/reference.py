@@ -4,18 +4,20 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ReferenceLocation(BaseModel):
-    id: int
-    name: str
-    latitude: float
-    longitude: float
-    radius_meters: int = 50
-    description: str | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
+    """Named geographic reference point used for spatial queries (e.g. home, office)."""
+
+    id: int = Field(description="Unique reference location identifier")
+    name: str = Field(description="Short, unique name for the location (e.g. home, office)")
+    latitude: float = Field(description="GPS latitude in decimal degrees (WGS 84)")
+    longitude: float = Field(description="GPS longitude in decimal degrees (WGS 84)")
+    radius_meters: int = Field(default=50, description="Geofence radius in meters for proximity queries")
+    description: str | None = Field(default=None, description="Optional human-readable description of the location")
+    created_at: datetime | None = Field(default=None, description="UTC timestamp when the record was created")
+    updated_at: datetime | None = Field(default=None, description="UTC timestamp when the record was last updated")
 
     model_config = {
         "json_schema_extra": {
@@ -36,11 +38,13 @@ class ReferenceLocation(BaseModel):
 
 
 class ReferenceLocationCreate(BaseModel):
-    name: str
-    latitude: float
-    longitude: float
-    radius_meters: int = 50
-    description: str | None = None
+    """Request body for creating a new reference location."""
+
+    name: str = Field(description="Short, unique name for the location (e.g. home, office)")
+    latitude: float = Field(description="GPS latitude in decimal degrees (WGS 84)")
+    longitude: float = Field(description="GPS longitude in decimal degrees (WGS 84)")
+    radius_meters: int = Field(default=50, description="Geofence radius in meters for proximity queries")
+    description: str | None = Field(default=None, description="Optional human-readable description of the location")
 
     model_config = {
         "json_schema_extra": {
@@ -58,11 +62,13 @@ class ReferenceLocationCreate(BaseModel):
 
 
 class ReferenceLocationUpdate(BaseModel):
-    name: str | None = None
-    latitude: float | None = None
-    longitude: float | None = None
-    radius_meters: int | None = None
-    description: str | None = None
+    """Request body for partially updating a reference location. All fields are optional."""
+
+    name: str | None = Field(default=None, description="Updated location name")
+    latitude: float | None = Field(default=None, description="Updated GPS latitude in decimal degrees")
+    longitude: float | None = Field(default=None, description="Updated GPS longitude in decimal degrees")
+    radius_meters: int | None = Field(default=None, description="Updated geofence radius in meters")
+    description: str | None = Field(default=None, description="Updated description text")
 
     model_config = {
         "json_schema_extra": {

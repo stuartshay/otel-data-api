@@ -33,9 +33,15 @@
       "groupName": "github-actions"
     },
     {
-      "description": "Automerge minor and patch updates",
+      "description": "Disable automerge for Docker base image updates",
+      "matchDatasources": ["docker"],
+      "automerge": false
+    },
+    {
+      "description": "Automerge minor and patch updates with required status checks",
       "matchUpdateTypes": ["minor", "patch"],
-      "automerge": true
+      "automerge": true,
+      "requiredStatusChecks": null
     }
   ]
 }

@@ -17,7 +17,7 @@ async def find_nearby(
     lon: float = Query(..., description="Longitude of center point", examples=[-74.0394]),
     radius_meters: int = Query(1000, ge=1, le=100000, description="Search radius in meters"),
     source: str | None = Query(None, description="Filter by source: owntracks or garmin", examples=["owntracks"]),
-    limit: int = Query(100, ge=1, le=5000),
+    limit: int = Query(100, ge=1, le=5000, description="Maximum number of nearby points to return"),
 ) -> list[NearbyPoint]:
     """Find GPS points within a radius of a given lat/lon using PostGIS ST_DWithin.
 
@@ -94,7 +94,7 @@ async def within_reference(
     request: Request,
     name: str = fastapi.Path(description="Reference location name", examples=["home"]),
     source: str | None = Query(None, description="Filter by source: owntracks or garmin", examples=["owntracks"]),
-    limit: int = Query(100, ge=1, le=5000),
+    limit: int = Query(100, ge=1, le=5000, description="Maximum number of points to return within the reference area"),
 ) -> WithinReferenceResult:
     """Find all GPS points within a named reference location's radius.
 

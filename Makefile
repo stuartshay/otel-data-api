@@ -2,7 +2,7 @@
 # otel-data-api Makefile
 # =============================================================================
 
-.PHONY: help setup install dev start stop restart clean lint format test docker-build docker-run docker-push all verify
+.PHONY: help setup install dev start stop restart clean lint format test docker-build docker-run docker-push all verify db-test db-tables dependencies openapi
 
 .DEFAULT_GOAL := help
 
@@ -150,25 +150,73 @@ test-cov: ## Run tests with coverage
 # Database
 # =============================================================================
 
+define SCRIPT_DB_TEST
+import asyncio, asyncpg, os
+async def test():
+    conn = await asyncpg.connect(
+        host=os.environ["PGBOUNCER_HOST"],
+        port=int(os.environ["PGBOUNCER_PORT"]),
+        database=os.environ["POSTGRES_DB"],
+        user=os.environ["POSTGRES_USER"],
+        password=os.environ["POSTGRES_PASSWORD"])
+    ver = await conn.fetchval("SELECT version()")
+    print(f"Connected: {ver[:50]}...")
+    await conn.close()
+asyncio.run(test())
+endef
+export SCRIPT_DB_TEST
+
+define SCRIPT_DB_TABLES
+import asyncio, asyncpg, os
+async def q():
+    conn = await asyncpg.connect(
+        host=os.environ["PGBOUNCER_HOST"],
+        port=int(os.environ["PGBOUNCER_PORT"]),
+        database=os.environ["POSTGRES_DB"],
+        user=os.environ["POSTGRES_USER"],
+        password=os.environ["POSTGRES_PASSWORD"])
+    rows = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename")
+    for r in rows:
+        print(f"  {r['tablename']}")
+    await conn.close()
+asyncio.run(q())
+endef
+export SCRIPT_DB_TABLES
+
 db-test: ## Test database connection
 	@echo "$(YELLOW)Testing database connection...$(NC)"
 	@set -a; . ./.env; set +a; \
 	. $(VENV_DIR)/bin/activate && \
-	python -c "import asyncio, asyncpg; \
-	async def test(): \
-	    conn = await asyncpg.connect(host='$${PGBOUNCER_HOST}', port=int('$${PGBOUNCER_PORT}'), database='$${POSTGRES_DB}', user='$${POSTGRES_USER}', password='$${POSTGRES_PASSWORD}'); \
-	    ver = await conn.fetchval('SELECT version()'); print(f'✓ Connected: {ver[:50]}...'); await conn.close(); \
-	asyncio.run(test())"
+	python3 -c "$$SCRIPT_DB_TEST"
 
 db-tables: ## List database tables
+	@echo "$(YELLOW)Listing database tables...$(NC)"
 	@set -a; . ./.env; set +a; \
 	. $(VENV_DIR)/bin/activate && \
-	python -c "import asyncio, asyncpg; \
-	async def q(): \
-	    conn = await asyncpg.connect(host='$${PGBOUNCER_HOST}', port=int('$${PGBOUNCER_PORT}'), database='$${POSTGRES_DB}', user='$${POSTGRES_USER}', password='$${POSTGRES_PASSWORD}'); \
-	    rows = await conn.fetch(\"SELECT tablename FROM pg_tables WHERE schemaname='public'\"); \
-	    [print(f'  {r[\"tablename\"]}') for r in rows]; await conn.close(); \
-	asyncio.run(q())"
+	python3 -c "$$SCRIPT_DB_TABLES"
+
+# =============================================================================
+# Dependencies
+# =============================================================================
+
+dependencies: ## Check for outdated Python packages
+	@echo "$(YELLOW)Checking for outdated packages...$(NC)"
+	@. $(VENV_DIR)/bin/activate && \
+	pip list --outdated --format=columns 2>/dev/null || true
+	@echo ""
+	@echo "$(GREEN)✓ Dependency check complete$(NC)"
+
+# =============================================================================
+# OpenAPI
+# =============================================================================
+
+openapi: ## Generate OpenAPI schema to output directory
+	@echo "$(YELLOW)Generating OpenAPI schema...$(NC)"
+	@mkdir -p output
+	@set -a; . ./.env; set +a; \
+	. $(VENV_DIR)/bin/activate && \
+	python3 scripts/generate-openapi-spec.py -o output/openapi.json
+	@echo "$(GREEN)✓ OpenAPI schema written to output/openapi.json$(NC)"
 
 # =============================================================================
 # Docker

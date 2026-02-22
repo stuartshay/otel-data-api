@@ -4,7 +4,7 @@
 Imports the FastAPI app, calls app.openapi() to produce the spec,
 and writes it to stdout or a file. No running server needed.
 
-Requires Python 3.12+ (matching project minimum).
+Requires Python 3.14+ (matching project minimum).
 """
 
 import argparse

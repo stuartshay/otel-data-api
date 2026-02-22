@@ -5,7 +5,7 @@
 [![Publish Types](https://github.com/stuartshay/otel-data-api/actions/workflows/publish-types.yml/badge.svg)](https://github.com/stuartshay/otel-data-api/actions/workflows/publish-types.yml)
 [![Docker Hub](https://img.shields.io/badge/Docker%20Hub-stuartshay%2Fotel--data--api-blue?logo=docker)](https://hub.docker.com/repository/docker/stuartshay/otel-data-api)
 [![npm](https://img.shields.io/npm/v/@stuartshay/otel-data-types?logo=npm&label=otel-data-types)](https://www.npmjs.com/package/@stuartshay/otel-data-types)
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-latest-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 
 FastAPI microservice providing read/write access to the OwnTracks + Garmin
@@ -79,7 +79,7 @@ open http://localhost:8080/docs
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.14+
 - PostgreSQL with PostGIS (via PgBouncer)
 - Docker (optional)
 

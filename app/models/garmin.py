@@ -4,37 +4,41 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class GarminActivity(BaseModel):
-    activity_id: str
-    sport: str
-    sub_sport: str | None = None
-    start_time: datetime | None = None
-    end_time: datetime | None = None
-    distance_km: float | None = None
-    duration_seconds: int | None = None
-    avg_heart_rate: int | None = None
-    max_heart_rate: int | None = None
-    avg_cadence: int | None = None
-    max_cadence: int | None = None
-    calories: int | None = None
-    avg_speed_kmh: float | None = None
-    max_speed_kmh: float | None = None
-    total_ascent_m: int | None = None
-    total_descent_m: int | None = None
-    total_distance: float | None = None
-    avg_pace: float | None = None
-    device_manufacturer: str | None = None
-    avg_temperature_c: int | None = None
-    min_temperature_c: int | None = None
-    max_temperature_c: int | None = None
-    total_elapsed_time: float | None = None
-    total_timer_time: float | None = None
-    created_at: datetime | None = None
-    uploaded_at: datetime | None = None
-    track_point_count: int | None = None
+    """Summary of a Garmin Connect activity parsed from a FIT file."""
+
+    activity_id: str = Field(description="Garmin Connect activity identifier")
+    sport: str = Field(description="Primary sport type (e.g. cycling, running)")
+    sub_sport: str | None = Field(default=None, description="Sub-sport classification (e.g. road, trail)")
+    start_time: datetime | None = Field(default=None, description="Activity start time in UTC")
+    end_time: datetime | None = Field(default=None, description="Activity end time in UTC")
+    distance_km: float | None = Field(default=None, description="Total distance in kilometres")
+    duration_seconds: int | None = Field(default=None, description="Active duration in seconds (excludes pauses)")
+    avg_heart_rate: int | None = Field(default=None, description="Average heart rate in beats per minute")
+    max_heart_rate: int | None = Field(default=None, description="Maximum heart rate in beats per minute")
+    avg_cadence: int | None = Field(default=None, description="Average cadence in RPM")
+    max_cadence: int | None = Field(default=None, description="Maximum cadence in RPM")
+    calories: int | None = Field(default=None, description="Total calories burned")
+    avg_speed_kmh: float | None = Field(default=None, description="Average speed in km/h")
+    max_speed_kmh: float | None = Field(default=None, description="Maximum speed in km/h")
+    total_ascent_m: int | None = Field(default=None, description="Total elevation gain in meters")
+    total_descent_m: int | None = Field(default=None, description="Total elevation loss in meters")
+    total_distance: float | None = Field(default=None, description="Raw total distance in meters from FIT file")
+    avg_pace: float | None = Field(default=None, description="Average pace in minutes per kilometre")
+    device_manufacturer: str | None = Field(default=None, description="Device manufacturer (e.g. garmin)")
+    avg_temperature_c: int | None = Field(default=None, description="Average ambient temperature in degrees C")
+    min_temperature_c: int | None = Field(default=None, description="Minimum ambient temperature in degrees C")
+    max_temperature_c: int | None = Field(default=None, description="Maximum ambient temperature in degrees C")
+    total_elapsed_time: float | None = Field(
+        default=None, description="Total elapsed time in seconds (includes pauses)"
+    )
+    total_timer_time: float | None = Field(default=None, description="Total timer time in seconds (active recording)")
+    created_at: datetime | None = Field(default=None, description="UTC timestamp when the record was inserted")
+    uploaded_at: datetime | None = Field(default=None, description="UTC timestamp when the FIT file was uploaded")
+    track_point_count: int | None = Field(default=None, description="Number of GPS track points in this activity")
 
     model_config = {
         "json_schema_extra": {
@@ -74,18 +78,22 @@ class GarminActivity(BaseModel):
 
 
 class GarminTrackPoint(BaseModel):
-    id: int
-    activity_id: str
-    latitude: float
-    longitude: float
-    timestamp: datetime
-    altitude: float | None = None
-    distance_from_start_km: float | None = None
-    speed_kmh: float | None = None
-    heart_rate: int | None = None
-    cadence: int | None = None
-    temperature_c: int | None = None
-    created_at: datetime | None = None
+    """Individual GPS track point within a Garmin activity."""
+
+    id: int = Field(description="Unique track point record identifier")
+    activity_id: str = Field(description="Parent Garmin activity identifier")
+    latitude: float = Field(description="GPS latitude in decimal degrees (WGS 84)")
+    longitude: float = Field(description="GPS longitude in decimal degrees (WGS 84)")
+    timestamp: datetime = Field(description="UTC timestamp of the track point recording")
+    altitude: float | None = Field(default=None, description="Elevation above sea level in meters")
+    distance_from_start_km: float | None = Field(
+        default=None, description="Cumulative distance from activity start in km"
+    )
+    speed_kmh: float | None = Field(default=None, description="Instantaneous speed in km/h")
+    heart_rate: int | None = Field(default=None, description="Heart rate in beats per minute")
+    cadence: int | None = Field(default=None, description="Pedal/step cadence in RPM")
+    temperature_c: int | None = Field(default=None, description="Ambient temperature in degrees C")
+    created_at: datetime | None = Field(default=None, description="UTC timestamp when the record was inserted")
 
     model_config = {
         "json_schema_extra": {
@@ -110,15 +118,19 @@ class GarminTrackPoint(BaseModel):
 
 
 class GarminChartPoint(BaseModel):
-    timestamp: datetime
-    altitude: float | None = None
-    distance_from_start_km: float | None = None
-    speed_kmh: float | None = None
-    heart_rate: int | None = None
-    cadence: int | None = None
-    temperature_c: int | None = None
-    latitude: float
-    longitude: float
+    """Lightweight track point optimised for time-series chart rendering."""
+
+    timestamp: datetime = Field(description="UTC timestamp of the data point")
+    altitude: float | None = Field(default=None, description="Elevation above sea level in meters")
+    distance_from_start_km: float | None = Field(
+        default=None, description="Cumulative distance from activity start in km"
+    )
+    speed_kmh: float | None = Field(default=None, description="Instantaneous speed in km/h")
+    heart_rate: int | None = Field(default=None, description="Heart rate in beats per minute")
+    cadence: int | None = Field(default=None, description="Pedal/step cadence in RPM")
+    temperature_c: int | None = Field(default=None, description="Ambient temperature in degrees C")
+    latitude: float = Field(description="GPS latitude in decimal degrees (WGS 84)")
+    longitude: float = Field(description="GPS longitude in decimal degrees (WGS 84)")
 
     model_config = {
         "json_schema_extra": {
@@ -140,7 +152,9 @@ class GarminChartPoint(BaseModel):
 
 
 class SportInfo(BaseModel):
-    sport: str
-    activity_count: int
+    """Sport type with its activity count."""
+
+    sport: str = Field(description="Sport type name (e.g. cycling, running)")
+    activity_count: int = Field(description="Number of activities for this sport")
 
     model_config = {"json_schema_extra": {"examples": [{"sport": "cycling", "activity_count": 20}]}}

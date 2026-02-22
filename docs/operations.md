@@ -4,7 +4,7 @@
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.14+
 - Access to PostgreSQL/PgBouncer at 192.168.1.175:6432
 - Docker (optional)
 

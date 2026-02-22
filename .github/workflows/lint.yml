@@ -1,4 +1,4 @@
-name: Lint and Validate
+name: Lint, Validate and Test
 
 on:
   push:
@@ -51,11 +51,49 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest --cov=app --cov-report=xml --cov-report=term-missing tests/
+          pytest --cov=app --cov-report=xml --cov-report=term-missing --cov-report=json tests/
 
       - name: Verify imports
         run: |
           python -c "from app import create_app; print('✓ App factory imports successfully')"
+
+      - name: Coverage Report
+        if: always()
+        run: |
+          if [ -f coverage.json ]; then
+            {
+              echo "## Test Coverage Report"
+              echo ""
+              echo "| Category | Covered | Missing | Percentage |"
+              echo "|----------|---------|---------|------------|"
+              for key in statements branches; do
+                if [ "$key" = "statements" ]; then
+                  covered=$(jq -r '.totals.covered_lines' coverage.json)
+                  total=$(jq -r '.totals.num_statements' coverage.json)
+                  missing=$(jq -r '.totals.missing_lines' coverage.json)
+                  pct=$(jq -r '.totals.percent_covered_display' coverage.json)
+                  threshold=85
+                else
+                  covered=$(jq -r '.totals.covered_branches' coverage.json)
+                  total=$(jq -r '.totals.num_branches' coverage.json)
+                  missing=$(jq -r '.totals.missing_branches' coverage.json)
+                  pct=$(jq -r '(.totals.covered_branches / .totals.num_branches * 100) | floor' coverage.json)
+                  threshold=85
+                fi
+                icon="✅"
+                if awk "BEGIN {exit !($pct < $threshold)}"; then icon="⚠️"; fi
+                echo "| ${icon} ${key^} | ${covered}/${total} | ${missing} | ${pct}% |"
+              done
+              echo ""
+              echo "_Threshold: 85% (enforced by pyproject.toml)_"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Test Coverage Report"
+              echo ""
+              echo "⚠️ No coverage data generated"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   docker-lint:
     name: Dockerfile Lint

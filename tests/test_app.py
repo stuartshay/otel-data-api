@@ -79,7 +79,7 @@ async def test_create_app_handles_db_initialization_failure(monkeypatch: pytest.
     monkeypatch.setattr(app_module, "DatabaseService", FailingDB)
     monkeypatch.setattr(app_module, "configure_auth", lambda *_args, **_kwargs: None)
 
-    cfg = Config(db_user="user", db_password="pass")
+    cfg = Config(db_user="user", db_password="pass")  # pragma: allowlist secret - test fixture
     app = app_module.create_app(cfg)
 
     async with app.router.lifespan_context(app):

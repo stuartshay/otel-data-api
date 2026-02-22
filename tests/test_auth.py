@@ -60,7 +60,7 @@ async def test_get_current_user_success(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(auth.jwt, "get_unverified_header", lambda _token: {"kid": "kid1"})
 
     class DummyKey:
-        def to_pem(self) -> bytes:  # pragma: no cover - trivial
+        def to_pem(self) -> bytes:
             return b"pem-key"
 
     monkeypatch.setattr(auth.jwk, "construct", lambda _key: DummyKey())

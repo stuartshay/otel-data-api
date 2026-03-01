@@ -43,13 +43,11 @@ async def test_middleware_does_not_break_responses(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_health_endpoint_excluded_from_logging(client: AsyncClient, caplog):
+async def test_health_endpoint_excluded_from_logging(client: AsyncClient, capfd):
     """Health endpoints should not produce request log entries."""
-    with caplog.at_level("INFO", logger="app.middleware"):
-        await client.get("/health")
-
-    request_log_messages = [r for r in caplog.records if r.getMessage() == "HTTP request"]
-    assert len(request_log_messages) == 0
+    await client.get("/health")
+    captured = capfd.readouterr()
+    assert "HTTP request" not in captured.out
 
 
 @pytest.mark.asyncio
@@ -57,4 +55,4 @@ async def test_non_health_endpoint_produces_log(client: AsyncClient, capfd):
     """Non-excluded endpoints should produce an 'HTTP request' log entry."""
     await client.get("/api/v1/locations/status")
     captured = capfd.readouterr()
-    assert "HTTP request" in captured.err
+    assert "HTTP request" in captured.out

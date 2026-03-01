@@ -9,7 +9,9 @@ import asyncpg
 import structlog
 
 from app.config import Config
-from app.logging import SLOW_QUERY_THRESHOLD_MS
+
+# Slow-query threshold (milliseconds) — queries above this are logged at WARNING
+SLOW_QUERY_THRESHOLD_MS: float = 500.0
 
 logger = structlog.get_logger(__name__)
 

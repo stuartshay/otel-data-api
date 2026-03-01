@@ -47,6 +47,7 @@ class Config:
     log_format: str = "json"
     log_sql: bool = True
     log_sql_params: bool = False
+    log_http_query_params: bool = True
 
     # CORS
     cors_origins: tuple[str, ...] = ()
@@ -86,6 +87,7 @@ class Config:
             log_format=os.getenv("LOG_FORMAT", "json").lower(),
             log_sql=os.getenv("LOG_SQL", "true").lower() == "true",
             log_sql_params=os.getenv("LOG_SQL_PARAMS", "false").lower() == "true",
+            log_http_query_params=os.getenv("LOG_HTTP_QUERY_PARAMS", "true").lower() == "true",
             # CORS
             cors_origins=cors_origins,
         )

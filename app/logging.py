@@ -17,11 +17,8 @@ import structlog
 
 from app.config import Config
 
-# Slow-query threshold (milliseconds) — queries above this are logged at WARNING
-SLOW_QUERY_THRESHOLD_MS: float = 500.0
 
-
-def _add_service_context(config: Config):
+def _add_service_context(config: Config) -> structlog.types.Processor:
     """Return a processor that injects service metadata into every log event."""
 
     def _processor(

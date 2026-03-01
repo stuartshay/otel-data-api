@@ -37,6 +37,7 @@ def _test_config() -> Config:
         log_format="json",
         log_sql=True,
         log_sql_params=False,
+        log_http_query_params=True,
     )
 
 

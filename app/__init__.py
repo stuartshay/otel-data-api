@@ -44,7 +44,7 @@ def create_app(config: Config) -> FastAPI:
     )
 
     # Request logging + trace correlation
-    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(RequestLoggingMiddleware, config=config)
 
     # CORS
     if config.cors_origins:

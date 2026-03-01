@@ -204,7 +204,7 @@ async def test_sql_logging_disabled(monkeypatch: pytest.MonkeyPatch, capfd):
         db_port=5432,
         db_name="test",
         db_user="test",
-        db_password="test",  # pragma: allowlist secret
+        db_password="test",  # pragma: allowlist secret - test fixture
         log_level="DEBUG",
         log_format="json",
         log_sql=False,

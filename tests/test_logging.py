@@ -26,6 +26,7 @@ def _make_config(**overrides: str | int | bool) -> Config:
         log_format=str(overrides.get("log_format", "json")),
         log_sql=bool(overrides.get("log_sql", True)),
         log_sql_params=bool(overrides.get("log_sql_params", False)),
+        log_http_query_params=bool(overrides.get("log_http_query_params", True)),
     )
 
 

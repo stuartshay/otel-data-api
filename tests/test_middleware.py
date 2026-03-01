@@ -53,8 +53,8 @@ async def test_health_endpoint_excluded_from_logging(client: AsyncClient, caplog
 
 
 @pytest.mark.asyncio
-async def test_non_health_endpoint_returns_ok(client: AsyncClient):
-    """Non-excluded endpoints should still work normally."""
-    response = await client.get("/api/v1/locations/status")
-    # Even if the route returns an error, middleware should not crash
-    assert response.status_code in {200, 404, 422}
+async def test_non_health_endpoint_produces_log(client: AsyncClient, capfd):
+    """Non-excluded endpoints should produce an 'HTTP request' log entry."""
+    await client.get("/api/v1/locations/status")
+    captured = capfd.readouterr()
+    assert "HTTP request" in captured.err

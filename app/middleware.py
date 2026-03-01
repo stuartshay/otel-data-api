@@ -10,6 +10,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.config import Config
+
 logger = structlog.get_logger(__name__)
 
 # Response header names for trace correlation
@@ -27,6 +29,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     structured logging so that New Relic (NRQL) can query on fields like
     ``http.method``, ``http.route``, ``http.status_code``, and ``duration_ms``.
     """
+
+    def __init__(self, app: Any, config: Config | None = None) -> None:
+        super().__init__(app)
+        self._log_query_params = config.log_http_query_params if config else True
 
     async def dispatch(self, request: Request, call_next: Any) -> Response:
         start = time.perf_counter()
@@ -60,10 +66,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 "client.address": request.client.host if request.client else None,
             }
 
-            # Include query parameters when present
-            query_params = dict(request.query_params)
-            if query_params:
-                log_kwargs["http.query_params"] = query_params
+            # Include query parameters when present and allowed by config
+            if self._log_query_params:
+                query_params = dict(request.query_params)
+                if query_params:
+                    log_kwargs["http.query_params"] = query_params
 
             if trace_id:
                 log_kwargs["trace.id"] = trace_id

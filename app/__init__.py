@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import configure_auth
 from app.config import Config
 from app.database import DatabaseService
-from app.middleware import SPAN_ID_HEADER, TRACE_ID_HEADER, TraceCorrelationMiddleware
+from app.middleware import SPAN_ID_HEADER, TRACE_ID_HEADER, RequestLoggingMiddleware
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def create_app(config: Config) -> FastAPI:
@@ -43,8 +43,8 @@ def create_app(config: Config) -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Trace correlation — injects X-Trace-Id / X-Span-Id response headers
-    app.add_middleware(TraceCorrelationMiddleware)
+    # Request logging + trace correlation
+    app.add_middleware(RequestLoggingMiddleware)
 
     # CORS
     if config.cors_origins:

@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 import httpx
+import structlog
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwk, jwt
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _security = HTTPBearer(auto_error=False)
 

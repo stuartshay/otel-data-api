@@ -42,6 +42,12 @@ class Config:
     cognito_client_id: str = ""
     oauth2_enabled: bool = False
 
+    # Logging
+    log_level: str = "INFO"
+    log_format: str = "json"
+    log_sql: bool = True
+    log_sql_params: bool = False
+
     # CORS
     cors_origins: tuple[str, ...] = ()
 
@@ -75,6 +81,11 @@ class Config:
             cognito_issuer=os.getenv("COGNITO_ISSUER", ""),
             cognito_client_id=os.getenv("COGNITO_CLIENT_ID", ""),
             oauth2_enabled=os.getenv("OAUTH2_ENABLED", "false").lower() == "true",
+            # Logging
+            log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
+            log_format=os.getenv("LOG_FORMAT", "json").lower(),
+            log_sql=os.getenv("LOG_SQL", "true").lower() == "true",
+            log_sql_params=os.getenv("LOG_SQL_PARAMS", "false").lower() == "true",
             # CORS
             cors_origins=cors_origins,
         )

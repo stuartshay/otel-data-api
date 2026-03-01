@@ -48,7 +48,7 @@ async def test_create_app_runs_lifespan_and_configures_middleware(monkeypatch: p
     cfg = _config_with_cors()
     app = app_module.create_app(cfg)
 
-    assert any(m.cls is app_module.TraceCorrelationMiddleware for m in app.user_middleware)
+    assert any(m.cls is app_module.RequestLoggingMiddleware for m in app.user_middleware)
     assert any(m.cls is CORSMiddleware for m in app.user_middleware)
 
     async with app.router.lifespan_context(app):

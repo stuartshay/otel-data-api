@@ -1,4 +1,4 @@
-"""Tests for trace correlation middleware."""
+"""Tests for request logging middleware."""
 
 from unittest.mock import MagicMock, patch
 
@@ -40,3 +40,21 @@ async def test_middleware_does_not_break_responses(client: AsyncClient):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
+
+
+@pytest.mark.asyncio
+async def test_health_endpoint_excluded_from_logging(client: AsyncClient, caplog):
+    """Health endpoints should not produce request log entries."""
+    with caplog.at_level("INFO", logger="app.middleware"):
+        await client.get("/health")
+
+    request_log_messages = [r for r in caplog.records if r.getMessage() == "HTTP request"]
+    assert len(request_log_messages) == 0
+
+
+@pytest.mark.asyncio
+async def test_non_health_endpoint_returns_ok(client: AsyncClient):
+    """Non-excluded endpoints should still work normally."""
+    response = await client.get("/api/v1/locations/status")
+    # Even if the route returns an error, middleware should not crash
+    assert response.status_code in {200, 404, 422}

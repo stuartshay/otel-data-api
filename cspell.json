@@ -47,6 +47,8 @@
         "kilometre",
         "kilometres",
         "kustomization",
+        "locustfile",
+        "locustio",
         "markdownlint",
         "MQTT",
         "mypy",

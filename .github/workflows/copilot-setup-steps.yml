@@ -37,3 +37,8 @@ jobs:
 
       - name: Install pre-commit
         run: pip install pre-commit
+
+      - name: Pre-install pre-commit hook environments
+        # Download all hook environments before the agent's firewall activates,
+        # so `pre-commit run -a` works without outbound network access.
+        run: pre-commit install-hooks

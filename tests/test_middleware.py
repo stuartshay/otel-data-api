@@ -7,26 +7,53 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_trace_headers_present_when_nr_active(client: AsyncClient):
-    """Response includes X-Trace-Id and X-Span-Id when New Relic is active."""
+async def test_trace_headers_from_otel(client: AsyncClient):
+    """Response includes trace headers when OTel span context is active."""
+    mock_ctx = MagicMock()
+    mock_ctx.trace_id = 0x0AF7651916CD43DD8448EB211C80319C
+    mock_ctx.span_id = 0xB7AD6B7169203331
+
+    mock_span = MagicMock()
+    mock_span.get_span_context.return_value = mock_ctx
+
+    with patch("app.middleware.otel_trace.get_current_span", return_value=mock_span):
+        response = await client.get("/health")
+
+    assert response.status_code == 200
+    assert response.headers.get("X-Trace-Id") == "0af7651916cd43dd8448eb211c80319c"  # pragma: allowlist secret
+    assert response.headers.get("X-Span-Id") == "b7ad6b7169203331"  # pragma: allowlist secret
+
+
+@pytest.mark.asyncio
+async def test_trace_headers_fallback_to_nr(client: AsyncClient):
+    """Response falls back to NR trace IDs when OTel has no active span."""
+    mock_ctx = MagicMock()
+    mock_ctx.trace_id = 0  # OTel returns 0 when no span is active
+
+    mock_span = MagicMock()
+    mock_span.get_span_context.return_value = mock_ctx
+
     mock_nr = MagicMock()
-    mock_nr.current_trace_id.return_value = "trace-001"
-    mock_nr.current_span_id.return_value = "span-002"
+    mock_nr.current_trace_id.return_value = "nr-trace-001"
+    mock_nr.current_span_id.return_value = "nr-span-002"
 
     mock_parent = MagicMock()
     mock_parent.agent = mock_nr
 
-    with patch.dict("sys.modules", {"newrelic": mock_parent, "newrelic.agent": mock_nr}):
+    with (
+        patch("app.middleware.otel_trace.get_current_span", return_value=mock_span),
+        patch.dict("sys.modules", {"newrelic": mock_parent, "newrelic.agent": mock_nr}),
+    ):
         response = await client.get("/health")
 
     assert response.status_code == 200
-    assert response.headers.get("X-Trace-Id") == "trace-001"
-    assert response.headers.get("X-Span-Id") == "span-002"
+    assert response.headers.get("X-Trace-Id") == "nr-trace-001"
+    assert response.headers.get("X-Span-Id") == "nr-span-002"
 
 
 @pytest.mark.asyncio
-async def test_trace_headers_absent_without_nr(client: AsyncClient):
-    """Response does NOT include trace headers when New Relic is not active."""
+async def test_trace_headers_absent_without_tracing(client: AsyncClient):
+    """Response does NOT include trace headers when neither OTel nor NR is active."""
     response = await client.get("/health")
     assert response.status_code == 200
     assert "X-Trace-Id" not in response.headers

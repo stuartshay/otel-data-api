@@ -1,0 +1,32 @@
+# Locust Load Testing for otel-data-api
+#
+# Runs Locust in Docker targeting the live API.
+# Web UI available at http://<host>:8089
+#
+# Usage:
+#   docker compose up -d          # Start Locust web UI
+#   docker compose up --scale worker=3  # Scale workers
+#   docker compose down           # Stop
+
+services:
+  master:
+    build: .
+    ports:
+      - "8089:8089"
+    command: >
+      -f /mnt/locust/locustfile.py
+      --master
+      --host https://api.lab.informationcart.com
+    environment:
+      - LOCUST_USERS=${LOCUST_USERS:-10}
+      - LOCUST_SPAWN_RATE=${LOCUST_SPAWN_RATE:-2}
+      - LOCUST_RUN_TIME=${LOCUST_RUN_TIME:-5m}
+
+  worker:
+    build: .
+    command: >
+      -f /mnt/locust/locustfile.py
+      --worker
+      --master-host master
+    depends_on:
+      - master

@@ -13,6 +13,7 @@ from app.auth import configure_auth
 from app.config import Config
 from app.database import DatabaseService
 from app.middleware import SPAN_ID_HEADER, TRACE_ID_HEADER, RequestLoggingMiddleware
+from app.tracing import setup_tracing
 
 logger = structlog.get_logger(__name__)
 
@@ -34,6 +35,10 @@ def create_app(config: Config) -> FastAPI:
         yield
         # Shutdown
         await db.close()
+        # Flush remaining OTel spans before exit
+        tracer_provider = getattr(app.state, "tracer_provider", None)
+        if tracer_provider is not None:
+            tracer_provider.shutdown()
         logger.info("Application shutdown — database pool closed")
 
     app = FastAPI(
@@ -69,5 +74,8 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(unified.router)
     app.include_router(reference.router)
     app.include_router(spatial.router)
+
+    # OpenTelemetry auto-instrumentation (opt-in via OTEL_TRACES_ENABLED)
+    app.state.tracer_provider = setup_tracing(app, config)
 
     return app

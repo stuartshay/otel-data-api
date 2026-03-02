@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 import structlog
+from opentelemetry import trace as otel_trace
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -39,20 +40,32 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         duration_ms = (time.perf_counter() - start) * 1000.0
 
-        # --- Trace correlation headers (New Relic) ---
+        # --- Trace correlation headers (OTel-native with NR fallback) ---
         trace_id: str | None = None
         span_id: str | None = None
         try:
-            import newrelic.agent  # pyright: ignore[reportMissingImports]
-
-            trace_id = newrelic.agent.current_trace_id()
-            span_id = newrelic.agent.current_span_id()
-            if trace_id:
-                response.headers[TRACE_ID_HEADER] = trace_id
-            if span_id:
-                response.headers[SPAN_ID_HEADER] = span_id
+            span = otel_trace.get_current_span()
+            ctx = span.get_span_context()
+            if ctx and ctx.trace_id:
+                trace_id = format(ctx.trace_id, "032x")
+                span_id = format(ctx.span_id, "016x")
         except Exception:  # noqa: BLE001
-            pass  # New Relic not available — skip silently
+            pass
+
+        # Fallback to New Relic agent if OTel didn't provide IDs
+        if not trace_id:
+            try:
+                import newrelic.agent  # pyright: ignore[reportMissingImports]
+
+                trace_id = newrelic.agent.current_trace_id()
+                span_id = newrelic.agent.current_span_id()
+            except Exception:  # noqa: BLE001
+                pass
+
+        if trace_id:
+            response.headers[TRACE_ID_HEADER] = trace_id
+        if span_id:
+            response.headers[SPAN_ID_HEADER] = span_id
 
         # --- Request logging ---
         path = request.url.path

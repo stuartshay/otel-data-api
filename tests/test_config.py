@@ -25,6 +25,11 @@ def test_from_env_parses_all_fields(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("COGNITO_ISSUER", "https://issuer")
     monkeypatch.setenv("COGNITO_CLIENT_ID", "client123")
     monkeypatch.setenv("OAUTH2_ENABLED", "true")
+    monkeypatch.setenv("LOG_LEVEL", "WARNING")
+    monkeypatch.setenv("LOG_FORMAT", "console")
+    monkeypatch.setenv("LOG_SQL", "false")
+    monkeypatch.setenv("LOG_SQL_PARAMS", "true")
+    monkeypatch.setenv("LOG_HTTP_QUERY_PARAMS", "false")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com, https://api.example.com ")
 
     cfg = Config.from_env()
@@ -48,6 +53,11 @@ def test_from_env_parses_all_fields(monkeypatch: pytest.MonkeyPatch):
     assert cfg.cognito_issuer == "https://issuer"
     assert cfg.cognito_client_id == "client123"
     assert cfg.oauth2_enabled is True
+    assert cfg.log_level == "WARNING"
+    assert cfg.log_format == "console"
+    assert cfg.log_sql is False
+    assert cfg.log_sql_params is True
+    assert cfg.log_http_query_params is False
     assert cfg.cors_origins == ("https://app.example.com", "https://api.example.com")
 
 

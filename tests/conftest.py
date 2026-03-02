@@ -33,6 +33,11 @@ def _test_config() -> Config:
         cognito_client_id="",
         oauth2_enabled=False,
         cors_origins=("*",),
+        log_level="DEBUG",
+        log_format="json",
+        log_sql=True,
+        log_sql_params=False,
+        log_http_query_params=True,
     )
 
 

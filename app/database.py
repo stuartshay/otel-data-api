@@ -2,14 +2,27 @@
 
 from __future__ import annotations
 
-import logging
+import time
 from typing import Any
 
 import asyncpg
+import structlog
 
 from app.config import Config
 
-logger = logging.getLogger(__name__)
+# Slow-query threshold (milliseconds) — queries above this are logged at WARNING
+SLOW_QUERY_THRESHOLD_MS: float = 500.0
+
+logger = structlog.get_logger(__name__)
+
+# Maximum SQL length to include in log events (prevents log bloat)
+_MAX_SQL_LOG_LENGTH = 1000
+
+
+def _parse_operation(query: str) -> str:
+    """Extract the SQL operation (SELECT, INSERT, …) from the query text."""
+    first_word = query.lstrip().split(None, 1)[0].upper() if query.strip() else "UNKNOWN"
+    return first_word if first_word in {"SELECT", "INSERT", "UPDATE", "DELETE", "WITH", "BEGIN", "COMMIT"} else "OTHER"
 
 
 class DatabaseService:
@@ -18,6 +31,8 @@ class DatabaseService:
     def __init__(self, config: Config) -> None:
         self._config = config
         self._pool: asyncpg.Pool | None = None
+        self._log_sql = config.log_sql
+        self._log_sql_params = config.log_sql_params
 
     async def initialize(self) -> None:
         """Create the connection pool."""
@@ -33,9 +48,9 @@ class DatabaseService:
             command_timeout=self._config.db_connect_timeout,
         )
         logger.info(
-            "Database pool initialized (min=%d, max=%d)",
-            self._config.db_pool_min,
-            self._config.db_pool_max,
+            "Database pool initialized",
+            db_pool_min=self._config.db_pool_min,
+            db_pool_max=self._config.db_pool_max,
         )
 
     async def close(self) -> None:
@@ -51,6 +66,26 @@ class DatabaseService:
             raise RuntimeError("Database pool not initialized. Call initialize() first.")
         return self._pool
 
+    def _log_query(self, query: str, args: tuple[Any, ...], duration_ms: float, row_count: int | None = None) -> None:
+        """Emit a structured log event for a SQL query."""
+        if not self._log_sql:
+            return
+
+        log_kwargs: dict[str, Any] = {
+            "db.statement": query[:_MAX_SQL_LOG_LENGTH],
+            "db.operation": _parse_operation(query),
+            "db.duration_ms": round(duration_ms, 2),
+        }
+        if row_count is not None:
+            log_kwargs["db.rows_affected"] = row_count
+        if self._log_sql_params and args:
+            log_kwargs["db.params"] = [str(a) for a in args]
+
+        if duration_ms >= SLOW_QUERY_THRESHOLD_MS:
+            logger.warning("Slow SQL query", **log_kwargs)
+        else:
+            logger.debug("SQL query", **log_kwargs)
+
     async def health_check(self) -> dict[str, Any]:
         """Check database connectivity and return status."""
         try:
@@ -63,23 +98,33 @@ class DatabaseService:
                 "pool_free": self.pool.get_idle_size(),
             }
         except Exception as e:
-            logger.error("Database health check failed: %s", e)
+            logger.error("Database health check failed", error=str(e))
             return {"status": "unhealthy", "error": str(e)}
 
     async def fetch(self, query: str, *args: Any) -> list[asyncpg.Record]:
         """Execute a query and return all rows."""
+        start = time.perf_counter()
         result: list[asyncpg.Record] = await self.pool.fetch(query, *args)
+        self._log_query(query, args, (time.perf_counter() - start) * 1000.0, row_count=len(result))
         return result
 
     async def fetchrow(self, query: str, *args: Any) -> asyncpg.Record | None:
         """Execute a query and return a single row."""
-        return await self.pool.fetchrow(query, *args)
+        start = time.perf_counter()
+        result = await self.pool.fetchrow(query, *args)
+        self._log_query(query, args, (time.perf_counter() - start) * 1000.0, row_count=1 if result else 0)
+        return result
 
     async def fetchval(self, query: str, *args: Any) -> Any:
         """Execute a query and return a single value."""
-        return await self.pool.fetchval(query, *args)
+        start = time.perf_counter()
+        result = await self.pool.fetchval(query, *args)
+        self._log_query(query, args, (time.perf_counter() - start) * 1000.0)
+        return result
 
     async def execute(self, query: str, *args: Any) -> str:
         """Execute a query and return the status."""
+        start = time.perf_counter()
         result: str = await self.pool.execute(query, *args)
+        self._log_query(query, args, (time.perf_counter() - start) * 1000.0)
         return result

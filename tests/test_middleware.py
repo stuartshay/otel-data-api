@@ -1,4 +1,4 @@
-"""Tests for trace correlation middleware."""
+"""Tests for request logging middleware."""
 
 from unittest.mock import MagicMock, patch
 
@@ -40,3 +40,25 @@ async def test_middleware_does_not_break_responses(client: AsyncClient):
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
+
+
+@pytest.mark.asyncio
+async def test_health_endpoint_excluded_from_logging(client: AsyncClient):
+    """Health endpoints should not produce request log entries."""
+    with patch("app.middleware.logger") as mock_logger:
+        await client.get("/health")
+        all_calls = (
+            mock_logger.info.call_args_list + mock_logger.warning.call_args_list + mock_logger.error.call_args_list
+        )
+        assert not any(c.args and c.args[0] == "HTTP request" for c in all_calls)
+
+
+@pytest.mark.asyncio
+async def test_non_health_endpoint_produces_log(client: AsyncClient):
+    """Non-excluded endpoints should produce an 'HTTP request' log entry."""
+    with patch("app.middleware.logger") as mock_logger:
+        await client.get("/api/v1/locations/status")
+        all_calls = (
+            mock_logger.info.call_args_list + mock_logger.warning.call_args_list + mock_logger.error.call_args_list
+        )
+        assert any(c.args[0] == "HTTP request" for c in all_calls if c.args)

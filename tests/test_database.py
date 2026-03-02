@@ -239,8 +239,10 @@ async def test_slow_query_logged_as_warning(monkeypatch: pytest.MonkeyPatch, con
         # First call returns 0, second call returns 1 (1000ms duration)
         return 0.0 if call_count % 2 == 1 else 1.0
 
-    with patch("app.database.time.perf_counter", side_effect=fake_perf_counter):
-        with patch("app.database.logger") as mock_logger:
-            await db.fetch("SELECT * FROM big_table")
-            warning_calls = mock_logger.warning.call_args_list
-            assert any(c.args and c.args[0] == "Slow SQL query" for c in warning_calls)
+    with (
+        patch("app.database.time.perf_counter", side_effect=fake_perf_counter),
+        patch("app.database.logger") as mock_logger,
+    ):
+        await db.fetch("SELECT * FROM big_table")
+        warning_calls = mock_logger.warning.call_args_list
+        assert any(c.args and c.args[0] == "Slow SQL query" for c in warning_calls)

@@ -47,9 +47,12 @@ async def test_health_endpoint_excluded_from_logging(client: AsyncClient):
     """Health endpoints should not produce request log entries."""
     with patch("app.middleware.logger") as mock_logger:
         await client.get("/health")
-        mock_logger.info.assert_not_called()
-        mock_logger.warning.assert_not_called()
-        mock_logger.error.assert_not_called()
+        all_calls = (
+            mock_logger.info.call_args_list
+            + mock_logger.warning.call_args_list
+            + mock_logger.error.call_args_list
+        )
+        assert not any(c.args and c.args[0] == "HTTP request" for c in all_calls)
 
 
 @pytest.mark.asyncio

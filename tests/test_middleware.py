@@ -43,16 +43,23 @@ async def test_middleware_does_not_break_responses(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_health_endpoint_excluded_from_logging(client: AsyncClient, capfd):
+async def test_health_endpoint_excluded_from_logging(client: AsyncClient):
     """Health endpoints should not produce request log entries."""
-    await client.get("/health")
-    captured = capfd.readouterr()
-    assert "HTTP request" not in captured.out
+    with patch("app.middleware.logger") as mock_logger:
+        await client.get("/health")
+        mock_logger.info.assert_not_called()
+        mock_logger.warning.assert_not_called()
+        mock_logger.error.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_non_health_endpoint_produces_log(client: AsyncClient, capfd):
+async def test_non_health_endpoint_produces_log(client: AsyncClient):
     """Non-excluded endpoints should produce an 'HTTP request' log entry."""
-    await client.get("/api/v1/locations/status")
-    captured = capfd.readouterr()
-    assert "HTTP request" in captured.out
+    with patch("app.middleware.logger") as mock_logger:
+        await client.get("/api/v1/locations/status")
+        all_calls = (
+            mock_logger.info.call_args_list
+            + mock_logger.warning.call_args_list
+            + mock_logger.error.call_args_list
+        )
+        assert any(c.args[0] == "HTTP request" for c in all_calls if c.args)

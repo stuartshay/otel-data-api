@@ -173,12 +173,8 @@ class TestParseOperation:
 
 
 @pytest.mark.asyncio
-async def test_sql_logging_emits_debug_log(monkeypatch: pytest.MonkeyPatch, config, capfd):
+async def test_sql_logging_emits_debug_log(monkeypatch: pytest.MonkeyPatch, config):
     """SQL tracing should emit a debug-level log with semantic fields."""
-    from app.logging import configure_logging
-
-    configure_logging(config)
-
     fake_pool = FakePool()
     fake_pool.fetch.return_value = [{"id": 1}, {"id": 2}]
     monkeypatch.setattr("app.database.asyncpg.create_pool", AsyncMock(return_value=fake_pool))
@@ -186,18 +182,18 @@ async def test_sql_logging_emits_debug_log(monkeypatch: pytest.MonkeyPatch, conf
     db = DatabaseService(config)
     await db.initialize()
 
-    await db.fetch("SELECT * FROM locations WHERE device_id=$1", "phone")
-
-    captured = capfd.readouterr()
-    assert "SQL query" in captured.err
-    assert "SELECT * FROM locations WHERE device_id=$1" in captured.err
+    with patch("app.database.logger") as mock_logger:
+        await db.fetch("SELECT * FROM locations WHERE device_id=$1", "phone")
+        debug_calls = mock_logger.debug.call_args_list
+        assert any(c.args and c.args[0] == "SQL query" for c in debug_calls)
+        sql_call = next(c for c in debug_calls if c.args and c.args[0] == "SQL query")
+        assert sql_call.kwargs.get("db.statement") == "SELECT * FROM locations WHERE device_id=$1"
 
 
 @pytest.mark.asyncio
-async def test_sql_logging_disabled(monkeypatch: pytest.MonkeyPatch, capfd):
+async def test_sql_logging_disabled(monkeypatch: pytest.MonkeyPatch):
     """When log_sql=False, no SQL log events should be emitted."""
     from app.config import Config
-    from app.logging import configure_logging
 
     disabled_config = Config(
         db_host="localhost",
@@ -210,7 +206,6 @@ async def test_sql_logging_disabled(monkeypatch: pytest.MonkeyPatch, capfd):
         log_sql=False,
         log_sql_params=False,
     )
-    configure_logging(disabled_config)
 
     fake_pool = FakePool()
     fake_pool.fetch.return_value = []
@@ -219,21 +214,15 @@ async def test_sql_logging_disabled(monkeypatch: pytest.MonkeyPatch, capfd):
     db = DatabaseService(disabled_config)
     await db.initialize()
 
-    await db.fetch("SELECT 1")
-
-    captured = capfd.readouterr()
-    # The "SQL query" log should NOT appear (only "Database pool initialized" may)
-    lines_after_init = captured.err.split("Database pool initialized")[-1]
-    assert "SQL query" not in lines_after_init
+    with patch("app.database.logger") as mock_logger:
+        await db.fetch("SELECT 1")
+        debug_calls = mock_logger.debug.call_args_list
+        assert not any(c.args and c.args[0] == "SQL query" for c in debug_calls)
 
 
 @pytest.mark.asyncio
-async def test_slow_query_logged_as_warning(monkeypatch: pytest.MonkeyPatch, config, capfd):
+async def test_slow_query_logged_as_warning(monkeypatch: pytest.MonkeyPatch, config):
     """Queries exceeding SLOW_QUERY_THRESHOLD_MS should be logged at WARNING."""
-    from app.logging import configure_logging
-
-    configure_logging(config)
-
     fake_pool = FakePool()
     fake_pool.fetch.return_value = []
     monkeypatch.setattr("app.database.asyncpg.create_pool", AsyncMock(return_value=fake_pool))
@@ -251,7 +240,7 @@ async def test_slow_query_logged_as_warning(monkeypatch: pytest.MonkeyPatch, con
         return 0.0 if call_count % 2 == 1 else 1.0
 
     with patch("app.database.time.perf_counter", side_effect=fake_perf_counter):
-        await db.fetch("SELECT * FROM big_table")
-
-    captured = capfd.readouterr()
-    assert "Slow SQL query" in captured.err
+        with patch("app.database.logger") as mock_logger:
+            await db.fetch("SELECT * FROM big_table")
+            warning_calls = mock_logger.warning.call_args_list
+            assert any(c.args and c.args[0] == "Slow SQL query" for c in warning_calls)

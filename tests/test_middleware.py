@@ -48,9 +48,7 @@ async def test_health_endpoint_excluded_from_logging(client: AsyncClient):
     with patch("app.middleware.logger") as mock_logger:
         await client.get("/health")
         all_calls = (
-            mock_logger.info.call_args_list
-            + mock_logger.warning.call_args_list
-            + mock_logger.error.call_args_list
+            mock_logger.info.call_args_list + mock_logger.warning.call_args_list + mock_logger.error.call_args_list
         )
         assert not any(c.args and c.args[0] == "HTTP request" for c in all_calls)
 
@@ -61,8 +59,6 @@ async def test_non_health_endpoint_produces_log(client: AsyncClient):
     with patch("app.middleware.logger") as mock_logger:
         await client.get("/api/v1/locations/status")
         all_calls = (
-            mock_logger.info.call_args_list
-            + mock_logger.warning.call_args_list
-            + mock_logger.error.call_args_list
+            mock_logger.info.call_args_list + mock_logger.warning.call_args_list + mock_logger.error.call_args_list
         )
         assert any(c.args[0] == "HTTP request" for c in all_calls if c.args)

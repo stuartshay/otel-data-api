@@ -57,11 +57,16 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         # --- Request logging ---
         path = request.url.path
         if path not in _EXCLUDED_PATHS:
+            url = (
+                str(request.url)
+                if self._log_query_params
+                else f"{request.url.scheme}://{request.url.netloc}{request.url.path}"
+            )
             log_kwargs: dict[str, Any] = {
                 "http.method": request.method,
                 "http.route": path,
                 "http.status_code": response.status_code,
-                "http.url": str(request.url),
+                "http.url": url,
                 "duration_ms": round(duration_ms, 2),
                 "client.address": request.client.host if request.client else None,
             }

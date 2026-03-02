@@ -29,11 +29,14 @@ jobs:
           python-version: "3.14"
           cache: "pip"
 
+      - name: Create virtual environment
+        run: python -m venv venv
+
       - name: Install project dependencies
-        run: pip install -r requirements.txt
+        run: . venv/bin/activate && pip install -r requirements.txt
 
       - name: Install test dependencies
-        run: pip install pytest pytest-cov pytest-asyncio httpx
+        run: . venv/bin/activate && pip install pytest pytest-cov pytest-asyncio httpx
 
       - name: Install pre-commit
         run: pip install pre-commit

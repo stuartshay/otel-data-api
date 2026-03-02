@@ -30,7 +30,7 @@ NYC_LON = -74.0394
 
 
 def _random_date_range() -> dict[str, str]:
-    """Return a plausible date_from/date_to pair for the last 30 days."""
+    """Return a random month from 2025 as a date range (1st to 28th)."""
     month = random.randint(1, 12)
     return {
         "date_from": f"2025-{month:02d}-01",
@@ -106,14 +106,14 @@ class GarminExplorer(HttpUser):
 
     def on_start(self) -> None:
         """Fetch current activity IDs for realistic requests."""
+        self.activity_ids = list(ACTIVITY_IDS)  # per-instance copy
         resp = self.client.get(
             "/api/v1/garmin/activities", params={"limit": 10}, name="/api/v1/garmin/activities [init]"
         )
         if resp.status_code == 200:
             items = resp.json().get("items", [])
             if items:
-                ACTIVITY_IDS.clear()
-                ACTIVITY_IDS.extend(item["activity_id"] for item in items)
+                self.activity_ids = [item["activity_id"] for item in items]
 
     @tag("garmin")
     @task(5)
@@ -125,7 +125,7 @@ class GarminExplorer(HttpUser):
     @task(3)
     def list_activities_filtered(self) -> None:
         dates = _random_date_range()
-        params = {"sport": "cycling", "limit": 50, "offset": 0, **dates}
+        params = {"sport": random.choice(SPORTS), "limit": 50, "offset": 0, **dates}
         self.client.get("/api/v1/garmin/activities", params=params, name="/api/v1/garmin/activities [filtered]")
 
     @tag("garmin")
@@ -136,15 +136,15 @@ class GarminExplorer(HttpUser):
     @tag("garmin")
     @task(4)
     def view_activity_detail(self) -> None:
-        if ACTIVITY_IDS:
-            activity_id = random.choice(ACTIVITY_IDS)
+        if self.activity_ids:
+            activity_id = random.choice(self.activity_ids)
             self.client.get(f"/api/v1/garmin/activities/{activity_id}", name="/api/v1/garmin/activities/{id}")
 
     @tag("garmin")
     @task(3)
     def view_track_points(self) -> None:
-        if ACTIVITY_IDS:
-            activity_id = random.choice(ACTIVITY_IDS)
+        if self.activity_ids:
+            activity_id = random.choice(self.activity_ids)
             self.client.get(
                 f"/api/v1/garmin/activities/{activity_id}/tracks",
                 params={"limit": 500, "sort": "timestamp", "order": "asc"},
@@ -154,8 +154,8 @@ class GarminExplorer(HttpUser):
     @tag("garmin")
     @task(2)
     def view_chart_data(self) -> None:
-        if ACTIVITY_IDS:
-            activity_id = random.choice(ACTIVITY_IDS)
+        if self.activity_ids:
+            activity_id = random.choice(self.activity_ids)
             self.client.get(
                 f"/api/v1/garmin/activities/{activity_id}/chart-data",
                 name="/api/v1/garmin/activities/{id}/chart-data",

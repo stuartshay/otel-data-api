@@ -23,14 +23,15 @@ from app.config import Config
 logger = structlog.get_logger(__name__)
 
 
-def setup_tracing(app: FastAPI, config: Config) -> None:
+def setup_tracing(app: FastAPI, config: Config) -> TracerProvider | None:
     """Configure OpenTelemetry tracing and instrument the application.
 
-    Does nothing when ``config.otel_traces_enabled`` is ``False``.
+    Returns the ``TracerProvider`` so the caller can wire a shutdown hook,
+    or ``None`` when tracing is disabled.
     """
     if not config.otel_traces_enabled:
         logger.info("OpenTelemetry tracing disabled (OTEL_TRACES_ENABLED != true)")
-        return
+        return None
 
     resource = Resource.create(
         {
@@ -65,3 +66,4 @@ def setup_tracing(app: FastAPI, config: Config) -> None:
         otel_endpoint=config.otel_endpoint,
         service_name=config.service_name,
     )
+    return provider

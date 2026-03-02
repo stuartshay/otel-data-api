@@ -100,7 +100,16 @@ class TestConfigureLogging:
         mock_parent = MagicMock()
         mock_parent.agent = mock_nr
 
-        with patch.dict("sys.modules", {"newrelic": mock_parent, "newrelic.agent": mock_nr}):
+        # Ensure OTel returns an invalid span so the NR fallback is exercised
+        mock_span = MagicMock()
+        mock_ctx = MagicMock()
+        mock_ctx.trace_id = 0
+        mock_span.get_span_context.return_value = mock_ctx
+
+        with (
+            patch("opentelemetry.trace.get_current_span", return_value=mock_span),
+            patch.dict("sys.modules", {"newrelic": mock_parent, "newrelic.agent": mock_nr}),
+        ):
             test_logger = structlog.get_logger("test.nr")
             test_logger.info("nr_test")
 
@@ -126,3 +135,25 @@ class TestConfigureLogging:
         assert data["event"] == "no_nr_test"
         # trace.id and span.id should not be present
         assert "trace.id" not in data or data["trace.id"] is None
+
+    def test_otel_trace_context_injected_when_active(self, capfd):
+        """trace.id and span.id should be injected from OTel SDK when span is active."""
+        config = _make_config(log_format="json")
+        configure_logging(config)
+
+        mock_span = MagicMock()
+        mock_ctx = MagicMock()
+        mock_ctx.trace_id = 0x0AF7651916CD43DD8448EB211C80319C  # pragma: allowlist secret
+        mock_ctx.span_id = 0xB7AD6B7169203331  # pragma: allowlist secret
+        mock_span.get_span_context.return_value = mock_ctx
+
+        with patch("opentelemetry.trace.get_current_span", return_value=mock_span):
+            test_logger = structlog.get_logger("test.otel")
+            test_logger.info("otel_test")
+
+        captured = capfd.readouterr()
+        line = captured.err.strip().split("\n")[-1]
+        data = json.loads(line)
+
+        assert data.get("trace.id") == "0af7651916cd43dd8448eb211c80319c"
+        assert data.get("span.id") == "b7ad6b7169203331"

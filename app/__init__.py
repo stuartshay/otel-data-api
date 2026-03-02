@@ -35,6 +35,10 @@ def create_app(config: Config) -> FastAPI:
         yield
         # Shutdown
         await db.close()
+        # Flush remaining OTel spans before exit
+        tracer_provider = getattr(app.state, "tracer_provider", None)
+        if tracer_provider is not None:
+            tracer_provider.shutdown()
         logger.info("Application shutdown — database pool closed")
 
     app = FastAPI(
@@ -72,6 +76,6 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(spatial.router)
 
     # OpenTelemetry auto-instrumentation (opt-in via OTEL_TRACES_ENABLED)
-    setup_tracing(app, config)
+    app.state.tracer_provider = setup_tracing(app, config)
 
     return app

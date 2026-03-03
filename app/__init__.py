@@ -30,7 +30,10 @@ def create_app(config: Config) -> FastAPI:
             app.state.db = db
             logger.info("Application started — database pool ready")
         except Exception:
-            logger.warning("Database initialization failed — starting without DB")
+            logger.warning(
+                "Database initialization failed \u2014 starting without DB",
+                exc_info=True,
+            )
             app.state.db = db
         yield
         # Shutdown

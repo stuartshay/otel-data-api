@@ -235,8 +235,8 @@ async def get_chart_data(
     """Return all track points for chart rendering (no pagination).
 
     Provides the complete time-series data (altitude, speed, heart rate, cadence)
-    for an activity, deduplicated by timestamp. Designed for client-side charting
-    without pagination limits.
+    for an activity, ordered by timestamp. Uniqueness is guaranteed by the
+    UNIQUE(activity_id, timestamp) database constraint.
     """
     db = request.app.state.db
 

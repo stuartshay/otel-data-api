@@ -138,6 +138,7 @@ async def test_list_track_points_success_and_invalid_sort_falls_back(client: Asy
 
     track_query, *params = mock_db.fetch.await_args.args
     assert "ORDER BY timestamp desc" in track_query
+    assert "garmin_track_points" in track_query
     assert params == ["20932993811", 5, 1]
 
 
@@ -234,8 +235,7 @@ async def test_get_chart_data_success(client: AsyncClient, mock_db):
     assert data[0]["speed_kmh"] == 24.5
 
     query = mock_db.fetch.await_args.args[0]
-    assert "ranked" in query
-    assert "rn = 1" in query
+    assert "garmin_track_points" in query
     assert "ORDER BY timestamp ASC" in query
 
 

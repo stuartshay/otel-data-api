@@ -73,7 +73,7 @@ async def list_activities(
         f"a.device_manufacturer, a.avg_temperature_c, a.min_temperature_c, "
         f"a.max_temperature_c, a.total_elapsed_time, a.total_timer_time, "
         f"a.created_at, a.uploaded_at, "
-        f"(SELECT COUNT(DISTINCT t.timestamp) FROM public.garmin_track_points t "
+        f"(SELECT COUNT(*) FROM public.garmin_track_points t "
         f"WHERE t.activity_id = a.activity_id) AS track_point_count "
         f"FROM public.garmin_activities a {where} "
         f"ORDER BY a.{sort} {order} "
@@ -116,7 +116,7 @@ async def get_activity(
         "a.device_manufacturer, a.avg_temperature_c, a.min_temperature_c, "
         "a.max_temperature_c, a.total_elapsed_time, a.total_timer_time, "
         "a.created_at, a.uploaded_at, "
-        "(SELECT COUNT(DISTINCT t.timestamp) FROM public.garmin_track_points t "
+        "(SELECT COUNT(*) FROM public.garmin_track_points t "
         "WHERE t.activity_id = a.activity_id) AS track_point_count "
         "FROM public.garmin_activities a WHERE a.activity_id = $1",
         activity_id,
@@ -169,7 +169,7 @@ async def list_track_points(
         raise HTTPException(status_code=404, detail="Activity not found")
 
     total = await db.fetchval(
-        "SELECT COUNT(DISTINCT timestamp) FROM public.garmin_track_points WHERE activity_id = $1",
+        "SELECT COUNT(*) FROM public.garmin_track_points WHERE activity_id = $1",
         activity_id,
     )
 
@@ -210,20 +210,9 @@ async def list_track_points(
         return PaginatedResponse(items=items, total=total, limit=len(items), offset=0)
 
     rows = await db.fetch(
-        "WITH ranked AS ("
-        "  SELECT id, activity_id, latitude, longitude, timestamp, altitude, "
-        "  distance_from_start_km, speed_kmh, heart_rate, cadence, temperature_c, "
-        "  created_at, "
-        "  ROW_NUMBER() OVER ("
-        "    PARTITION BY timestamp "
-        "    ORDER BY (altitude IS NOT NULL) DESC, id DESC"
-        "  ) AS rn "
-        "  FROM public.garmin_track_points "
-        "  WHERE activity_id = $1"
-        ") "
         "SELECT id, activity_id, latitude, longitude, timestamp, altitude, "
         "distance_from_start_km, speed_kmh, heart_rate, cadence, temperature_c, "
-        f"created_at FROM ranked WHERE rn = 1 ORDER BY {sort} {order} "
+        f"created_at FROM public.garmin_track_points WHERE activity_id = $1 ORDER BY {sort} {order} "
         f"LIMIT $2 OFFSET $3",
         activity_id,
         limit,
@@ -256,19 +245,9 @@ async def get_chart_data(
         raise HTTPException(status_code=404, detail="Activity not found")
 
     rows = await db.fetch(
-        "WITH ranked AS ("
-        "  SELECT latitude, longitude, timestamp, altitude, "
-        "  distance_from_start_km, speed_kmh, heart_rate, cadence, temperature_c, "
-        "  ROW_NUMBER() OVER ("
-        "    PARTITION BY timestamp "
-        "    ORDER BY (altitude IS NOT NULL) DESC, id DESC"
-        "  ) AS rn "
-        "  FROM public.garmin_track_points "
-        "  WHERE activity_id = $1"
-        ") "
         "SELECT latitude, longitude, timestamp, altitude, "
         "distance_from_start_km, speed_kmh, heart_rate, cadence, temperature_c "
-        "FROM ranked WHERE rn = 1 ORDER BY timestamp ASC",
+        "FROM public.garmin_track_points WHERE activity_id = $1 ORDER BY timestamp ASC",
         activity_id,
     )
 

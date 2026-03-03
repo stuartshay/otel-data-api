@@ -15,6 +15,7 @@ def test_from_env_parses_all_fields(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("DB_POOL_MIN", "3")
     monkeypatch.setenv("DB_POOL_MAX", "8")
     monkeypatch.setenv("DB_CONNECT_TIMEOUT", "7")
+    monkeypatch.setenv("DB_STATEMENT_TIMEOUT_MS", "20000")
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "otel:4317")
     monkeypatch.setenv("OTEL_SERVICE_NAME", "svc")
     monkeypatch.setenv("OTEL_SERVICE_NAMESPACE", "svc-ns")
@@ -43,6 +44,7 @@ def test_from_env_parses_all_fields(monkeypatch: pytest.MonkeyPatch):
     assert cfg.db_pool_min == 3
     assert cfg.db_pool_max == 8
     assert cfg.db_connect_timeout == 7
+    assert cfg.db_statement_timeout_ms == 20000
     assert cfg.otel_endpoint == "otel:4317"
     assert cfg.service_name == "svc"
     assert cfg.service_namespace == "svc-ns"

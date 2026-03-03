@@ -49,6 +49,7 @@
         "kustomization",
         "locustfile",
         "locustio",
+        "lookback",
         "markdownlint",
         "MQTT",
         "mypy",

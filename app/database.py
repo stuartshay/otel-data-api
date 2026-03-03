@@ -46,6 +46,7 @@ class DatabaseService:
             min_size=self._config.db_pool_min,
             max_size=self._config.db_pool_max,
             command_timeout=self._config.db_connect_timeout,
+            server_settings={"statement_timeout": str(self._config.db_statement_timeout_ms)},
         )
         logger.info(
             "Database pool initialized",

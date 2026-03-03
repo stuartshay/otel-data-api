@@ -25,6 +25,7 @@ class Config:
     db_pool_min: int = 2
     db_pool_max: int = 10
     db_connect_timeout: int = 5
+    db_statement_timeout_ms: int = 15000
 
     # OpenTelemetry
     otel_endpoint: str = "localhost:4317"
@@ -70,6 +71,7 @@ class Config:
             db_pool_min=int(os.getenv("DB_POOL_MIN", "2")),
             db_pool_max=int(os.getenv("DB_POOL_MAX", "10")),
             db_connect_timeout=int(os.getenv("DB_CONNECT_TIMEOUT", "5")),
+            db_statement_timeout_ms=int(os.getenv("DB_STATEMENT_TIMEOUT_MS", "15000")),
             # OpenTelemetry
             otel_endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317"),
             otel_traces_enabled=os.getenv("OTEL_TRACES_ENABLED", "false").lower() == "true",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Query, Request
@@ -11,12 +12,20 @@ from app.models.spatial import DailyActivitySummary, UnifiedGpsPoint
 
 router = APIRouter(prefix="/api/v1/gps", tags=["Unified GPS"])
 
+# Default lookback period when no date filters are provided.
+# Prevents full-table scans on the 4M+ row unified view.
+_DEFAULT_LOOKBACK_DAYS = 90
+
 
 @router.get("/unified", response_model=PaginatedResponse[UnifiedGpsPoint])
 async def list_unified_gps(
     request: Request,
     source: str | None = Query(None, description="Filter by source: owntracks or garmin", examples=["owntracks"]),
-    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2026-02-01"]),
+    date_from: str | None = Query(
+        None,
+        description="Filter from date (YYYY-MM-DD). Defaults to 90 days ago if omitted.",
+        examples=["2026-02-01"],
+    ),
     date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]),
     limit: int = Query(100, ge=1, le=5000, description="Maximum number of GPS points to return per page"),
     offset: int = Query(0, ge=0, description="Number of GPS points to skip for pagination"),
@@ -28,8 +37,14 @@ async def list_unified_gps(
 
     Merges OwnTracks location data and Garmin track points into a single
     chronological stream. Filter by data source or date range.
+
+    When no date_from is specified, defaults to the last 90 days to avoid
+    expensive full-table scans on the underlying 4M+ row tables.
     """
     db = request.app.state.db
+
+    if date_from is None and date_to is None:
+        date_from = str(date.today() - timedelta(days=_DEFAULT_LOOKBACK_DAYS))
 
     conditions: list[str] = []
     params: list = []
@@ -72,7 +87,11 @@ async def list_unified_gps(
 @router.get("/daily-summary", response_model=list[DailyActivitySummary])
 async def daily_summary(
     request: Request,
-    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2026-02-01"]),
+    date_from: str | None = Query(
+        None,
+        description="Filter from date (YYYY-MM-DD). Defaults to 90 days ago if omitted.",
+        examples=["2026-02-01"],
+    ),
     date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]),
     limit: int = Query(30, ge=1, le=365, description="Maximum number of daily summaries to return"),
 ) -> list[DailyActivitySummary]:
@@ -80,8 +99,14 @@ async def daily_summary(
 
     Returns per-day aggregates including OwnTracks point counts, battery stats,
     and Garmin activity metrics (distance, duration, heart rate, calories).
+
+    When no date_from is specified, defaults to the last 90 days to avoid
+    expensive full-table aggregations.
     """
     db = request.app.state.db
+
+    if date_from is None and date_to is None:
+        date_from = str(date.today() - timedelta(days=_DEFAULT_LOOKBACK_DAYS))
 
     conditions: list[str] = []
     params: list = []

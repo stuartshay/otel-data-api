@@ -23,7 +23,7 @@ async def list_unified_gps(
     source: str | None = Query(None, description="Filter by source: owntracks or garmin", examples=["owntracks"]),
     date_from: str | None = Query(
         None,
-        description="Filter from date (YYYY-MM-DD). Defaults to 90 days ago if omitted.",
+        description="Filter from date (YYYY-MM-DD). Defaults to 90 days ago when both date_from and date_to are omitted.",
         examples=["2026-02-01"],
     ),
     date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]),
@@ -38,8 +38,9 @@ async def list_unified_gps(
     Merges OwnTracks location data and Garmin track points into a single
     chronological stream. Filter by data source or date range.
 
-    When no date_from is specified, defaults to the last 90 days to avoid
-    expensive full-table scans on the underlying 4M+ row tables.
+    When no date filters are specified (both date_from and date_to omitted),
+    defaults to the last 90 days to avoid expensive full-table scans on the
+    underlying 4M+ row tables.
     """
     db = request.app.state.db
 
@@ -89,7 +90,7 @@ async def daily_summary(
     request: Request,
     date_from: str | None = Query(
         None,
-        description="Filter from date (YYYY-MM-DD). Defaults to 90 days ago if omitted.",
+        description="Filter from date (YYYY-MM-DD). Defaults to 90 days ago when both date_from and date_to are omitted.",
         examples=["2026-02-01"],
     ),
     date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]),
@@ -100,8 +101,8 @@ async def daily_summary(
     Returns per-day aggregates including OwnTracks point counts, battery stats,
     and Garmin activity metrics (distance, duration, heart rate, calories).
 
-    When no date_from is specified, defaults to the last 90 days to avoid
-    expensive full-table aggregations.
+    When no date filters are specified (both date_from and date_to omitted),
+    defaults to the last 90 days to avoid expensive full-table aggregations.
     """
     db = request.app.state.db
 

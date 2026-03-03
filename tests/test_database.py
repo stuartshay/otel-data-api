@@ -52,6 +52,7 @@ async def test_initialize_creates_pool(monkeypatch: pytest.MonkeyPatch, config):
     assert captured["min_size"] == config.db_pool_min
     assert captured["max_size"] == config.db_pool_max
     assert captured["command_timeout"] == config.db_connect_timeout
+    assert captured["server_settings"] == {"statement_timeout": str(config.db_statement_timeout_ms)}
 
 
 def test_pool_property_requires_initialize(config):

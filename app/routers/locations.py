@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from typing import Literal
 
 import fastapi
@@ -14,6 +15,14 @@ from app.models.locations import DeviceInfo, Location, LocationCount, LocationDe
 router = APIRouter(prefix="/api/v1/locations", tags=["Locations"])
 
 SORT_WHITELIST = {"id", "device_id", "timestamp", "created_at", "battery", "accuracy"}
+
+
+def _parse_date(value: str) -> date:
+    """Parse a YYYY-MM-DD string to a datetime.date object for asyncpg."""
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"Invalid date format: {value!r}. Expected YYYY-MM-DD.") from None
 
 
 @router.get("", response_model=PaginatedResponse[Location])
@@ -53,12 +62,12 @@ async def list_locations(
 
     if date_from:
         conditions.append(f"created_at >= ${idx}::date")
-        params.append(date_from)
+        params.append(_parse_date(date_from))
         idx += 1
 
     if date_to:
         conditions.append(f"created_at < (${idx}::date + INTERVAL '1 day')")
-        params.append(date_to)
+        params.append(_parse_date(date_to))
         idx += 1
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
@@ -104,7 +113,7 @@ async def location_count(
 
     if date:
         conditions.append(f"DATE(created_at) = ${idx}::date")
-        params.append(date)
+        params.append(_parse_date(date))
         idx += 1
 
     if device_id:

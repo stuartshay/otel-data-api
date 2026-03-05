@@ -1,5 +1,7 @@
 """Tests for Garmin endpoints."""
 
+from datetime import date
+
 import pytest
 from httpx import AsyncClient
 
@@ -85,7 +87,16 @@ async def test_list_activities_filters_and_invalid_sort_falls_back(client: Async
 
     data_query, *params = mock_db.fetch.await_args.args
     assert "ORDER BY a.start_time asc" in data_query
-    assert params == ["cycling", "2025-11-01", "2025-11-30", 10, 3]
+    assert params == ["cycling", date(2025, 11, 1), date(2025, 11, 30), 10, 3]
+
+
+@pytest.mark.asyncio
+async def test_list_activities_invalid_date(client: AsyncClient, mock_db):
+    """Invalid date_from returns 422 with a descriptive error."""
+    response = await client.get("/api/v1/garmin/activities?date_from=not-a-date")
+
+    assert response.status_code == 422
+    assert "Invalid date format" in response.json()["detail"]
 
 
 @pytest.mark.asyncio

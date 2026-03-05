@@ -1,6 +1,7 @@
 """Tests for OwnTracks location endpoints."""
 
 import json
+from datetime import date
 
 import pytest
 from httpx import AsyncClient
@@ -65,7 +66,16 @@ async def test_list_locations_filters_and_invalid_sort_falls_back(client: AsyncC
 
     data_query, *params = mock_db.fetch.await_args.args
     assert "ORDER BY created_at asc" in data_query
-    assert params == ["phone", "2025-01-01", "2025-01-02", 10, 5]
+    assert params == ["phone", date(2025, 1, 1), date(2025, 1, 2), 10, 5]
+
+
+@pytest.mark.asyncio
+async def test_list_locations_invalid_date(client: AsyncClient, mock_db):
+    """Invalid date_from returns 422 with a descriptive error."""
+    response = await client.get("/api/v1/locations?date_from=not-a-date")
+
+    assert response.status_code == 422
+    assert "Invalid date format" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -90,7 +100,16 @@ async def test_location_count_with_filters(client: AsyncClient, mock_db):
     count_query, *params = mock_db.fetchval.await_args.args
     assert "DATE(created_at) = $1::date" in count_query
     assert "device_id = $2" in count_query
-    assert params == ["2025-01-01", "phone"]
+    assert params == [date(2025, 1, 1), "phone"]
+
+
+@pytest.mark.asyncio
+async def test_location_count_invalid_date(client: AsyncClient, mock_db):
+    """Invalid date on /count returns 422 with a descriptive error."""
+    response = await client.get("/api/v1/locations/count?date=not-a-date")
+
+    assert response.status_code == 422
+    assert "Invalid date format" in response.json()["detail"]
 
 
 @pytest.mark.asyncio

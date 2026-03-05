@@ -347,6 +347,7 @@ jobs:
           echo "version=${PKG_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Trigger otel-data-gateway types update
+        id: gateway_dispatch
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.GITOPS_PAT }}

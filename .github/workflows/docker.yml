@@ -347,6 +347,7 @@ jobs:
           echo "version=${PKG_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Trigger otel-data-gateway types update
+        id: gateway_dispatch
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.GITOPS_PAT }}
@@ -357,6 +358,11 @@ jobs:
 
       - name: Summary
         run: |
+          if [ "${{ steps.gateway_dispatch.outcome }}" = "success" ]; then
+            DISPATCH_STATUS="✅"
+          else
+            DISPATCH_STATUS="❌ (${{ steps.gateway_dispatch.outcome }})"
+          fi
           {
             echo "## npm Package Published"
             echo ""
@@ -365,5 +371,5 @@ jobs:
             echo "| Package | \`@stuartshay/otel-data-types\` |"
             echo "| Version | \`${{ steps.types_version.outputs.version }}\` |"
             echo "| Run # | \`${{ github.run_number }}\` |"
-            echo "| Gateway Dispatch | ✅ |"
+            echo "| Gateway Dispatch | ${DISPATCH_STATUS} |"
           } >> "$GITHUB_STEP_SUMMARY"

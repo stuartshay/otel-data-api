@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Literal
 
 import fastapi
@@ -14,6 +15,14 @@ router = APIRouter(prefix="/api/v1/garmin", tags=["Garmin"])
 
 ACTIVITY_SORT_WHITELIST = {"start_time", "distance_km", "duration_seconds", "sport", "created_at"}
 TRACK_SORT_WHITELIST = {"timestamp", "altitude", "speed_kmh", "heart_rate", "created_at"}
+
+
+def _parse_date(value: str) -> date:
+    """Parse a YYYY-MM-DD string to a datetime.date object for asyncpg."""
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"Invalid date format: {value!r}. Expected YYYY-MM-DD.") from None
 
 
 @router.get("/activities", response_model=PaginatedResponse[GarminActivity])
@@ -53,12 +62,12 @@ async def list_activities(
 
     if date_from:
         conditions.append(f"start_time >= ${idx}::date")
-        params.append(date_from)
+        params.append(_parse_date(date_from))
         idx += 1
 
     if date_to:
         conditions.append(f"start_time < (${idx}::date + INTERVAL '1 day')")
-        params.append(date_to)
+        params.append(_parse_date(date_to))
         idx += 1
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""

@@ -72,7 +72,7 @@ async def test_list_unified_gps_with_filters(client: AsyncClient, mock_db):
 
     data_query, *params = mock_db.fetch.await_args.args
     assert "ORDER BY timestamp asc" in data_query
-    assert params == ["owntracks", "2026-02-01", "2026-02-12", 25, 10]
+    assert params == ["owntracks", date(2026, 2, 1), date(2026, 2, 12), 25, 10]
 
 
 @pytest.mark.asyncio
@@ -90,7 +90,7 @@ async def test_daily_summary_with_filters(client: AsyncClient, mock_db):
     query, *params = mock_db.fetch.await_args.args
     assert "activity_date >= $1::date" in query
     assert "activity_date <= $2::date" in query
-    assert params == ["2026-02-01", "2026-02-12", 7]
+    assert params == [date(2026, 2, 1), date(2026, 2, 12), 7]
 
 
 @pytest.mark.asyncio
@@ -106,7 +106,7 @@ async def test_list_unified_gps_default_lookback(client: AsyncClient, mock_db):
     count_query = mock_db.fetchval.await_args.args[0]
     assert "timestamp >= $1::date" in count_query
 
-    expected_date = str(date.today() - timedelta(days=90))
+    expected_date = date.today() - timedelta(days=90)
     count_params = mock_db.fetchval.await_args.args
     assert count_params[1] == expected_date
 
@@ -123,5 +123,5 @@ async def test_daily_summary_default_lookback(client: AsyncClient, mock_db):
     query, *params = mock_db.fetch.await_args.args
     assert "activity_date >= $1::date" in query
 
-    expected_date = str(date.today() - timedelta(days=90))
+    expected_date = date.today() - timedelta(days=90)
     assert params[0] == expected_date

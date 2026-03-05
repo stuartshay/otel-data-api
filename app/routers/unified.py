@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Literal
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.models import PaginatedResponse
 from app.models.spatial import DailyActivitySummary, UnifiedGpsPoint
@@ -15,6 +15,14 @@ router = APIRouter(prefix="/api/v1/gps", tags=["Unified GPS"])
 # Default lookback period when no date filters are provided.
 # Prevents full-table scans on the 4M+ row unified view.
 _DEFAULT_LOOKBACK_DAYS = 90
+
+
+def _parse_date(value: str) -> date:
+    """Parse a YYYY-MM-DD string to a datetime.date object for asyncpg."""
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"Invalid date format: {value!r}. Expected YYYY-MM-DD.") from None
 
 
 @router.get("/unified", response_model=PaginatedResponse[UnifiedGpsPoint])
@@ -44,8 +52,11 @@ async def list_unified_gps(
     """
     db = request.app.state.db
 
-    if date_from is None and date_to is None:
-        date_from = str(date.today() - timedelta(days=_DEFAULT_LOOKBACK_DAYS))
+    parsed_from = _parse_date(date_from) if date_from else None
+    parsed_to = _parse_date(date_to) if date_to else None
+
+    if parsed_from is None and parsed_to is None:
+        parsed_from = date.today() - timedelta(days=_DEFAULT_LOOKBACK_DAYS)
 
     conditions: list[str] = []
     params: list = []
@@ -56,14 +67,14 @@ async def list_unified_gps(
         params.append(source)
         idx += 1
 
-    if date_from:
+    if parsed_from:
         conditions.append(f"timestamp >= ${idx}::date")
-        params.append(date_from)
+        params.append(parsed_from)
         idx += 1
 
-    if date_to:
+    if parsed_to:
         conditions.append(f"timestamp < (${idx}::date + INTERVAL '1 day')")
-        params.append(date_to)
+        params.append(parsed_to)
         idx += 1
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
@@ -106,21 +117,24 @@ async def daily_summary(
     """
     db = request.app.state.db
 
-    if date_from is None and date_to is None:
-        date_from = str(date.today() - timedelta(days=_DEFAULT_LOOKBACK_DAYS))
+    parsed_from = _parse_date(date_from) if date_from else None
+    parsed_to = _parse_date(date_to) if date_to else None
+
+    if parsed_from is None and parsed_to is None:
+        parsed_from = date.today() - timedelta(days=_DEFAULT_LOOKBACK_DAYS)
 
     conditions: list[str] = []
     params: list = []
     idx = 1
 
-    if date_from:
+    if parsed_from:
         conditions.append(f"activity_date >= ${idx}::date")
-        params.append(date_from)
+        params.append(parsed_from)
         idx += 1
 
-    if date_to:
+    if parsed_to:
         conditions.append(f"activity_date <= ${idx}::date")
-        params.append(date_to)
+        params.append(parsed_to)
         idx += 1
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""

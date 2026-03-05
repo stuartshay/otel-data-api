@@ -125,3 +125,21 @@ async def test_daily_summary_default_lookback(client: AsyncClient, mock_db):
 
     expected_date = date.today() - timedelta(days=90)
     assert params[0] == expected_date
+
+
+@pytest.mark.asyncio
+async def test_list_unified_gps_invalid_date(client: AsyncClient, mock_db):
+    """Invalid date_from returns 422 with a descriptive error."""
+    response = await client.get("/api/v1/gps/unified?date_from=not-a-date")
+
+    assert response.status_code == 422
+    assert "Invalid date format" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_daily_summary_invalid_date(client: AsyncClient, mock_db):
+    """Invalid date_from returns 422 with a descriptive error."""
+    response = await client.get("/api/v1/gps/daily-summary?date_from=not-a-date")
+
+    assert response.status_code == 422
+    assert "Invalid date format" in response.json()["detail"]

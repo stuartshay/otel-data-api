@@ -1,0 +1,67 @@
+---
+name: Performance Issue
+description: Report a performance problem (slow queries, high latency, resource exhaustion)
+title: "perf: "
+labels: ["performance"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report performance issues with latency, throughput, or resource usage.
+
+  - type: input
+    id: endpoint
+    attributes:
+      label: Affected Endpoint(s)
+      description: Which endpoint(s) are slow or timing out?
+      placeholder: "e.g., GET /api/v1/spatial/nearby"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the performance issue.
+    validations:
+      required: true
+
+  - type: textarea
+    id: metrics
+    attributes:
+      label: Performance Metrics
+      description: |
+        Include any measured data: response times, error rates, pod resource
+        usage, k6 results, or database query plans.
+      render: text
+      placeholder: |
+        p95 latency: 2.3s
+        Error rate: 15% under 50 VUs
+        asyncpg pool: 10/10 connections used
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Where was this observed?
+      options:
+        - Production (k8s-pi5-cluster)
+        - Local development
+        - k6 load test
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Performance
+      description: What response time or throughput do you expect?
+
+  - type: textarea
+    id: investigation
+    attributes:
+      label: Investigation Notes
+      description: |
+        Any root cause analysis done so far (query plans, pod describe output,
+        connection pool stats, profiling data).
+      render: text

@@ -48,6 +48,7 @@ flowchart LR
 | GET | `/api/v1/garmin/sports` | List sport types |
 | GET | `/api/v1/garmin/activities/{id}` | Activity detail |
 | GET | `/api/v1/garmin/activities/{id}/tracks` | Track points |
+| POST | `/api/v1/garmin/sync` | Trigger on-demand Garmin sync |
 | GET | `/api/v1/gps/unified` | Unified GPS points (view) |
 | GET | `/api/v1/gps/daily-summary` | Daily activity summary |
 | GET | `/api/v1/reference-locations` | List reference locations |
@@ -158,6 +159,8 @@ make docker-run
 | `DB_POOL_MIN` | `2` | Min connection pool |
 | `DB_POOL_MAX` | `10` | Max connection pool |
 | `PORT` | `8080` | Server port |
+| `GARMIN_SYNC_BASE_URL` | `http://garmin-sync.garmin-sync.svc.cluster.local:8080` | In-cluster garmin-sync service URL |
+| `GARMIN_SYNC_TIMEOUT_SECONDS` | `10` | Timeout for sync trigger proxy requests |
 | `OAUTH2_ENABLED` | `false` | Enable Cognito auth |
 | `COGNITO_ISSUER` | — | Cognito issuer URL |
 | `COGNITO_CLIENT_ID` | — | Cognito client ID |

@@ -6,10 +6,12 @@ from datetime import date
 from typing import Literal
 
 import fastapi
+import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 
 from app.models import PaginatedResponse
-from app.models.garmin import GarminActivity, GarminChartPoint, GarminTrackPoint, SportInfo
+from app.models.garmin import GarminActivity, GarminChartPoint, GarminSyncResponse, GarminTrackPoint, SportInfo
 
 router = APIRouter(prefix="/api/v1/garmin", tags=["Garmin"])
 
@@ -23,6 +25,80 @@ def _parse_date(value: str) -> date:
         return date.fromisoformat(value)
     except ValueError:
         raise HTTPException(status_code=422, detail=f"Invalid date format: {value!r}. Expected YYYY-MM-DD.") from None
+
+
+def _coerce_sync_payload(status_code: int, payload: dict) -> JSONResponse:
+    """Normalize proxied sync payloads and preserve upstream status codes."""
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=502, detail="Invalid response from Garmin sync service")
+
+    # Ensure required keys exist for response_model compatibility.
+    payload.setdefault("status", "error")
+    payload.setdefault("message", "Unexpected response from Garmin sync service")
+    return JSONResponse(status_code=status_code, content=payload)
+
+
+@router.post(
+    "/sync",
+    response_model=GarminSyncResponse,
+    status_code=202,
+    responses={
+        400: {"model": GarminSyncResponse, "description": "Invalid sync trigger parameters"},
+        409: {"model": GarminSyncResponse, "description": "Sync already in progress"},
+    },
+)
+async def trigger_sync(
+    request: Request,
+    lookback: int | None = Query(
+        None,
+        ge=0,
+        description="Optional activity lookback override. Non-negative integer.",
+    ),
+    window_hours: int | None = Query(
+        None,
+        ge=1,
+        description="Optional sync window in hours. Positive integer.",
+    ),
+) -> JSONResponse:
+    """Trigger an on-demand Garmin sync via the in-cluster garmin-sync service."""
+    if lookback is not None and window_hours is not None:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "status": "bad_request",
+                "message": "lookback and window_hours cannot be combined",
+            },
+        )
+
+    config = request.app.state.config
+    base_url = config.garmin_sync_base_url.rstrip("/")
+    params = {}
+    if lookback is not None:
+        params["lookback"] = lookback
+    if window_hours is not None:
+        params["window_hours"] = window_hours
+
+    try:
+        async with httpx.AsyncClient(base_url=base_url, timeout=config.garmin_sync_timeout_seconds) as client:
+            response = await client.post("/api/v1/sync", params=params)
+    except httpx.TimeoutException as exc:
+        raise HTTPException(status_code=504, detail="Garmin sync service timed out") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail="Garmin sync service unavailable") from exc
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail="Invalid response from Garmin sync service") from exc
+
+    if response.status_code in {202, 409, 400}:
+        return _coerce_sync_payload(response.status_code, payload)
+    if response.status_code >= 500:
+        raise HTTPException(status_code=502, detail="Garmin sync service error")
+    raise HTTPException(
+        status_code=502,
+        detail=f"Unexpected response from Garmin sync service: {response.status_code}",
+    )
 
 
 @router.get("/activities", response_model=PaginatedResponse[GarminActivity])

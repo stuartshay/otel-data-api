@@ -158,3 +158,35 @@ class SportInfo(BaseModel):
     activity_count: int = Field(description="Number of activities for this sport")
 
     model_config = {"json_schema_extra": {"examples": [{"sport": "cycling", "activity_count": 20}]}}
+
+
+class GarminSyncResponse(BaseModel):
+    """Response payload for Garmin on-demand sync trigger requests."""
+
+    status: str = Field(description="Sync trigger status (accepted, conflict, bad_request, error)")
+    message: str = Field(description="Human-readable status message")
+    triggered_at: str | None = Field(default=None, description="UTC timestamp when sync was triggered")
+    started_at: str | None = Field(default=None, description="UTC timestamp when active sync started")
+    lookback: int | None = Field(default=None, description="Effective lookback override used for this trigger")
+    window_hours: int | None = Field(default=None, description="Effective window in hours used for this trigger")
+    window_start: str | None = Field(default=None, description="Computed UTC window start timestamp")
+
+    model_config = {
+        "extra": "allow",
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "status": "accepted",
+                    "message": "Sync started",
+                    "triggered_at": "2026-03-12T01:25:14.586353+00:00",
+                    "window_hours": 48,
+                    "window_start": "2026-03-10T01:25:14.586331+00:00",
+                },
+                {
+                    "status": "conflict",
+                    "message": "Sync already in progress",
+                    "started_at": "2026-03-12T01:24:58.102924+00:00",
+                },
+            ]
+        },
+    }

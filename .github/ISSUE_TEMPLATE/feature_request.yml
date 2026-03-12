@@ -1,0 +1,85 @@
+---
+name: Feature Request
+description: Propose a new feature or endpoint for otel-data-api
+title: "feat: "
+labels: ["feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the feature you'd like to see added.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of the feature or new endpoint.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this feature needed? What problem does it solve?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: What area does this feature affect?
+      options:
+        - New endpoint
+        - Existing endpoint enhancement
+        - Database / query
+        - Authentication
+        - Performance
+        - Documentation
+        - Infrastructure / deployment
+    validations:
+      required: true
+
+  - type: textarea
+    id: api_design
+    attributes:
+      label: Proposed API Design
+      description: |
+        If applicable, describe the endpoint path, method, query parameters,
+        and response shape.
+      render: text
+      placeholder: |
+        GET /api/v1/locations/nearby?lat=40.7&lon=-74.0&radius=1000
+
+        Response:
+        {
+          "items": [...],
+          "total": 42,
+          "page": 1,
+          "page_size": 50
+        }
+
+  - type: textarea
+    id: database
+    attributes:
+      label: Database Changes
+      description: |
+        Does this require new tables, columns, indexes, or views?
+        If so, a migration will be needed in homelab-database-migrations.
+      placeholder: "e.g., New index on locations(device_id, timestamp)"
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative approaches you've considered.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have checked the existing issues for duplicates
+          required: true
+        - label: I have reviewed the current API docs at /docs

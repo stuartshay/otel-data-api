@@ -236,7 +236,7 @@ Issue templates live in `.github/ISSUE_TEMPLATE/` and are a **living document**
 | Feature Request | `feature_request.yml` | New endpoints — API design, database changes |
 | Performance | `performance.yml` | Slow queries, pool exhaustion — metrics, k6 results |
 
-When filing issues, always use the appropriate template. When adding new
+When filing issues, prefer using the appropriate template. When adding new
 endpoints or changing the project structure, update the templates to reflect
 the changes.
 

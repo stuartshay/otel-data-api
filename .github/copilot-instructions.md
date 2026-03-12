@@ -225,6 +225,21 @@ make docker-build  # Build Docker image
 pre-commit run -a  # Pre-commit checks
 ```
 
+## Issue Templates
+
+Issue templates live in `.github/ISSUE_TEMPLATE/` and are a **living document**
+— update them as the project evolves.
+
+| Template | File | Purpose |
+| --- | --- | --- |
+| Bug Report | `bug_report.yml` | API endpoint bugs — endpoint, steps, environment, version |
+| Feature Request | `feature_request.yml` | New endpoints — API design, database changes |
+| Performance | `performance.yml` | Slow queries, pool exhaustion — metrics, k6 results |
+
+When filing issues, prefer using the appropriate template. When adding new
+endpoints or changing the project structure, update the templates to reflect
+the changes.
+
 ## Related Repositories
 
 - [otel-ui](https://github.com/stuartshay/otel-ui) — React frontend (primary

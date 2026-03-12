@@ -165,11 +165,11 @@ class GarminSyncResponse(BaseModel):
 
     status: str = Field(description="Sync trigger status (accepted, conflict, bad_request, error)")
     message: str = Field(description="Human-readable status message")
-    triggered_at: str | None = Field(default=None, description="UTC timestamp when sync was triggered")
-    started_at: str | None = Field(default=None, description="UTC timestamp when active sync started")
+    triggered_at: datetime | None = Field(default=None, description="UTC timestamp when sync was triggered")
+    started_at: datetime | None = Field(default=None, description="UTC timestamp when active sync started")
     lookback: int | None = Field(default=None, description="Effective lookback override used for this trigger")
     window_hours: int | None = Field(default=None, description="Effective window in hours used for this trigger")
-    window_start: str | None = Field(default=None, description="Computed UTC window start timestamp")
+    window_start: datetime | None = Field(default=None, description="Computed UTC window start timestamp")
 
     model_config = {
         "extra": "allow",

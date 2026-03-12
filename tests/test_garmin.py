@@ -6,6 +6,8 @@ import httpx
 import pytest
 from httpx import AsyncClient
 
+from app.config import Config
+
 
 def _activity_row(activity_id: str = "20932993811") -> dict:
     return {
@@ -273,7 +275,9 @@ class _FakeSyncResponse:
 
 
 @pytest.mark.asyncio
-async def test_trigger_sync_window_hours_passthrough(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+async def test_trigger_sync_window_hours_passthrough(
+    client: AsyncClient, config: Config, monkeypatch: pytest.MonkeyPatch
+):
     captured: dict = {}
 
     class _FakeClient:
@@ -309,8 +313,8 @@ async def test_trigger_sync_window_hours_passthrough(client: AsyncClient, monkey
     assert response.json()["window_hours"] == 48
     assert captured["path"] == "/api/v1/sync"
     assert captured["params"] == {"window_hours": 48}
-    assert captured["base_url"] == "http://garmin-sync.garmin-sync.svc.cluster.local:8080"
-    assert captured["timeout"] == 10.0
+    assert captured["base_url"] == config.garmin_sync_base_url
+    assert captured["timeout"] == config.garmin_sync_timeout_seconds
 
 
 @pytest.mark.asyncio
@@ -386,10 +390,8 @@ async def test_trigger_sync_conflict_passthrough(client: AsyncClient, monkeypatc
 async def test_trigger_sync_rejects_mutually_exclusive_args(client: AsyncClient):
     response = await client.post("/api/v1/garmin/sync?lookback=1&window_hours=24")
     assert response.status_code == 400
-    assert response.json() == {
-        "status": "bad_request",
-        "message": "lookback and window_hours cannot be combined",
-    }
+    assert response.json()["status"] == "bad_request"
+    assert response.json()["message"] == "lookback and window_hours cannot be combined"
 
 
 @pytest.mark.asyncio
@@ -411,7 +413,8 @@ async def test_trigger_sync_timeout_maps_to_504(client: AsyncClient, monkeypatch
 
     response = await client.post("/api/v1/garmin/sync")
     assert response.status_code == 504
-    assert response.json()["detail"] == "Garmin sync service timed out"
+    assert response.json()["status"] == "error"
+    assert response.json()["message"] == "Garmin sync service timed out"
 
 
 @pytest.mark.asyncio
@@ -433,7 +436,8 @@ async def test_trigger_sync_unavailable_maps_to_503(client: AsyncClient, monkeyp
 
     response = await client.post("/api/v1/garmin/sync")
     assert response.status_code == 503
-    assert response.json()["detail"] == "Garmin sync service unavailable"
+    assert response.json()["status"] == "error"
+    assert response.json()["message"] == "Garmin sync service unavailable"
 
 
 @pytest.mark.asyncio
@@ -455,4 +459,28 @@ async def test_trigger_sync_invalid_upstream_json_maps_to_502(client: AsyncClien
 
     response = await client.post("/api/v1/garmin/sync")
     assert response.status_code == 502
-    assert response.json()["detail"] == "Invalid response from Garmin sync service"
+    assert response.json()["status"] == "error"
+    assert response.json()["message"] == "Invalid response from Garmin sync service"
+
+
+@pytest.mark.asyncio
+async def test_trigger_sync_upstream_error_maps_to_502(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    class _FakeClient:
+        def __init__(self, *, base_url: str, timeout: float):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, path: str, params=None):
+            return _FakeSyncResponse(500, {"status": "error", "message": "internal error"})
+
+    monkeypatch.setattr("app.routers.garmin.httpx.AsyncClient", _FakeClient)
+
+    response = await client.post("/api/v1/garmin/sync")
+    assert response.status_code == 502
+    assert response.json()["status"] == "error"
+    assert response.json()["message"] == "Garmin sync service error"

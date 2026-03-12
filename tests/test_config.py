@@ -32,6 +32,8 @@ def test_from_env_parses_all_fields(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("LOG_SQL_PARAMS", "true")
     monkeypatch.setenv("LOG_HTTP_QUERY_PARAMS", "false")
     monkeypatch.setenv("CORS_ORIGINS", "https://app.example.com, https://api.example.com ")
+    monkeypatch.setenv("GARMIN_SYNC_BASE_URL", "http://garmin-sync.example:8080")
+    monkeypatch.setenv("GARMIN_SYNC_TIMEOUT_SECONDS", "12.5")
 
     cfg = Config.from_env()
 
@@ -61,6 +63,8 @@ def test_from_env_parses_all_fields(monkeypatch: pytest.MonkeyPatch):
     assert cfg.log_sql_params is True
     assert cfg.log_http_query_params is False
     assert cfg.cors_origins == ("https://app.example.com", "https://api.example.com")
+    assert cfg.garmin_sync_base_url == "http://garmin-sync.example:8080"
+    assert cfg.garmin_sync_timeout_seconds == 12.5
 
 
 def test_validate_database_requires_credentials():

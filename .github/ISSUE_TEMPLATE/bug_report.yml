@@ -1,8 +1,8 @@
 ---
 name: Bug Report
 description: Report a bug in otel-data-api
-title: "bug: "
-labels: ["bug"]
+title: 'bug: '
+labels: ['bug']
 body:
   - type: markdown
     attributes:
@@ -14,7 +14,7 @@ body:
     attributes:
       label: Affected Endpoint
       description: Which API endpoint is affected?
-      placeholder: "e.g., GET /api/v1/locations, POST /api/v1/reference-locations"
+      placeholder: 'e.g., GET /api/v1/locations, POST /api/v1/reference-locations'
     validations:
       required: true
 
@@ -72,7 +72,7 @@ body:
     attributes:
       label: Version
       description: API version from /health endpoint
-      placeholder: "e.g., 1.0.158"
+      placeholder: 'e.g., 1.0.158'
 
   - type: textarea
     id: logs

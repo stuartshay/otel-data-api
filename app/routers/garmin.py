@@ -6,10 +6,12 @@ from datetime import date
 from typing import Literal
 
 import fastapi
-from fastapi import APIRouter, HTTPException, Query, Request
+import httpx
+from fastapi import APIRouter, HTTPException, Query, Request, Response
+from pydantic import ValidationError
 
 from app.models import PaginatedResponse
-from app.models.garmin import GarminActivity, GarminChartPoint, GarminTrackPoint, SportInfo
+from app.models.garmin import GarminActivity, GarminChartPoint, GarminSyncResponse, GarminTrackPoint, SportInfo
 
 router = APIRouter(prefix="/api/v1/garmin", tags=["Garmin"])
 
@@ -23,6 +25,96 @@ def _parse_date(value: str) -> date:
         return date.fromisoformat(value)
     except ValueError:
         raise HTTPException(status_code=422, detail=f"Invalid date format: {value!r}. Expected YYYY-MM-DD.") from None
+
+
+def _coerce_sync_payload(payload: dict) -> GarminSyncResponse:
+    """Normalize proxied sync payloads."""
+    if not isinstance(payload, dict):
+        raise ValueError("Sync payload must be an object")
+
+    payload.setdefault("status", "error")
+    payload.setdefault("message", "Unexpected response from Garmin sync service")
+    return GarminSyncResponse(**payload)
+
+
+@router.post(
+    "/sync",
+    response_model=GarminSyncResponse,
+    status_code=202,
+    responses={
+        400: {"model": GarminSyncResponse, "description": "Invalid sync trigger parameters"},
+        409: {"model": GarminSyncResponse, "description": "Sync already in progress"},
+        502: {"model": GarminSyncResponse, "description": "Bad gateway from Garmin sync service"},
+        503: {"model": GarminSyncResponse, "description": "Garmin sync service unavailable"},
+        504: {"model": GarminSyncResponse, "description": "Garmin sync service timeout"},
+    },
+)
+async def trigger_sync(
+    request: Request,
+    response: Response,
+    lookback: int | None = Query(
+        None,
+        ge=0,
+        description="Optional activity lookback override. Non-negative integer.",
+    ),
+    window_hours: int | None = Query(
+        None,
+        ge=1,
+        description="Optional sync window in hours. Positive integer.",
+    ),
+) -> GarminSyncResponse:
+    """Trigger an on-demand Garmin sync via the in-cluster garmin-sync service."""
+    if lookback is not None and window_hours is not None:
+        response.status_code = 400
+        return GarminSyncResponse(
+            status="bad_request",
+            message="lookback and window_hours cannot be combined",
+        )
+
+    config = request.app.state.config
+    base_url = config.garmin_sync_base_url.rstrip("/")
+    params = {}
+    if lookback is not None:
+        params["lookback"] = lookback
+    if window_hours is not None:
+        params["window_hours"] = window_hours
+
+    try:
+        async with httpx.AsyncClient(base_url=base_url, timeout=config.garmin_sync_timeout_seconds) as client:
+            upstream_response = await client.post("/api/v1/sync", params=params)
+    except httpx.TimeoutException:
+        response.status_code = 504
+        return GarminSyncResponse(status="error", message="Garmin sync service timed out")
+    except httpx.HTTPError:
+        response.status_code = 503
+        return GarminSyncResponse(status="error", message="Garmin sync service unavailable")
+
+    try:
+        payload = upstream_response.json()
+    except ValueError:
+        response.status_code = 502
+        return GarminSyncResponse(status="error", message="Invalid response from Garmin sync service")
+
+    if upstream_response.status_code in {202, 409, 400}:
+        try:
+            sync_response = _coerce_sync_payload(payload)
+        except ValidationError:
+            response.status_code = 502
+            return GarminSyncResponse(status="error", message="Invalid response from Garmin sync service")
+        except ValueError:
+            response.status_code = 502
+            return GarminSyncResponse(status="error", message="Invalid response from Garmin sync service")
+        response.status_code = upstream_response.status_code
+        return sync_response
+    if upstream_response.status_code >= 500:
+        response.status_code = 502
+        return GarminSyncResponse(status="error", message="Garmin sync service error")
+
+    response.status_code = 502
+    return GarminSyncResponse(
+        status="error",
+        message=f"Unexpected response from Garmin sync service: {upstream_response.status_code}",
+    )
 
 
 @router.get("/activities", response_model=PaginatedResponse[GarminActivity])

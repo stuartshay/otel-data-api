@@ -50,6 +50,7 @@ def create_app(config: Config) -> FastAPI:
         version=config.app_version,
         lifespan=lifespan,
     )
+    app.state.config = config
 
     # Request logging + trace correlation
     app.add_middleware(RequestLoggingMiddleware, config=config)

@@ -54,6 +54,10 @@ class Config:
     # CORS
     cors_origins: tuple[str, ...] = ()
 
+    # Garmin sync proxy (to garmin-sync agent service)
+    garmin_sync_base_url: str = "http://garmin-sync.garmin-sync.svc.cluster.local:8080"
+    garmin_sync_timeout_seconds: float = 10.0
+
     @classmethod
     def from_env(cls) -> Config:
         """Create configuration from environment variables."""
@@ -94,6 +98,12 @@ class Config:
             log_http_query_params=os.getenv("LOG_HTTP_QUERY_PARAMS", "true").lower() == "true",
             # CORS
             cors_origins=cors_origins,
+            # Garmin sync proxy
+            garmin_sync_base_url=os.getenv(
+                "GARMIN_SYNC_BASE_URL",
+                "http://garmin-sync.garmin-sync.svc.cluster.local:8080",
+            ),
+            garmin_sync_timeout_seconds=float(os.getenv("GARMIN_SYNC_TIMEOUT_SECONDS", "10")),
         )
 
     def validate_database(self) -> None:

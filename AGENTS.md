@@ -21,6 +21,8 @@ All automation, assistants, and developers must follow
 - **Run dev**: `make dev`
 - **Test**: `make test`
 - **API Docs**: <http://localhost:8080/docs>
+- **Post-deploy check**: after cluster deploy, verify linked issue acceptance
+  criteria and record evidence before marking work complete
 
 ## Development Workflow
 
@@ -31,6 +33,8 @@ All automation, assistants, and developers must follow
 5. Run `make test`
 6. Commit and push to `develop` or `feature/*` branch
 7. Create PR to `master` when ready for production
+8. After deployment PR merges (for example in `k8s-gitops`), validate every
+   linked issue acceptance criterion in-cluster before closing/confirming done
 
 ## Project Structure
 

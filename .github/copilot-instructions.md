@@ -71,6 +71,23 @@ git fetch origin master && git rebase origin/master
 This is especially important after squash merges, which cause develop to
 diverge from master.
 
+### After Deployment (Required)
+
+⚠️ **ALWAYS verify linked issue acceptance criteria after cluster deployment**
+before considering work complete.
+
+1. Track the implementation issue linked to the code PR.
+2. Complete deployment via the corresponding deployment PR (for example in
+   `k8s-gitops`).
+3. Validate each acceptance-criteria checkbox against the deployed cluster
+   behavior (not only local tests/CI).
+4. Post verification evidence on the issue (commands, API responses, logs, or
+   screenshots as applicable).
+5. Only then mark the issue/project item as done.
+
+If an issue is auto-closed by merge keywords (`Closes #...`) before deployment
+validation is complete, reopen it until acceptance criteria are confirmed.
+
 ### Daily Workflow
 
 1. **ALWAYS** start from `develop` or create a feature branch

@@ -88,6 +88,21 @@ before considering work complete.
 If an issue is auto-closed by merge keywords (`Closes #...`) before deployment
 validation is complete, reopen it until acceptance criteria are confirmed.
 
+### After Types Publish (Required)
+
+⚠️ **ALWAYS verify the downstream dependency PR after publishing
+`@stuartshay/otel-data-types`.**
+
+1. Confirm `.github/workflows/publish-types.yml` completed successfully.
+2. Verify a new dependency-update PR is created in `otel-data-gateway` (title
+   pattern: `📦 Update @stuartshay/otel-data-types to vX.Y.Z`).
+3. Confirm the PR version bump matches the published npm version and CI checks
+   are green.
+4. Link that downstream PR in the originating issue/PR before marking work
+   complete.
+5. If no PR is created or checks fail, open/fix the workflow issue and rerun
+   until a valid PR exists.
+
 ### Daily Workflow
 
 1. **ALWAYS** start from `develop` or create a feature branch

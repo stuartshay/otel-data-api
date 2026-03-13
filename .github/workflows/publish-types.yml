@@ -54,6 +54,22 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Get published version
+        id: types_version
+        run: |
+          PKG_VERSION=$(jq -r '.version' ${{ env.TYPES_PKG_DIR }}/package.json)
+          echo "version=${PKG_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger otel-data-gateway types update
+        id: gateway_dispatch
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITOPS_PAT }}
+          repository: stuartshay/otel-data-gateway
+          event-type: otel-data-types-release
+          client-payload: '{"version": "${{ steps.types_version.outputs.version }}"}'
+        continue-on-error: true
+
       - name: Attach OpenAPI spec to release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -64,13 +80,19 @@ jobs:
 
       - name: Summary
         run: |
+          if [ "${{ steps.gateway_dispatch.outcome }}" = "success" ]; then
+            DISPATCH_STATUS="✅"
+          else
+            DISPATCH_STATUS="❌ (${{ steps.gateway_dispatch.outcome }})"
+          fi
           {
             echo "## npm Package Published"
             echo ""
             echo "| Property | Value |"
             echo "|----------|-------|"
             echo "| Package | \`@stuartshay/otel-data-types\` |"
-            echo "| Version | \`${GITHUB_REF_NAME#v}\` |"
+            echo "| Version | \`${{ steps.types_version.outputs.version }}\` |"
             echo "| Release | \`${{ github.event.release.tag_name }}\` |"
             echo "| Spec | \`docs/openapi.json\` attached |"
+            echo "| Gateway Dispatch | ${DISPATCH_STATUS} |"
           } >> "$GITHUB_STEP_SUMMARY"

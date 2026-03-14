@@ -71,6 +71,66 @@ git fetch origin master && git rebase origin/master
 This is especially important after squash merges, which cause develop to
 diverge from master.
 
+### After Deployment (Required)
+
+⚠️ **ALWAYS verify linked issue acceptance criteria after cluster deployment**
+before considering work complete.
+
+1. Track the implementation issue linked to the code PR.
+2. Complete deployment via the corresponding deployment PR (for example in
+   `k8s-gitops`).
+3. Validate each acceptance-criteria checkbox against the deployed cluster
+   behavior (not only local tests/CI).
+4. Post verification evidence on the issue (commands, API responses, logs, or
+   screenshots as applicable).
+5. Only then mark the issue/project item as done.
+
+If an issue is auto-closed by merge keywords (`Closes #...`) before deployment
+validation is complete, reopen it until acceptance criteria are confirmed.
+
+### After Types Publish (Required)
+
+⚠️ **ALWAYS verify the downstream dependency PR after publishing
+`@stuartshay/otel-data-types`.**
+
+1. Confirm `.github/workflows/publish-types.yml` completed successfully.
+2. Verify a new dependency-update PR is created in `otel-data-gateway` (title
+   pattern: `📦 Update @stuartshay/otel-data-types to vX.Y.Z`).
+3. Confirm the PR version bump matches the published npm version and CI checks
+   are green.
+4. Link that downstream PR in the originating issue/PR before marking work
+   complete.
+5. If no PR is created or checks fail, open/fix the workflow issue and rerun
+   until a valid PR exists.
+
+### Release Hygiene Completion (Required)
+
+⚠️ **ALWAYS complete issue/project hygiene before setting work to Done.**
+
+1. If any earlier comment says validation is blocked, add a new superseding
+   comment after resolution that clearly states criteria are now satisfied.
+2. Ensure acceptance criteria are explicitly marked complete by either:
+   - updating issue checkboxes, or
+   - posting a final checklist comment that maps each criterion to pass/fail
+     evidence.
+3. Include links in the final comment to all lifecycle artifacts:
+   code PR, deployment PR, and (when applicable) downstream types PR.
+4. Only move the project item to `Done` after the final validation comment is
+   posted and blockers are resolved.
+5. Use `.github/skills/release-hygiene-check/SKILL.md` for this repeatable
+   workflow.
+
+Suggested final comment format:
+
+```text
+Final acceptance validation (YYYY-MM-DD):
+- Criterion 1: PASS — <evidence link/command output>
+- Criterion 2: PASS — <evidence link/command output>
+- Deployment PR: <link>
+- Types PR (if applicable): <link>
+- Prior blocker status: Resolved (<link to resolving PR/run>)
+```
+
 ### Daily Workflow
 
 1. **ALWAYS** start from `develop` or create a feature branch

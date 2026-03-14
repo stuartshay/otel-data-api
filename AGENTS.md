@@ -21,6 +21,16 @@ All automation, assistants, and developers must follow
 - **Run dev**: `make dev`
 - **Test**: `make test`
 - **API Docs**: <http://localhost:8080/docs>
+- **Post-deploy check**: after cluster deploy, verify linked issue acceptance
+  criteria and record evidence before marking work complete
+- **Types release check**: after `publish-types.yml` publishes
+  `@stuartshay/otel-data-types`, verify the downstream update PR is created in
+  `otel-data-gateway`
+- **Issue closure hygiene**: if any prior validation comment reported a blocker,
+  add a final superseding validation comment after resolution before marking
+  done
+- **Release hygiene skill**:
+  `.github/skills/release-hygiene-check/SKILL.md`
 
 ## Development Workflow
 
@@ -31,6 +41,12 @@ All automation, assistants, and developers must follow
 5. Run `make test`
 6. Commit and push to `develop` or `feature/*` branch
 7. Create PR to `master` when ready for production
+8. After deployment PR merges (for example in `k8s-gitops`), validate every
+   linked issue acceptance criterion in-cluster before closing/confirming done
+9. If `packages/otel-data-types` changed, confirm the corresponding
+   `otel-data-gateway` dependency-update PR exists and is linked for follow-up
+10. If validation was previously blocked, post a final resolution comment with
+    evidence and links before moving the project item to Done
 
 ## Project Structure
 

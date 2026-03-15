@@ -291,9 +291,10 @@ async def test_trigger_sync_window_hours_passthrough(
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-        async def post(self, path: str, params=None):
+        async def post(self, path: str, params=None, headers=None):
             captured["path"] = path
             captured["params"] = params
+            captured["headers"] = headers
             return _FakeSyncResponse(
                 202,
                 {
@@ -315,6 +316,7 @@ async def test_trigger_sync_window_hours_passthrough(
     assert captured["params"] == {"window_hours": 48}
     assert captured["base_url"] == config.garmin_sync_base_url
     assert captured["timeout"] == config.garmin_sync_timeout_seconds
+    assert "X-Garmin-Sync-Id" in captured["headers"]
 
 
 @pytest.mark.asyncio
@@ -332,9 +334,10 @@ async def test_trigger_sync_lookback_passthrough(client: AsyncClient, monkeypatc
             captured["base_url"] = base_url
             captured["timeout"] = timeout
 
-        async def post(self, path: str, params=None):
+        async def post(self, path: str, params=None, headers=None):
             captured["path"] = path
             captured["params"] = params
+            captured["headers"] = headers
             return _FakeSyncResponse(
                 202,
                 {
@@ -353,6 +356,7 @@ async def test_trigger_sync_lookback_passthrough(client: AsyncClient, monkeypatc
     assert response.json()["lookback"] == 7
     assert captured["path"] == "/api/v1/sync"
     assert captured["params"] == {"lookback": 7}
+    assert "X-Garmin-Sync-Id" in captured["headers"]
 
 
 @pytest.mark.asyncio
@@ -367,7 +371,7 @@ async def test_trigger_sync_conflict_passthrough(client: AsyncClient, monkeypatc
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-        async def post(self, path: str, params=None):
+        async def post(self, path: str, params=None, headers=None):
             return _FakeSyncResponse(
                 409,
                 {
@@ -406,7 +410,7 @@ async def test_trigger_sync_timeout_maps_to_504(client: AsyncClient, monkeypatch
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-        async def post(self, path: str, params=None):
+        async def post(self, path: str, params=None, headers=None):
             raise httpx.TimeoutException("timed out")
 
     monkeypatch.setattr("app.routers.garmin.httpx.AsyncClient", _FakeClient)
@@ -429,7 +433,7 @@ async def test_trigger_sync_unavailable_maps_to_503(client: AsyncClient, monkeyp
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-        async def post(self, path: str, params=None):
+        async def post(self, path: str, params=None, headers=None):
             raise httpx.HTTPError("connection failed")
 
     monkeypatch.setattr("app.routers.garmin.httpx.AsyncClient", _FakeClient)
@@ -452,7 +456,7 @@ async def test_trigger_sync_invalid_upstream_json_maps_to_502(client: AsyncClien
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-        async def post(self, path: str, params=None):
+        async def post(self, path: str, params=None, headers=None):
             return _FakeSyncResponse(202, ValueError("invalid json"))
 
     monkeypatch.setattr("app.routers.garmin.httpx.AsyncClient", _FakeClient)
@@ -475,7 +479,7 @@ async def test_trigger_sync_upstream_error_maps_to_502(client: AsyncClient, monk
         async def __aexit__(self, exc_type, exc, tb):
             return False
 
-        async def post(self, path: str, params=None):
+        async def post(self, path: str, params=None, headers=None):
             return _FakeSyncResponse(500, {"status": "error", "message": "internal error"})
 
     monkeypatch.setattr("app.routers.garmin.httpx.AsyncClient", _FakeClient)
@@ -484,3 +488,70 @@ async def test_trigger_sync_upstream_error_maps_to_502(client: AsyncClient, monk
     assert response.status_code == 502
     assert response.json()["status"] == "error"
     assert response.json()["message"] == "Garmin sync service error"
+
+
+@pytest.mark.asyncio
+async def test_trigger_sync_generates_sync_id_when_no_header(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    """sync_id is auto-generated as UUID when X-Garmin-Sync-Id header is absent."""
+    captured: dict = {}
+
+    class _FakeClient:
+        def __init__(self, *, base_url: str, timeout: float):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, path: str, params=None, headers=None):
+            captured["headers"] = headers
+            return _FakeSyncResponse(
+                202,
+                {"status": "accepted", "message": "Sync started", "triggered_at": "2026-03-12T01:00:00Z"},
+            )
+
+    monkeypatch.setattr("app.routers.garmin.httpx.AsyncClient", _FakeClient)
+
+    response = await client.post("/api/v1/garmin/sync")
+
+    assert response.status_code == 202
+    sync_id = captured["headers"]["X-Garmin-Sync-Id"]
+    # Validate it's a valid UUID (36 chars with dashes)
+    assert len(sync_id) == 36
+    assert sync_id.count("-") == 4
+
+
+@pytest.mark.asyncio
+async def test_trigger_sync_forwards_provided_sync_id(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    """When X-Garmin-Sync-Id header is provided, it is forwarded to upstream."""
+    captured: dict = {}
+
+    class _FakeClient:
+        def __init__(self, *, base_url: str, timeout: float):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, path: str, params=None, headers=None):
+            captured["headers"] = headers
+            return _FakeSyncResponse(
+                202,
+                {"status": "accepted", "message": "Sync started", "triggered_at": "2026-03-12T01:00:00Z"},
+            )
+
+    monkeypatch.setattr("app.routers.garmin.httpx.AsyncClient", _FakeClient)
+
+    provided_id = "my-custom-sync-id-123"
+    response = await client.post(
+        "/api/v1/garmin/sync",
+        headers={"X-Garmin-Sync-Id": provided_id},
+    )
+
+    assert response.status_code == 202
+    assert captured["headers"]["X-Garmin-Sync-Id"] == provided_id

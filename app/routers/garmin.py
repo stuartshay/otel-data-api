@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import date
 from typing import Literal
 
 import fastapi
 import httpx
+import structlog
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import ValidationError
 
@@ -14,6 +16,7 @@ from app.models import PaginatedResponse
 from app.models.garmin import GarminActivity, GarminChartPoint, GarminSyncResponse, GarminTrackPoint, SportInfo
 
 router = APIRouter(prefix="/api/v1/garmin", tags=["Garmin"])
+logger = structlog.get_logger(__name__)
 
 ACTIVITY_SORT_WHITELIST = {"start_time", "distance_km", "duration_seconds", "sport", "created_at"}
 TRACK_SORT_WHITELIST = {"timestamp", "altitude", "speed_kmh", "heart_rate", "created_at"}
@@ -64,6 +67,9 @@ async def trigger_sync(
     ),
 ) -> GarminSyncResponse:
     """Trigger an on-demand Garmin sync via the in-cluster garmin-sync service."""
+    sync_id = request.headers.get("X-Garmin-Sync-Id") or str(uuid.uuid4())
+    structlog.contextvars.bind_contextvars(**{"garmin.sync_id": sync_id, "garmin.flow": True})
+
     if lookback is not None and window_hours is not None:
         response.status_code = 400
         return GarminSyncResponse(
@@ -79,9 +85,15 @@ async def trigger_sync(
     if window_hours is not None:
         params["window_hours"] = window_hours
 
+    logger.info("garmin_sync_trigger", sync_id=sync_id, params=params)
+
     try:
         async with httpx.AsyncClient(base_url=base_url, timeout=config.garmin_sync_timeout_seconds) as client:
-            upstream_response = await client.post("/api/v1/sync", params=params)
+            upstream_response = await client.post(
+                "/api/v1/sync",
+                params=params,
+                headers={"X-Garmin-Sync-Id": sync_id},
+            )
     except httpx.TimeoutException:
         response.status_code = 504
         return GarminSyncResponse(status="error", message="Garmin sync service timed out")

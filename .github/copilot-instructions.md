@@ -85,8 +85,17 @@ before considering work complete.
    screenshots as applicable).
 5. Only then mark the issue/project item as done.
 
-If an issue is auto-closed by merge keywords (`Closes #...`) before deployment
-validation is complete, reopen it until acceptance criteria are confirmed.
+### Issue Closure Policy
+
+⚠️ **Do NOT use `Closes #` or `Fixes #` in PR descriptions.** Issues must
+remain open until post-deploy acceptance criteria are validated on the cluster.
+
+1. After the PR merges, wait for Docker build and k8s-gitops deployment.
+2. Validate each acceptance criterion against the live cluster.
+3. Post a final validation comment on the issue with evidence.
+4. Close the issue manually only after all criteria pass.
+5. If any criterion cannot be validated, document the reason on the issue
+   instead of closing it.
 
 ### After Types Publish (Required)
 

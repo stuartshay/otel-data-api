@@ -6,6 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.models.geocoding import GeocodedAddress
+
 
 class Location(BaseModel):
     """GPS location recorded by the OwnTracks mobile app."""
@@ -30,6 +32,9 @@ class Location(BaseModel):
     created_at: datetime | None = Field(
         default=None, description="UTC timestamp when the record was inserted into the database"
     )
+    display_address: str | None = Field(
+        default=None, description="Short formatted address from reverse geocoding (e.g. '123 Main St, Hoboken')"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -49,6 +54,7 @@ class Location(BaseModel):
                     "trigger": "t",
                     "timestamp": "2026-02-12T08:10:55+00:00",
                     "created_at": "2026-02-12T08:10:55+00:00",
+                    "display_address": "123 Main St, Hoboken, NJ 07030",
                 }
             ]
         }
@@ -60,6 +66,9 @@ class LocationDetail(Location):
 
     raw_payload: dict | None = Field(
         default=None, description="Original OwnTracks JSON payload as received from the MQTT broker"
+    )
+    address: GeocodedAddress | None = Field(
+        default=None, description="Full reverse-geocoded address components from Pelias"
     )
 
     model_config = {

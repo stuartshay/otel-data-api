@@ -58,6 +58,10 @@ class Config:
     garmin_sync_base_url: str = "http://garmin-sync.garmin-sync.svc.cluster.local:8080"
     garmin_sync_timeout_seconds: float = 10.0
 
+    # Pelias geocoder
+    pelias_base_url: str = "http://geocoder.lab.informationcart.com"
+    pelias_timeout_seconds: float = 10.0
+
     @classmethod
     def from_env(cls) -> Config:
         """Create configuration from environment variables."""
@@ -104,6 +108,12 @@ class Config:
                 "http://garmin-sync.garmin-sync.svc.cluster.local:8080",
             ),
             garmin_sync_timeout_seconds=float(os.getenv("GARMIN_SYNC_TIMEOUT_SECONDS", "10")),
+            # Pelias geocoder
+            pelias_base_url=os.getenv(
+                "PELIAS_BASE_URL",
+                "http://geocoder.lab.informationcart.com",
+            ),
+            pelias_timeout_seconds=float(os.getenv("PELIAS_TIMEOUT_SECONDS", "10")),
         )
 
     def validate_database(self) -> None:

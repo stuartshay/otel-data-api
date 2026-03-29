@@ -70,7 +70,7 @@ def create_app(config: Config) -> FastAPI:
     configure_auth(config.cognito_issuer, config.cognito_client_id, config.oauth2_enabled)
 
     # Register routers
-    from app.routers import garmin, health, locations, reference, spatial, unified
+    from app.routers import garmin, geocoding, health, locations, reference, spatial, unified
 
     app.include_router(health.router)
     app.include_router(locations.router)
@@ -78,6 +78,7 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(unified.router)
     app.include_router(reference.router)
     app.include_router(spatial.router)
+    app.include_router(geocoding.router)
 
     # OpenTelemetry auto-instrumentation (opt-in via OTEL_TRACES_ENABLED)
     app.state.tracer_provider = setup_tracing(app, config)

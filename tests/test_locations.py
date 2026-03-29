@@ -65,7 +65,7 @@ async def test_list_locations_filters_and_invalid_sort_falls_back(client: AsyncC
     assert "created_at < ($3::date + INTERVAL '1 day')" in count_query
 
     data_query, *params = mock_db.fetch.await_args.args
-    assert "ORDER BY created_at asc" in data_query
+    assert "ORDER BY l.created_at asc" in data_query
     assert params == ["phone", date(2025, 1, 1), date(2025, 1, 2), 10, 5]
 
 

@@ -10,6 +10,7 @@ import fastapi
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.models import PaginatedResponse
+from app.models.geocoding import GeocodedAddress
 from app.models.locations import DeviceInfo, Location, LocationCount, LocationDetail
 
 router = APIRouter(prefix="/api/v1/locations", tags=["Locations"])
@@ -76,10 +77,13 @@ async def list_locations(
     total = await db.fetchval(count_query, *params)
 
     data_query = (
-        f"SELECT id, device_id, tid, latitude, longitude, accuracy, altitude, "
-        f"velocity, battery, battery_status, connection_type, trigger, "
-        f"timestamp, created_at "
-        f"FROM public.locations {where} "
+        f"SELECT l.id, l.device_id, l.tid, l.latitude, l.longitude, l.accuracy, l.altitude, "
+        f"l.velocity, l.battery, l.battery_status, l.connection_type, l.trigger, "
+        f"l.timestamp, l.created_at, "
+        f"ga.display_address "
+        f"FROM public.locations l "
+        f"LEFT JOIN public.geocoded_addresses ga ON ga.location_id = l.id "
+        f"{where} "
         f"ORDER BY {sort} {order} "
         f"LIMIT ${idx} OFFSET ${idx + 1}"
     )
@@ -134,10 +138,17 @@ async def get_location(
     """Get a single location by ID, including raw payload."""
     db = request.app.state.db
     row = await db.fetchrow(
-        "SELECT id, device_id, tid, latitude, longitude, accuracy, altitude, "
-        "velocity, battery, battery_status, connection_type, trigger, "
-        "timestamp, created_at, raw_payload "
-        "FROM public.locations WHERE id = $1",
+        "SELECT l.id, l.device_id, l.tid, l.latitude, l.longitude, l.accuracy, l.altitude, "
+        "l.velocity, l.battery, l.battery_status, l.connection_type, l.trigger, "
+        "l.timestamp, l.created_at, l.raw_payload, "
+        "ga.display_address AS ga_display_address, ga.street AS ga_street, "
+        "ga.housenumber AS ga_housenumber, ga.neighbourhood AS ga_neighbourhood, "
+        "ga.locality AS ga_locality, ga.region AS ga_region, ga.country AS ga_country, "
+        "ga.postalcode AS ga_postalcode, ga.confidence AS ga_confidence, "
+        "ga.status AS ga_status, ga.geocoded_at AS ga_geocoded_at "
+        "FROM public.locations l "
+        "LEFT JOIN public.geocoded_addresses ga ON ga.location_id = l.id "
+        "WHERE l.id = $1",
         location_id,
     )
     if not row:
@@ -147,4 +158,25 @@ async def get_location(
     # Convert raw_payload from JSON string to dict if needed
     if data.get("raw_payload") and isinstance(data["raw_payload"], str):
         data["raw_payload"] = json.loads(data["raw_payload"])
-    return LocationDetail(**data)
+
+    # Build address object from joined columns
+    address = None
+    if data.get("ga_status"):
+        address = GeocodedAddress(
+            display_address=data["ga_display_address"],
+            street=data["ga_street"],
+            housenumber=data["ga_housenumber"],
+            neighbourhood=data["ga_neighbourhood"],
+            locality=data["ga_locality"],
+            region=data["ga_region"],
+            country=data["ga_country"],
+            postalcode=data["ga_postalcode"],
+            confidence=data["ga_confidence"],
+            status=data["ga_status"],
+            geocoded_at=data["ga_geocoded_at"],
+        )
+
+    # Remove ga_ prefixed keys before constructing LocationDetail
+    location_data = {k: v for k, v in data.items() if not k.startswith("ga_")}
+    location_data["display_address"] = data.get("ga_display_address")
+    return LocationDetail(**location_data, address=address)

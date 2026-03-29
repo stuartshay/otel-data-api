@@ -17,6 +17,15 @@ router = APIRouter(prefix="/api/v1/locations", tags=["Locations"])
 
 SORT_WHITELIST = {"id", "device_id", "timestamp", "created_at", "battery", "accuracy"}
 
+_SORT_COLUMN_MAP: dict[str, str] = {
+    "id": "l.id",
+    "device_id": "l.device_id",
+    "timestamp": "l.timestamp",
+    "created_at": "l.created_at",
+    "battery": "l.battery",
+    "accuracy": "l.accuracy",
+}
+
 
 def _parse_date(value: str) -> date:
     """Parse a YYYY-MM-DD string to a datetime.date object for asyncpg."""
@@ -52,6 +61,8 @@ async def list_locations(
     if sort not in SORT_WHITELIST:
         sort = "created_at"
 
+    qualified_sort = _SORT_COLUMN_MAP[sort]
+
     conditions: list[str] = []
     params: list = []
     idx = 1
@@ -84,7 +95,7 @@ async def list_locations(
         f"FROM public.locations l "
         f"LEFT JOIN public.geocoded_addresses ga ON ga.location_id = l.id "
         f"{where} "
-        f"ORDER BY {sort} {order} "
+        f"ORDER BY {qualified_sort} {order} "
         f"LIMIT ${idx} OFFSET ${idx + 1}"
     )
     params.extend([limit, offset])

@@ -2,21 +2,22 @@
 
 from __future__ import annotations
 
-import logging
+import asyncio
 from typing import Any
 
 import httpx
+import structlog
 from fastapi import APIRouter, Depends, Query, Request
 
 from app.auth import require_auth
 from app.models.geocoding import GeocodingStatus, GeocodingTriggerResponse
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/geocoding", tags=["Geocoding"])
 
-PELIAS_BASE_URL = "http://geocoder.lab.informationcart.com"
 PELIAS_REVERSE_PATH = "/v1/reverse"
+MAX_GEOCODE_CONCURRENCY = 5
 
 
 @router.get("/status", response_model=GeocodingStatus)
@@ -57,6 +58,9 @@ async def trigger_geocoding(
     (within 50 m) that already have a geocoded address are skipped.
     """
     db = request.app.state.db
+    config = request.app.state.config
+    pelias_base_url = config.pelias_base_url
+    pelias_timeout = config.pelias_timeout_seconds
 
     if retry_failed:
         rows = await db.fetch(
@@ -79,100 +83,82 @@ async def trigger_geocoding(
 
     processed = 0
     skipped_dedup = 0
+    sem = asyncio.Semaphore(MAX_GEOCODE_CONCURRENCY)
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        for row in rows:
-            location_id = row["id"]
-            lat = row["latitude"]
-            lon = row["longitude"]
+    async def _geocode_one(
+        client: httpx.AsyncClient,
+        row: dict[str, Any],
+    ) -> tuple[int, int]:
+        """Process one location with bounded concurrency. Returns (processed, skipped)."""
+        async with sem:
+            return await _process_location(db, client, pelias_base_url, row)
 
-            # Proximity dedup: skip if a nearby location (within 50m) is already geocoded
-            nearby = await db.fetchval(
-                "SELECT COUNT(*) FROM public.geocoded_addresses ga "
-                "INNER JOIN public.locations l ON l.id = ga.location_id "
-                "WHERE ga.status = 'success' "
-                "AND ST_DWithin("
-                "  ST_SetSRID(ST_MakePoint(l.longitude, l.latitude), 4326)::geography, "
-                "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, "
-                "  50"
-                ")",
-                lon,
-                lat,
-            )
+    async with httpx.AsyncClient(timeout=pelias_timeout) as client:
+        results = await asyncio.gather(*[_geocode_one(client, dict(row)) for row in rows])
+        for proc, skip in results:
+            processed += proc
+            skipped_dedup += skip
 
-            if nearby and nearby > 0:
-                # Copy address from nearest geocoded neighbour
-                neighbour = await db.fetchrow(
-                    "SELECT ga.display_address, ga.street, ga.housenumber, ga.neighbourhood, "
-                    "ga.locality, ga.region, ga.country, ga.postalcode, ga.confidence, "
-                    "ga.raw_response "
-                    "FROM public.geocoded_addresses ga "
-                    "INNER JOIN public.locations l ON l.id = ga.location_id "
-                    "WHERE ga.status = 'success' "
-                    "AND ST_DWithin("
-                    "  ST_SetSRID(ST_MakePoint(l.longitude, l.latitude), 4326)::geography, "
-                    "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, "
-                    "  50"
-                    ") "
-                    "ORDER BY ST_Distance("
-                    "  ST_SetSRID(ST_MakePoint(l.longitude, l.latitude), 4326)::geography, "
-                    "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography"
-                    ") LIMIT 1",
-                    lon,
-                    lat,
-                )
-                if neighbour:
-                    n = dict(neighbour)
-                    await db.execute(
-                        "INSERT INTO public.geocoded_addresses "
-                        "(location_id, source, display_address, street, housenumber, "
-                        "neighbourhood, locality, region, country, postalcode, "
-                        "confidence, status, raw_response) "
-                        "VALUES ($1, 'owntracks', $2, $3, $4, $5, $6, $7, $8, $9, $10, 'success', $11) "
-                        "ON CONFLICT (location_id) DO UPDATE SET "
-                        "display_address = EXCLUDED.display_address, "
-                        "street = EXCLUDED.street, housenumber = EXCLUDED.housenumber, "
-                        "neighbourhood = EXCLUDED.neighbourhood, locality = EXCLUDED.locality, "
-                        "region = EXCLUDED.region, country = EXCLUDED.country, "
-                        "postalcode = EXCLUDED.postalcode, confidence = EXCLUDED.confidence, "
-                        "status = EXCLUDED.status, raw_response = EXCLUDED.raw_response, "
-                        "geocoded_at = CURRENT_TIMESTAMP",
-                        location_id,
-                        n["display_address"],
-                        n["street"],
-                        n["housenumber"],
-                        n["neighbourhood"],
-                        n["locality"],
-                        n["region"],
-                        n["country"],
-                        n["postalcode"],
-                        n["confidence"],
-                        n["raw_response"],
-                    )
-                    skipped_dedup += 1
-                    continue
+    remaining = await db.fetchval(
+        "SELECT COUNT(*) FROM public.locations l "
+        "LEFT JOIN public.geocoded_addresses ga ON ga.location_id = l.id "
+        "WHERE ga.id IS NULL"
+    )
 
-            # Call Pelias reverse geocoder
-            try:
-                resp = await client.get(
-                    f"{PELIAS_BASE_URL}{PELIAS_REVERSE_PATH}",
-                    params={"point.lat": lat, "point.lon": lon, "size": 1},
-                )
-                resp.raise_for_status()
-                data = resp.json()
-            except httpx.HTTPError:
-                logger.warning("Pelias request failed for location %d", location_id, exc_info=True)
-                await _upsert_geocoded(db, location_id, status="error")
-                processed += 1
-                continue
+    return GeocodingTriggerResponse(processed=processed, remaining=remaining, skipped_dedup=skipped_dedup)
 
-            features = data.get("features", [])
-            if not features:
-                await _upsert_geocoded(db, location_id, status="no_coverage")
-                processed += 1
-                continue
 
-            props = features[0].get("properties", {})
+async def _process_location(
+    db: Any,
+    client: httpx.AsyncClient,
+    pelias_base_url: str,
+    row: dict[str, Any],
+) -> tuple[int, int]:
+    """Process a single location for reverse geocoding.
+
+    Returns ``(processed, skipped_dedup)`` counts.
+    """
+    location_id = row["id"]
+    lat = row["latitude"]
+    lon = row["longitude"]
+
+    # Proximity dedup: skip if a nearby location (within 50m) is already geocoded
+    nearby = await db.fetchval(
+        "SELECT COUNT(*) FROM public.geocoded_addresses ga "
+        "INNER JOIN public.locations l ON l.id = ga.location_id "
+        "WHERE ga.status = 'success' "
+        "AND ST_DWithin("
+        "  ST_SetSRID(ST_MakePoint(l.longitude, l.latitude), 4326)::geography, "
+        "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, "
+        "  50"
+        ")",
+        lon,
+        lat,
+    )
+
+    if nearby and nearby > 0:
+        # Copy address from nearest geocoded neighbour
+        neighbour = await db.fetchrow(
+            "SELECT ga.display_address, ga.street, ga.housenumber, ga.neighbourhood, "
+            "ga.locality, ga.region, ga.country, ga.postalcode, ga.confidence, "
+            "ga.raw_response "
+            "FROM public.geocoded_addresses ga "
+            "INNER JOIN public.locations l ON l.id = ga.location_id "
+            "WHERE ga.status = 'success' "
+            "AND ST_DWithin("
+            "  ST_SetSRID(ST_MakePoint(l.longitude, l.latitude), 4326)::geography, "
+            "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, "
+            "  50"
+            ") "
+            "ORDER BY ST_Distance("
+            "  ST_SetSRID(ST_MakePoint(l.longitude, l.latitude), 4326)::geography, "
+            "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography"
+            ") LIMIT 1",
+            lon,
+            lat,
+        )
+        if neighbour:
+            n = dict(neighbour)
             await db.execute(
                 "INSERT INTO public.geocoded_addresses "
                 "(location_id, source, display_address, street, housenumber, "
@@ -188,26 +174,65 @@ async def trigger_geocoding(
                 "status = EXCLUDED.status, raw_response = EXCLUDED.raw_response, "
                 "geocoded_at = CURRENT_TIMESTAMP",
                 location_id,
-                props.get("label"),
-                props.get("street"),
-                props.get("housenumber"),
-                props.get("neighbourhood"),
-                props.get("locality"),
-                props.get("region"),
-                props.get("country"),
-                props.get("postalcode"),
-                props.get("confidence"),
-                data,
+                n["display_address"],
+                n["street"],
+                n["housenumber"],
+                n["neighbourhood"],
+                n["locality"],
+                n["region"],
+                n["country"],
+                n["postalcode"],
+                n["confidence"],
+                n["raw_response"],
             )
-            processed += 1
+            return 0, 1
 
-    remaining = await db.fetchval(
-        "SELECT COUNT(*) FROM public.locations l "
-        "LEFT JOIN public.geocoded_addresses ga ON ga.location_id = l.id "
-        "WHERE ga.id IS NULL"
+    # Call Pelias reverse geocoder
+    try:
+        resp = await client.get(
+            f"{pelias_base_url}{PELIAS_REVERSE_PATH}",
+            params={"point.lat": lat, "point.lon": lon, "size": 1},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except httpx.HTTPError:
+        logger.warning("Pelias request failed for location %d", location_id, exc_info=True)
+        await _upsert_geocoded(db, location_id, status="error")
+        return 1, 0
+
+    features = data.get("features", [])
+    if not features:
+        await _upsert_geocoded(db, location_id, status="no_coverage")
+        return 1, 0
+
+    props = features[0].get("properties", {})
+    await db.execute(
+        "INSERT INTO public.geocoded_addresses "
+        "(location_id, source, display_address, street, housenumber, "
+        "neighbourhood, locality, region, country, postalcode, "
+        "confidence, status, raw_response) "
+        "VALUES ($1, 'owntracks', $2, $3, $4, $5, $6, $7, $8, $9, $10, 'success', $11) "
+        "ON CONFLICT (location_id) DO UPDATE SET "
+        "display_address = EXCLUDED.display_address, "
+        "street = EXCLUDED.street, housenumber = EXCLUDED.housenumber, "
+        "neighbourhood = EXCLUDED.neighbourhood, locality = EXCLUDED.locality, "
+        "region = EXCLUDED.region, country = EXCLUDED.country, "
+        "postalcode = EXCLUDED.postalcode, confidence = EXCLUDED.confidence, "
+        "status = EXCLUDED.status, raw_response = EXCLUDED.raw_response, "
+        "geocoded_at = CURRENT_TIMESTAMP",
+        location_id,
+        props.get("label"),
+        props.get("street"),
+        props.get("housenumber"),
+        props.get("neighbourhood"),
+        props.get("locality"),
+        props.get("region"),
+        props.get("country"),
+        props.get("postalcode"),
+        props.get("confidence"),
+        data,
     )
-
-    return GeocodingTriggerResponse(processed=processed, remaining=remaining, skipped_dedup=skipped_dedup)
+    return 1, 0
 
 
 async def _upsert_geocoded(db: Any, location_id: int, *, status: str) -> None:

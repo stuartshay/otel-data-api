@@ -58,6 +58,9 @@ class Config:
     garmin_sync_base_url: str = "http://garmin-sync.garmin-sync.svc.cluster.local:8080"
     garmin_sync_timeout_seconds: float = 10.0
 
+    # Internal endpoints (unauthenticated, intended for in-cluster callers)
+    internal_endpoints_enabled: bool = False
+
     # Pelias geocoder
     pelias_base_url: str = "http://geocoder.lab.informationcart.com"
     pelias_timeout_seconds: float = 10.0
@@ -114,6 +117,8 @@ class Config:
                 "http://geocoder.lab.informationcart.com",
             ),
             pelias_timeout_seconds=float(os.getenv("PELIAS_TIMEOUT_SECONDS", "10")),
+            # Internal endpoints
+            internal_endpoints_enabled=os.getenv("INTERNAL_ENDPOINTS_ENABLED", "false").lower() == "true",
         )
 
     def validate_database(self) -> None:

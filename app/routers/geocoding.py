@@ -15,6 +15,7 @@ from app.models.geocoding import GeocodingStatus, GeocodingTriggerResponse
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/geocoding", tags=["Geocoding"])
+internal_router = APIRouter(prefix="/internal/geocoding", tags=["Internal"])
 
 PELIAS_REVERSE_PATH = "/v1/reverse"
 MAX_GEOCODE_CONCURRENCY = 5
@@ -90,6 +91,67 @@ async def trigger_geocoding(
         row: dict[str, Any],
     ) -> tuple[int, int]:
         """Process one location with bounded concurrency. Returns (processed, skipped)."""
+        async with sem:
+            return await _process_location(db, client, pelias_base_url, row)
+
+    async with httpx.AsyncClient(timeout=pelias_timeout) as client:
+        results = await asyncio.gather(*[_geocode_one(client, dict(row)) for row in rows])
+        for proc, skip in results:
+            processed += proc
+            skipped_dedup += skip
+
+    remaining = await db.fetchval(
+        "SELECT COUNT(*) FROM public.locations l "
+        "LEFT JOIN public.geocoded_addresses ga ON ga.location_id = l.id "
+        "WHERE ga.id IS NULL"
+    )
+
+    return GeocodingTriggerResponse(processed=processed, remaining=remaining, skipped_dedup=skipped_dedup)
+
+
+@internal_router.post("/trigger", response_model=GeocodingTriggerResponse)
+async def internal_trigger_geocoding(
+    request: Request,
+    batch_size: int = Query(100, ge=1, le=1000, description="Number of locations to geocode in this batch"),
+    retry_failed: bool = Query(False, description="Re-process records with status no_coverage"),
+) -> GeocodingTriggerResponse:
+    """Trigger batch reverse-geocoding (internal, no auth).
+
+    Identical to the public trigger endpoint but intended for in-cluster
+    callers such as the geocoding-backfill agent.
+    """
+    db = request.app.state.db
+    config = request.app.state.config
+    pelias_base_url = config.pelias_base_url
+    pelias_timeout = config.pelias_timeout_seconds
+
+    if retry_failed:
+        rows = await db.fetch(
+            "SELECT l.id, l.latitude, l.longitude "
+            "FROM public.locations l "
+            "INNER JOIN public.geocoded_addresses ga ON ga.location_id = l.id "
+            "WHERE ga.status = 'no_coverage' "
+            "ORDER BY l.id LIMIT $1",
+            batch_size,
+        )
+    else:
+        rows = await db.fetch(
+            "SELECT l.id, l.latitude, l.longitude "
+            "FROM public.locations l "
+            "LEFT JOIN public.geocoded_addresses ga ON ga.location_id = l.id "
+            "WHERE ga.id IS NULL "
+            "ORDER BY l.id LIMIT $1",
+            batch_size,
+        )
+
+    processed = 0
+    skipped_dedup = 0
+    sem = asyncio.Semaphore(MAX_GEOCODE_CONCURRENCY)
+
+    async def _geocode_one(
+        client: httpx.AsyncClient,
+        row: dict[str, Any],
+    ) -> tuple[int, int]:
         async with sem:
             return await _process_location(db, client, pelias_base_url, row)
 

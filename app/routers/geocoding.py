@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 
 import httpx
@@ -253,7 +254,7 @@ async def _process_location(
         props.get("country"),
         props.get("postalcode"),
         props.get("confidence"),
-        data,
+        json.dumps(data),
     )
     return 1, 0
 

@@ -32,6 +32,7 @@ def _test_config() -> Config:
         cognito_issuer="",
         cognito_client_id="",
         oauth2_enabled=False,
+        internal_endpoints_enabled=True,
         cors_origins=("*",),
         log_level="DEBUG",
         log_format="json",

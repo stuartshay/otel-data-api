@@ -15,6 +15,7 @@ from app.models.geocoding import GeocodingStatus, GeocodingTriggerResponse
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/geocoding", tags=["Geocoding"])
+internal_router = APIRouter(prefix="/internal/geocoding", tags=["Internal"])
 
 PELIAS_REVERSE_PATH = "/v1/reverse"
 MAX_GEOCODE_CONCURRENCY = 5
@@ -57,6 +58,29 @@ async def trigger_geocoding(
     the Pelias reverse-geocoder for each one.  Duplicate nearby coordinates
     (within 50 m) that already have a geocoded address are skipped.
     """
+    return await _trigger_geocoding_impl(request, batch_size, retry_failed)
+
+
+@internal_router.post("/trigger", response_model=GeocodingTriggerResponse)
+async def internal_trigger_geocoding(
+    request: Request,
+    batch_size: int = Query(100, ge=1, le=1000, description="Number of locations to geocode in this batch"),
+    retry_failed: bool = Query(False, description="Re-process records with status no_coverage"),
+) -> GeocodingTriggerResponse:
+    """Trigger batch reverse-geocoding (internal, no auth).
+
+    Identical to the public trigger endpoint but intended for in-cluster
+    callers such as the geocoding-backfill agent.
+    """
+    return await _trigger_geocoding_impl(request, batch_size, retry_failed)
+
+
+async def _trigger_geocoding_impl(
+    request: Request,
+    batch_size: int,
+    retry_failed: bool,
+) -> GeocodingTriggerResponse:
+    """Shared batch reverse-geocoding logic used by both public and internal endpoints."""
     db = request.app.state.db
     config = request.app.state.config
     pelias_base_url = config.pelias_base_url
@@ -89,7 +113,6 @@ async def trigger_geocoding(
         client: httpx.AsyncClient,
         row: dict[str, Any],
     ) -> tuple[int, int]:
-        """Process one location with bounded concurrency. Returns (processed, skipped)."""
         async with sem:
             return await _process_location(db, client, pelias_base_url, row)
 

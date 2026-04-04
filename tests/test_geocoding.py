@@ -183,12 +183,12 @@ async def test_trigger_geocoding_custom_batch_size(client: AsyncClient, mock_db:
     mock_db.fetch.return_value = []
     mock_db.fetchval.return_value = 0
 
-    response = await client.post("/api/v1/geocoding/trigger?batch_size=500")
+    response = await client.post("/api/v1/geocoding/trigger?batch_size=150")
 
     assert response.status_code == 200
     mock_db.fetch.assert_called_once()
     call_args = mock_db.fetch.call_args
-    assert call_args[0][1] == 500  # batch_size parameter
+    assert call_args[0][1] == 150  # batch_size parameter
 
 
 @pytest.mark.asyncio

@@ -49,7 +49,7 @@ async def geocoding_status(request: Request) -> GeocodingStatus:
 @router.post("/trigger", response_model=GeocodingTriggerResponse)
 async def trigger_geocoding(
     request: Request,
-    batch_size: int = Query(100, ge=1, le=1000, description="Number of locations to geocode in this batch"),
+    batch_size: int = Query(100, ge=1, le=200, description="Number of locations to geocode in this batch"),
     retry_failed: bool = Query(False, description="Re-process records with status no_coverage"),
     _user: dict = Depends(require_auth),
 ) -> GeocodingTriggerResponse:

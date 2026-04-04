@@ -98,6 +98,15 @@ async def test_trigger_geocoding_pelias_success(client: AsyncClient, mock_db: As
     assert body["processed"] == 1
     assert body["remaining"] == 5
 
+    # Verify raw_response is serialized as a JSON string (not a dict)
+    execute_calls = mock_db.execute.call_args_list
+    assert len(execute_calls) >= 1
+    upsert_args = execute_calls[0][0]
+    # raw_response is the last positional arg in the INSERT
+    raw_response_arg = upsert_args[-1]
+    assert isinstance(raw_response_arg, str)
+    assert '"features"' in raw_response_arg
+
 
 @pytest.mark.asyncio
 async def test_trigger_geocoding_pelias_no_features(client: AsyncClient, mock_db: AsyncMock):
@@ -183,12 +192,29 @@ async def test_trigger_geocoding_custom_batch_size(client: AsyncClient, mock_db:
     mock_db.fetch.return_value = []
     mock_db.fetchval.return_value = 0
 
-    response = await client.post("/api/v1/geocoding/trigger?batch_size=500")
+    response = await client.post("/api/v1/geocoding/trigger?batch_size=150")
 
     assert response.status_code == 200
     mock_db.fetch.assert_called_once()
     call_args = mock_db.fetch.call_args
-    assert call_args[0][1] == 500  # batch_size parameter
+    assert call_args[0][1] == 150  # batch_size parameter
+
+
+@pytest.mark.asyncio
+async def test_trigger_geocoding_batch_size_exceeds_public_limit(client: AsyncClient):
+    """Public endpoint rejects batch_size > 200."""
+    response = await client.post("/api/v1/geocoding/trigger?batch_size=201")
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_internal_trigger_accepts_large_batch_size(client: AsyncClient, mock_db: AsyncMock):
+    """Internal endpoint still accepts batch_size > 200 (up to 1000)."""
+    mock_db.fetch.return_value = []
+    mock_db.fetchval.return_value = 0
+
+    response = await client.post("/internal/geocoding/trigger?batch_size=500")
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio

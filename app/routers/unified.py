@@ -40,6 +40,11 @@ async def list_unified_gps(
     order: Literal["asc", "desc"] = Query(
         "desc", description="Sort direction: asc (oldest first) or desc (newest first)"
     ),
+    exclude_stationary: bool = Query(False, description="Exclude stationary points where speed_kmh = 0"),
+    deduplicate: bool = Query(
+        False,
+        description="Remove points with duplicate coordinates (rounded to ~11m precision)",
+    ),
 ) -> PaginatedResponse[UnifiedGpsPoint]:
     """Query the unified_gps_points view combining OwnTracks + Garmin data.
 
@@ -77,20 +82,48 @@ async def list_unified_gps(
         params.append(parsed_to)
         idx += 1
 
+    if exclude_stationary:
+        conditions.append("(speed_kmh > 0 OR speed_kmh IS NULL)")
+
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
-    total = await db.fetchval(f"SELECT COUNT(*) FROM unified_gps_points {where}", *params)
+    # When deduplicating, use a subquery with DISTINCT ON rounded coordinates.
+    # Rounding to 4 decimal places gives ~11m precision.
+    if deduplicate:
+        inner_table = (
+            f"(SELECT DISTINCT ON (ROUND(latitude::numeric, 4), ROUND(longitude::numeric, 4)) "
+            f"source, identifier, latitude, longitude, timestamp, "
+            f"accuracy, battery, speed_kmh, heart_rate, created_at "
+            f"FROM unified_gps_points {where} "
+            f"ORDER BY ROUND(latitude::numeric, 4), ROUND(longitude::numeric, 4), timestamp DESC"
+            f") AS deduped"
+        )
 
-    rows = await db.fetch(
-        f"SELECT source, identifier, latitude, longitude, timestamp, "
-        f"accuracy, battery, speed_kmh, heart_rate, created_at "
-        f"FROM unified_gps_points {where} "
-        f"ORDER BY timestamp {order} "
-        f"LIMIT ${idx} OFFSET ${idx + 1}",
-        *params,
-        limit,
-        offset,
-    )
+        total = await db.fetchval(f"SELECT COUNT(*) FROM {inner_table}", *params)
+
+        rows = await db.fetch(
+            f"SELECT source, identifier, latitude, longitude, timestamp, "
+            f"accuracy, battery, speed_kmh, heart_rate, created_at "
+            f"FROM {inner_table} "
+            f"ORDER BY timestamp {order} "
+            f"LIMIT ${idx} OFFSET ${idx + 1}",
+            *params,
+            limit,
+            offset,
+        )
+    else:
+        total = await db.fetchval(f"SELECT COUNT(*) FROM unified_gps_points {where}", *params)
+
+        rows = await db.fetch(
+            f"SELECT source, identifier, latitude, longitude, timestamp, "
+            f"accuracy, battery, speed_kmh, heart_rate, created_at "
+            f"FROM unified_gps_points {where} "
+            f"ORDER BY timestamp {order} "
+            f"LIMIT ${idx} OFFSET ${idx + 1}",
+            *params,
+            limit,
+            offset,
+        )
 
     items = [UnifiedGpsPoint(**dict(row)) for row in rows]
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)

@@ -143,3 +143,53 @@ async def test_daily_summary_invalid_date(client: AsyncClient, mock_db):
 
     assert response.status_code == 422
     assert "Invalid date format" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_list_unified_gps_exclude_stationary(client: AsyncClient, mock_db):
+    """exclude_stationary=true adds speed_kmh filter to the query."""
+    mock_db.fetchval.return_value = 0
+    mock_db.fetch.return_value = []
+
+    response = await client.get("/api/v1/gps/unified?exclude_stationary=true")
+
+    assert response.status_code == 200
+
+    count_query = mock_db.fetchval.await_args.args[0]
+    assert "(speed_kmh > 0 OR speed_kmh IS NULL)" in count_query
+
+    data_query = mock_db.fetch.await_args.args[0]
+    assert "(speed_kmh > 0 OR speed_kmh IS NULL)" in data_query
+
+
+@pytest.mark.asyncio
+async def test_list_unified_gps_deduplicate(client: AsyncClient, mock_db):
+    """deduplicate=true wraps query in DISTINCT ON subquery."""
+    mock_db.fetchval.return_value = 0
+    mock_db.fetch.return_value = []
+
+    response = await client.get("/api/v1/gps/unified?deduplicate=true")
+
+    assert response.status_code == 200
+
+    count_query = mock_db.fetchval.await_args.args[0]
+    assert "DISTINCT ON" in count_query
+    assert "ROUND(latitude::numeric, 4)" in count_query
+
+    data_query = mock_db.fetch.await_args.args[0]
+    assert "deduped" in data_query
+
+
+@pytest.mark.asyncio
+async def test_list_unified_gps_both_filters(client: AsyncClient, mock_db):
+    """Both exclude_stationary and deduplicate can be combined."""
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = [_unified_row()]
+
+    response = await client.get("/api/v1/gps/unified?date_from=2026-02-01&exclude_stationary=true&deduplicate=true")
+
+    assert response.status_code == 200
+
+    count_query = mock_db.fetchval.await_args.args[0]
+    assert "DISTINCT ON" in count_query
+    assert "(speed_kmh > 0 OR speed_kmh IS NULL)" in count_query

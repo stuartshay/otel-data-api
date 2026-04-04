@@ -95,7 +95,7 @@ async def list_unified_gps(
             f"source, identifier, latitude, longitude, timestamp, "
             f"accuracy, battery, speed_kmh, heart_rate, created_at "
             f"FROM unified_gps_points {where} "
-            f"ORDER BY ROUND(latitude::numeric, 4), ROUND(longitude::numeric, 4), timestamp DESC"
+            f"ORDER BY ROUND(latitude::numeric, 4), ROUND(longitude::numeric, 4), timestamp {order}"
             f") AS deduped"
         )
 

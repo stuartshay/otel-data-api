@@ -175,9 +175,24 @@ async def test_list_unified_gps_deduplicate(client: AsyncClient, mock_db):
     count_query = mock_db.fetchval.await_args.args[0]
     assert "DISTINCT ON" in count_query
     assert "ROUND(latitude::numeric, 4)" in count_query
+    assert "timestamp desc" in count_query
 
     data_query = mock_db.fetch.await_args.args[0]
     assert "deduped" in data_query
+
+
+@pytest.mark.asyncio
+async def test_list_unified_gps_deduplicate_respects_order(client: AsyncClient, mock_db):
+    """deduplicate inner query uses the requested sort order to pick which row to keep."""
+    mock_db.fetchval.return_value = 0
+    mock_db.fetch.return_value = []
+
+    response = await client.get("/api/v1/gps/unified?deduplicate=true&order=asc")
+
+    assert response.status_code == 200
+
+    count_query = mock_db.fetchval.await_args.args[0]
+    assert "timestamp asc" in count_query
 
 
 @pytest.mark.asyncio

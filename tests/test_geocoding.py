@@ -202,8 +202,8 @@ async def test_trigger_geocoding_custom_batch_size(client: AsyncClient, mock_db:
 
 @pytest.mark.asyncio
 async def test_trigger_geocoding_batch_size_exceeds_public_limit(client: AsyncClient):
-    """Public endpoint rejects batch_size > 200."""
-    response = await client.post("/api/v1/geocoding/trigger?batch_size=201")
+    """Public endpoint rejects batch_size > 500."""
+    response = await client.post("/api/v1/geocoding/trigger?batch_size=501")
     assert response.status_code == 422
 
 

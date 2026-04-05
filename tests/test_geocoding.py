@@ -60,7 +60,8 @@ async def test_trigger_geocoding_pelias_success(client: AsyncClient, mock_db: As
     mock_db.fetch.return_value = [
         {"id": 1, "latitude": 40.7128, "longitude": -74.006},
     ]
-    mock_db.fetchval.side_effect = [False, 5]  # nearby exists = False, then remaining = 5
+    mock_db.fetchrow.return_value = None  # no nearby neighbour
+    mock_db.fetchval.return_value = 5  # remaining
 
     pelias_response = {
         "features": [
@@ -113,7 +114,8 @@ async def test_trigger_geocoding_pelias_no_features(client: AsyncClient, mock_db
     mock_db.fetch.return_value = [
         {"id": 2, "latitude": 0.0, "longitude": 0.0},
     ]
-    mock_db.fetchval.side_effect = [False, 100]  # nearby exists = False, then remaining
+    mock_db.fetchrow.return_value = None  # no nearby neighbour
+    mock_db.fetchval.return_value = 100  # remaining
 
     pelias_response: dict[str, list[object]] = {"features": []}
     mock_httpx_response = MagicMock()
@@ -141,10 +143,7 @@ async def test_trigger_geocoding_dedup_from_neighbour(client: AsyncClient, mock_
     mock_db.fetch.return_value = [
         {"id": 3, "latitude": 40.7128, "longitude": -74.006},
     ]
-    mock_db.fetchval.side_effect = [
-        True,  # nearby exists → dedup
-        50,  # remaining
-    ]
+    mock_db.fetchval.return_value = 50  # remaining
     mock_db.fetchrow.return_value = {
         "display_address": "123 Main St",
         "street": "Main St",
@@ -267,7 +266,8 @@ async def test_internal_trigger_happy_path(client: AsyncClient, mock_db: AsyncMo
     mock_db.fetch.return_value = [
         {"id": 10, "latitude": 40.7128, "longitude": -74.006},
     ]
-    mock_db.fetchval.side_effect = [False, 3]  # nearby exists = False, then remaining = 3
+    mock_db.fetchrow.return_value = None  # no nearby neighbour
+    mock_db.fetchval.return_value = 3  # remaining
 
     pelias_response = {
         "features": [
@@ -304,6 +304,54 @@ async def test_internal_trigger_happy_path(client: AsyncClient, mock_db: AsyncMo
     body = response.json()
     assert body["processed"] == 1
     assert body["remaining"] == 3
+
+
+@pytest.mark.asyncio
+async def test_trigger_geocoding_db_timeout_handled(client: AsyncClient, mock_db: AsyncMock):
+    """Database TimeoutError per-location should not crash the entire batch."""
+    mock_db.fetch.return_value = [
+        {"id": 100, "latitude": 40.7128, "longitude": -74.006},
+        {"id": 101, "latitude": 40.7130, "longitude": -74.007},
+    ]
+    mock_db.fetchrow.side_effect = [TimeoutError("query timed out"), None]
+    mock_db.fetchval.return_value = 10  # remaining
+
+    pelias_response = {
+        "features": [
+            {
+                "properties": {
+                    "label": "789 Park Ave",
+                    "street": "Park Ave",
+                    "housenumber": "789",
+                    "neighbourhood": "Upper East Side",
+                    "locality": "New York",
+                    "region": "New York",
+                    "country": "United States",
+                    "postalcode": "10065",
+                    "confidence": 0.92,
+                }
+            }
+        ]
+    }
+
+    mock_httpx_response = MagicMock()
+    mock_httpx_response.json.return_value = pelias_response
+    mock_httpx_response.raise_for_status = MagicMock()
+
+    with patch("app.routers.geocoding.httpx.AsyncClient") as mock_client_cls:
+        mock_client_instance = AsyncMock()
+        mock_client_instance.get.return_value = mock_httpx_response
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_client_instance
+
+        response = await client.post("/internal/geocoding/trigger?batch_size=2")
+
+    assert response.status_code == 200
+    body = response.json()
+    # First location timed out (0, 0), second processed via Pelias (1, 0)
+    assert body["processed"] == 1
+    assert body["remaining"] == 10
 
 
 @pytest.mark.asyncio

@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/v1/geocoding", tags=["Geocoding"])
 internal_router = APIRouter(prefix="/internal/geocoding", tags=["Internal"])
 
 PELIAS_REVERSE_PATH = "/v1/reverse"
-MAX_GEOCODE_CONCURRENCY = 20
+MAX_GEOCODE_CONCURRENCY = 5
 
 
 @router.get("/status", response_model=GeocodingStatus)
@@ -146,74 +146,77 @@ async def _process_location(
     lat = row["latitude"]
     lon = row["longitude"]
 
-    # Proximity dedup: skip if a nearby location (within 50m) is already geocoded.
-    # Uses EXISTS (stops at first hit) with the pre-computed l.geog column
-    # (GIST index) instead of COUNT(*) + ST_MakePoint to avoid full scans.
-    nearby = await db.fetchval(
-        "SELECT EXISTS("
-        "  SELECT 1 FROM public.geocoded_addresses ga "
-        "  INNER JOIN public.locations l ON l.id = ga.location_id "
-        "  WHERE ga.status = 'success' "
-        "  AND ST_DWithin("
-        "    l.geog, "
-        "    ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, "
-        "    50"
-        "  )"
-        ")",
+    try:
+        return await _process_location_inner(db, client, pelias_base_url, location_id, lat, lon)
+    except TimeoutError:
+        logger.warning("Database timeout for location %d, skipping", location_id)
+        return 0, 0
+    except Exception:
+        logger.warning("Unexpected error processing location %d", location_id, exc_info=True)
+        return 0, 0
+
+
+async def _process_location_inner(
+    db: Any,
+    client: httpx.AsyncClient,
+    pelias_base_url: str,
+    location_id: int,
+    lat: float,
+    lon: float,
+) -> tuple[int, int]:
+    """Core logic for processing a single location (may raise on timeout)."""
+    # Proximity dedup: fetch the nearest geocoded neighbour within 50 m
+    # in a single query (combines the EXISTS check and address fetch).
+    # Uses the pre-computed l.geog column with a GIST index.
+    neighbour = await db.fetchrow(
+        "SELECT ga.display_address, ga.street, ga.housenumber, ga.neighbourhood, "
+        "ga.locality, ga.region, ga.country, ga.postalcode, ga.confidence, "
+        "ga.raw_response "
+        "FROM public.geocoded_addresses ga "
+        "INNER JOIN public.locations l ON l.id = ga.location_id "
+        "WHERE ga.status = 'success' "
+        "AND ST_DWithin("
+        "  l.geog, "
+        "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, "
+        "  50"
+        ") "
+        "ORDER BY ST_Distance("
+        "  l.geog, "
+        "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography"
+        ") LIMIT 1",
         lon,
         lat,
     )
 
-    if nearby:
-        # Copy address from nearest geocoded neighbour
-        neighbour = await db.fetchrow(
-            "SELECT ga.display_address, ga.street, ga.housenumber, ga.neighbourhood, "
-            "ga.locality, ga.region, ga.country, ga.postalcode, ga.confidence, "
-            "ga.raw_response "
-            "FROM public.geocoded_addresses ga "
-            "INNER JOIN public.locations l ON l.id = ga.location_id "
-            "WHERE ga.status = 'success' "
-            "AND ST_DWithin("
-            "  l.geog, "
-            "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, "
-            "  50"
-            ") "
-            "ORDER BY ST_Distance("
-            "  l.geog, "
-            "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography"
-            ") LIMIT 1",
-            lon,
-            lat,
+    if neighbour:
+        n = dict(neighbour)
+        await db.execute(
+            "INSERT INTO public.geocoded_addresses "
+            "(location_id, source, display_address, street, housenumber, "
+            "neighbourhood, locality, region, country, postalcode, "
+            "confidence, status, raw_response) "
+            "VALUES ($1, 'owntracks', $2, $3, $4, $5, $6, $7, $8, $9, $10, 'success', $11) "
+            "ON CONFLICT (location_id) DO UPDATE SET "
+            "display_address = EXCLUDED.display_address, "
+            "street = EXCLUDED.street, housenumber = EXCLUDED.housenumber, "
+            "neighbourhood = EXCLUDED.neighbourhood, locality = EXCLUDED.locality, "
+            "region = EXCLUDED.region, country = EXCLUDED.country, "
+            "postalcode = EXCLUDED.postalcode, confidence = EXCLUDED.confidence, "
+            "status = EXCLUDED.status, raw_response = EXCLUDED.raw_response, "
+            "geocoded_at = CURRENT_TIMESTAMP",
+            location_id,
+            n["display_address"],
+            n["street"],
+            n["housenumber"],
+            n["neighbourhood"],
+            n["locality"],
+            n["region"],
+            n["country"],
+            n["postalcode"],
+            n["confidence"],
+            n["raw_response"],
         )
-        if neighbour:
-            n = dict(neighbour)
-            await db.execute(
-                "INSERT INTO public.geocoded_addresses "
-                "(location_id, source, display_address, street, housenumber, "
-                "neighbourhood, locality, region, country, postalcode, "
-                "confidence, status, raw_response) "
-                "VALUES ($1, 'owntracks', $2, $3, $4, $5, $6, $7, $8, $9, $10, 'success', $11) "
-                "ON CONFLICT (location_id) DO UPDATE SET "
-                "display_address = EXCLUDED.display_address, "
-                "street = EXCLUDED.street, housenumber = EXCLUDED.housenumber, "
-                "neighbourhood = EXCLUDED.neighbourhood, locality = EXCLUDED.locality, "
-                "region = EXCLUDED.region, country = EXCLUDED.country, "
-                "postalcode = EXCLUDED.postalcode, confidence = EXCLUDED.confidence, "
-                "status = EXCLUDED.status, raw_response = EXCLUDED.raw_response, "
-                "geocoded_at = CURRENT_TIMESTAMP",
-                location_id,
-                n["display_address"],
-                n["street"],
-                n["housenumber"],
-                n["neighbourhood"],
-                n["locality"],
-                n["region"],
-                n["country"],
-                n["postalcode"],
-                n["confidence"],
-                n["raw_response"],
-            )
-            return 0, 1
+        return 0, 1
 
     # Call Pelias reverse geocoder
     try:

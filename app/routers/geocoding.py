@@ -153,6 +153,10 @@ async def _process_location(
         return 0, 0
     except Exception:
         logger.warning("Unexpected error processing location %d", location_id, exc_info=True)
+        try:
+            await _upsert_geocoded(db, location_id, status="error")
+        except Exception:
+            logger.warning("Failed to upsert error status for location %d", location_id, exc_info=True)
         return 0, 0
 
 

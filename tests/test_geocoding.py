@@ -355,6 +355,63 @@ async def test_trigger_geocoding_db_timeout_handled(client: AsyncClient, mock_db
 
 
 @pytest.mark.asyncio
+async def test_trigger_geocoding_unexpected_error_upserts_error_status(client: AsyncClient, mock_db: AsyncMock):
+    """Non-timeout Exception per-location should upsert error status, not silently skip."""
+    mock_db.fetch.return_value = [
+        {"id": 200, "latitude": 40.7128, "longitude": -74.006},
+        {"id": 201, "latitude": 40.7130, "longitude": -74.007},
+    ]
+    # First location raises unexpected error; second returns no neighbour
+    mock_db.fetchrow.side_effect = [RuntimeError("unexpected"), None]
+    mock_db.fetchval.return_value = 8  # remaining
+
+    pelias_response = {
+        "features": [
+            {
+                "properties": {
+                    "label": "100 Main St",
+                    "street": "Main St",
+                    "housenumber": "100",
+                    "neighbourhood": "Downtown",
+                    "locality": "New York",
+                    "region": "New York",
+                    "country": "United States",
+                    "postalcode": "10001",
+                    "confidence": 0.9,
+                }
+            }
+        ]
+    }
+
+    mock_httpx_response = MagicMock()
+    mock_httpx_response.json.return_value = pelias_response
+    mock_httpx_response.raise_for_status = MagicMock()
+
+    with patch("app.routers.geocoding.httpx.AsyncClient") as mock_client_cls:
+        mock_client_instance = AsyncMock()
+        mock_client_instance.get.return_value = mock_httpx_response
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_client_instance
+
+        response = await client.post("/internal/geocoding/trigger?batch_size=2")
+
+    assert response.status_code == 200
+    body = response.json()
+    # First location errored (0, 0) with error upsert, second processed via Pelias (1, 0)
+    assert body["processed"] == 1
+    assert body["remaining"] == 8
+
+    # Verify error status was upserted for the failed location
+    error_upsert_calls = [
+        call
+        for call in mock_db.execute.call_args_list
+        if len(call.args) >= 3 and call.args[2] == "error" and call.args[1] == 200
+    ]
+    assert len(error_upsert_calls) == 1
+
+
+@pytest.mark.asyncio
 async def test_internal_trigger_disabled_by_config(config: Config, mock_db: AsyncMock):
     """Internal endpoint should return 404 when internal_endpoints_enabled is False."""
     from app.config import Config as ConfigCls

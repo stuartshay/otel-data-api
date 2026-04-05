@@ -45,7 +45,8 @@ class DatabaseService:
             password=self._config.db_password,
             min_size=self._config.db_pool_min,
             max_size=self._config.db_pool_max,
-            command_timeout=self._config.db_connect_timeout,
+            timeout=self._config.db_connect_timeout,
+            command_timeout=self._config.db_statement_timeout_ms / 1000.0,
         )
         logger.info(
             "Database pool initialized",

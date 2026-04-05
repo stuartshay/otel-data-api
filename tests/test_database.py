@@ -51,7 +51,8 @@ async def test_initialize_creates_pool(monkeypatch: pytest.MonkeyPatch, config):
     assert captured["password"] == config.db_password
     assert captured["min_size"] == config.db_pool_min
     assert captured["max_size"] == config.db_pool_max
-    assert captured["command_timeout"] == config.db_connect_timeout
+    assert captured["timeout"] == config.db_connect_timeout
+    assert captured["command_timeout"] == config.db_statement_timeout_ms / 1000.0
     assert "server_settings" not in captured
 
 

@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/v1/geocoding", tags=["Geocoding"])
 internal_router = APIRouter(prefix="/internal/geocoding", tags=["Internal"])
 
 PELIAS_REVERSE_PATH = "/v1/reverse"
-MAX_GEOCODE_CONCURRENCY = 5
+MAX_GEOCODE_CONCURRENCY = 20
 
 
 @router.get("/status", response_model=GeocodingStatus)
@@ -49,7 +49,7 @@ async def geocoding_status(request: Request) -> GeocodingStatus:
 @router.post("/trigger", response_model=GeocodingTriggerResponse)
 async def trigger_geocoding(
     request: Request,
-    batch_size: int = Query(100, ge=1, le=200, description="Number of locations to geocode in this batch"),
+    batch_size: int = Query(100, ge=1, le=500, description="Number of locations to geocode in this batch"),
     retry_failed: bool = Query(False, description="Re-process records with status no_coverage"),
     _user: dict = Depends(require_auth),
 ) -> GeocodingTriggerResponse:
@@ -146,21 +146,25 @@ async def _process_location(
     lat = row["latitude"]
     lon = row["longitude"]
 
-    # Proximity dedup: skip if a nearby location (within 50m) is already geocoded
+    # Proximity dedup: skip if a nearby location (within 50m) is already geocoded.
+    # Uses EXISTS (stops at first hit) with the pre-computed l.geog column
+    # (GIST index) instead of COUNT(*) + ST_MakePoint to avoid full scans.
     nearby = await db.fetchval(
-        "SELECT COUNT(*) FROM public.geocoded_addresses ga "
-        "INNER JOIN public.locations l ON l.id = ga.location_id "
-        "WHERE ga.status = 'success' "
-        "AND ST_DWithin("
-        "  ST_SetSRID(ST_MakePoint(l.longitude, l.latitude), 4326)::geography, "
-        "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, "
-        "  50"
+        "SELECT EXISTS("
+        "  SELECT 1 FROM public.geocoded_addresses ga "
+        "  INNER JOIN public.locations l ON l.id = ga.location_id "
+        "  WHERE ga.status = 'success' "
+        "  AND ST_DWithin("
+        "    l.geog, "
+        "    ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, "
+        "    50"
+        "  )"
         ")",
         lon,
         lat,
     )
 
-    if nearby and nearby > 0:
+    if nearby:
         # Copy address from nearest geocoded neighbour
         neighbour = await db.fetchrow(
             "SELECT ga.display_address, ga.street, ga.housenumber, ga.neighbourhood, "
@@ -170,12 +174,12 @@ async def _process_location(
             "INNER JOIN public.locations l ON l.id = ga.location_id "
             "WHERE ga.status = 'success' "
             "AND ST_DWithin("
-            "  ST_SetSRID(ST_MakePoint(l.longitude, l.latitude), 4326)::geography, "
+            "  l.geog, "
             "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, "
             "  50"
             ") "
             "ORDER BY ST_Distance("
-            "  ST_SetSRID(ST_MakePoint(l.longitude, l.latitude), 4326)::geography, "
+            "  l.geog, "
             "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography"
             ") LIMIT 1",
             lon,

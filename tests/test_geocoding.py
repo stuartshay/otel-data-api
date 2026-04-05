@@ -60,7 +60,7 @@ async def test_trigger_geocoding_pelias_success(client: AsyncClient, mock_db: As
     mock_db.fetch.return_value = [
         {"id": 1, "latitude": 40.7128, "longitude": -74.006},
     ]
-    mock_db.fetchval.side_effect = [0, 5]  # nearby count = 0, then remaining = 5
+    mock_db.fetchval.side_effect = [False, 5]  # nearby exists = False, then remaining = 5
 
     pelias_response = {
         "features": [
@@ -113,7 +113,7 @@ async def test_trigger_geocoding_pelias_no_features(client: AsyncClient, mock_db
     mock_db.fetch.return_value = [
         {"id": 2, "latitude": 0.0, "longitude": 0.0},
     ]
-    mock_db.fetchval.side_effect = [0, 100]  # nearby count = 0, then remaining
+    mock_db.fetchval.side_effect = [False, 100]  # nearby exists = False, then remaining
 
     pelias_response: dict[str, list[object]] = {"features": []}
     mock_httpx_response = MagicMock()
@@ -142,7 +142,7 @@ async def test_trigger_geocoding_dedup_from_neighbour(client: AsyncClient, mock_
         {"id": 3, "latitude": 40.7128, "longitude": -74.006},
     ]
     mock_db.fetchval.side_effect = [
-        1,  # nearby count > 0 → dedup
+        True,  # nearby exists → dedup
         50,  # remaining
     ]
     mock_db.fetchrow.return_value = {
@@ -202,7 +202,7 @@ async def test_trigger_geocoding_custom_batch_size(client: AsyncClient, mock_db:
 
 @pytest.mark.asyncio
 async def test_trigger_geocoding_batch_size_exceeds_public_limit(client: AsyncClient):
-    """Public endpoint rejects batch_size > 500."""
+    """Authenticated endpoint rejects batch_size > 500."""
     response = await client.post("/api/v1/geocoding/trigger?batch_size=501")
     assert response.status_code == 422
 
@@ -267,7 +267,7 @@ async def test_internal_trigger_happy_path(client: AsyncClient, mock_db: AsyncMo
     mock_db.fetch.return_value = [
         {"id": 10, "latitude": 40.7128, "longitude": -74.006},
     ]
-    mock_db.fetchval.side_effect = [0, 3]  # nearby count = 0, then remaining = 3
+    mock_db.fetchval.side_effect = [False, 3]  # nearby exists = False, then remaining = 3
 
     pelias_response = {
         "features": [

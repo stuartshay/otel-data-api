@@ -147,22 +147,24 @@ async def _process_location(
     lon = row["longitude"]
 
     # Proximity dedup: skip if a nearby location (within 50m) is already geocoded.
-    # Uses the pre-computed l.geog column (with GIST index) instead of
-    # ST_MakePoint(l.longitude, l.latitude) to avoid full sequential scans.
+    # Uses EXISTS (stops at first hit) with the pre-computed l.geog column
+    # (GIST index) instead of COUNT(*) + ST_MakePoint to avoid full scans.
     nearby = await db.fetchval(
-        "SELECT COUNT(*) FROM public.geocoded_addresses ga "
-        "INNER JOIN public.locations l ON l.id = ga.location_id "
-        "WHERE ga.status = 'success' "
-        "AND ST_DWithin("
-        "  l.geog, "
-        "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, "
-        "  50"
+        "SELECT EXISTS("
+        "  SELECT 1 FROM public.geocoded_addresses ga "
+        "  INNER JOIN public.locations l ON l.id = ga.location_id "
+        "  WHERE ga.status = 'success' "
+        "  AND ST_DWithin("
+        "    l.geog, "
+        "    ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, "
+        "    50"
+        "  )"
         ")",
         lon,
         lat,
     )
 
-    if nearby and nearby > 0:
+    if nearby:
         # Copy address from nearest geocoded neighbour
         neighbour = await db.fetchrow(
             "SELECT ga.display_address, ga.street, ga.housenumber, ga.neighbourhood, "

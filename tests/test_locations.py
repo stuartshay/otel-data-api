@@ -150,6 +150,10 @@ async def test_date_range_returns_min_max(client: AsyncClient, mock_db):
     assert "max_date" in data
     assert "2025-12-27" in data["min_date"]
     assert "2026-04-06" in data["max_date"]
+    query = mock_db.fetchrow.await_args.args[0]
+    assert "MIN(timestamp)" in query
+    assert "MAX(timestamp)" in query
+    assert "FROM public.locations" in query
 
 
 @pytest.mark.asyncio
@@ -160,3 +164,7 @@ async def test_date_range_empty_database(client: AsyncClient, mock_db):
 
     assert response.status_code == 404
     assert response.json() == {"detail": "No location data found"}
+    query = mock_db.fetchrow.await_args.args[0]
+    assert "MIN(timestamp)" in query
+    assert "MAX(timestamp)" in query
+    assert "FROM public.locations" in query

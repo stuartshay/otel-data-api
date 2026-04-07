@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.models import PaginatedResponse
 from app.models.geocoding import GeocodedAddress
-from app.models.locations import DeviceInfo, Location, LocationCount, LocationDetail
+from app.models.locations import DeviceInfo, Location, LocationCount, LocationDateRange, LocationDetail
 
 router = APIRouter(prefix="/api/v1/locations", tags=["Locations"])
 
@@ -111,6 +111,16 @@ async def list_devices(request: Request) -> list[DeviceInfo]:
     db = request.app.state.db
     rows = await db.fetch("SELECT DISTINCT device_id FROM public.locations ORDER BY device_id")
     return [DeviceInfo(device_id=row["device_id"]) for row in rows]
+
+
+@router.get("/date-range", response_model=LocationDateRange)
+async def location_date_range(request: Request) -> LocationDateRange:
+    """Get the earliest and latest location timestamps."""
+    db = request.app.state.db
+    row = await db.fetchrow("SELECT MIN(timestamp) AS min_date, MAX(timestamp) AS max_date FROM public.locations")
+    if not row or row["min_date"] is None:
+        raise HTTPException(status_code=404, detail="No location data found")
+    return LocationDateRange(min_date=row["min_date"], max_date=row["max_date"])
 
 
 @router.get("/count", response_model=LocationCount)

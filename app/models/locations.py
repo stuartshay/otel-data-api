@@ -119,3 +119,21 @@ class LocationCount(BaseModel):
     device_id: str | None = Field(default=None, description="Device ID filter applied, if any")
 
     model_config = {"json_schema_extra": {"examples": [{"count": 45883, "date": None, "device_id": "iphone_stuart"}]}}
+
+
+class LocationDateRange(BaseModel):
+    """Earliest and latest location timestamps in the database."""
+
+    min_date: datetime = Field(description="Timestamp of the earliest location record")
+    max_date: datetime = Field(description="Timestamp of the latest location record")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "min_date": "2025-12-27T08:44:52+00:00",
+                    "max_date": "2026-04-06T20:00:00+00:00",
+                }
+            ]
+        }
+    }

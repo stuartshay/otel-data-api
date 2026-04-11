@@ -160,6 +160,24 @@ class SportInfo(BaseModel):
     model_config = {"json_schema_extra": {"examples": [{"sport": "cycling", "activity_count": 20}]}}
 
 
+class GarminDateRange(BaseModel):
+    """Earliest and latest Garmin activity timestamps in the database."""
+
+    min_date: datetime = Field(description="Timestamp of the earliest Garmin activity")
+    max_date: datetime = Field(description="Timestamp of the latest Garmin activity")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "min_date": "2025-11-08T18:21:13+00:00",
+                    "max_date": "2026-04-06T20:00:00+00:00",
+                }
+            ]
+        }
+    }
+
+
 class GarminSyncResponse(BaseModel):
     """Response payload for Garmin on-demand sync trigger requests."""
 

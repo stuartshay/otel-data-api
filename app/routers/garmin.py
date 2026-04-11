@@ -13,7 +13,14 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import ValidationError
 
 from app.models import PaginatedResponse
-from app.models.garmin import GarminActivity, GarminChartPoint, GarminSyncResponse, GarminTrackPoint, SportInfo
+from app.models.garmin import (
+    GarminActivity,
+    GarminChartPoint,
+    GarminDateRange,
+    GarminSyncResponse,
+    GarminTrackPoint,
+    SportInfo,
+)
 
 router = APIRouter(prefix="/api/v1/garmin", tags=["Garmin"])
 logger = structlog.get_logger(__name__)
@@ -127,6 +134,18 @@ async def trigger_sync(
         status="error",
         message=f"Unexpected response from Garmin sync service: {upstream_response.status_code}",
     )
+
+
+@router.get("/date-range", response_model=GarminDateRange)
+async def garmin_date_range(request: Request) -> GarminDateRange:
+    """Get the earliest and latest Garmin activity timestamps."""
+    db = request.app.state.db
+    row = await db.fetchrow(
+        "SELECT MIN(start_time) AS min_date, MAX(start_time) AS max_date FROM public.garmin_activities"
+    )
+    if not row or row["min_date"] is None:
+        raise HTTPException(status_code=404, detail="No Garmin activity data found")
+    return GarminDateRange(min_date=row["min_date"], max_date=row["max_date"])
 
 
 @router.get("/activities", response_model=PaginatedResponse[GarminActivity])

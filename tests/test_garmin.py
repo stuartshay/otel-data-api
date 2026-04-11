@@ -555,3 +555,38 @@ async def test_trigger_sync_forwards_provided_sync_id(client: AsyncClient, monke
 
     assert response.status_code == 202
     assert captured["headers"]["X-Garmin-Sync-Id"] == provided_id
+
+
+@pytest.mark.asyncio
+async def test_garmin_date_range_returns_min_max(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = {
+        "min_date": "2025-11-08T18:21:13+00:00",
+        "max_date": "2026-04-06T20:00:00+00:00",
+    }
+
+    response = await client.get("/api/v1/garmin/date-range")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "min_date" in data
+    assert "max_date" in data
+    assert "2025-11-08" in data["min_date"]
+    assert "2026-04-06" in data["max_date"]
+    query = mock_db.fetchrow.await_args.args[0]
+    assert "MIN(start_time)" in query
+    assert "MAX(start_time)" in query
+    assert "FROM public.garmin_activities" in query
+
+
+@pytest.mark.asyncio
+async def test_garmin_date_range_empty_database(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = {"min_date": None, "max_date": None}
+
+    response = await client.get("/api/v1/garmin/date-range")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "No Garmin activity data found"}
+    query = mock_db.fetchrow.await_args.args[0]
+    assert "MIN(start_time)" in query
+    assert "MAX(start_time)" in query
+    assert "FROM public.garmin_activities" in query

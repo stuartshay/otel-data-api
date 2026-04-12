@@ -20,9 +20,9 @@ jobs:
           python-version: '3.14'
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Create venv and install dependencies
         run: |

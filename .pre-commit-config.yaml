@@ -18,14 +18,14 @@ repos:
 
     # Markdown linting
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.47.0
+    rev: v0.48.0
     hooks:
       - id: markdownlint
         name: Lint Markdown files
         args: ['--fix', '--config', '.markdownlint.yaml']
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.1
+    rev: v0.15.10
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix, --line-length=120]
@@ -51,7 +51,7 @@ repos:
         exclude: package.lock.json
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.1
+    rev: v1.20.0
     hooks:
       - id: mypy
         additional_dependencies:
@@ -65,12 +65,12 @@ repos:
       - id: pyright
 
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.11
+    rev: v1.7.12
     hooks:
       - id: actionlint
 
   - repo: https://github.com/streetsidesoftware/cspell-cli
-    rev: v9.6.0
+    rev: v10.0.0
     hooks:
       - id: cspell
         name: Spell check

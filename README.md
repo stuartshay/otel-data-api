@@ -7,6 +7,7 @@
 [![npm](https://img.shields.io/npm/v/@stuartshay/otel-data-types?logo=npm&label=otel-data-types)](https://www.npmjs.com/package/@stuartshay/otel-data-types)
 [![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-latest-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Renovate](https://img.shields.io/badge/Renovate-enabled-brightgreen?logo=renovatebot)](https://developer.mend.io/github/stuartshay/otel-data-api)
 
 FastAPI microservice providing read/write access to the OwnTracks + Garmin
 location database with PostGIS spatial queries.

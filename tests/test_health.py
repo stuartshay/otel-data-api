@@ -1,5 +1,7 @@
 """Tests for health endpoints."""
 
+import asyncio
+
 import pytest
 from httpx import AsyncClient
 
@@ -41,3 +43,18 @@ async def test_ready_db_down(client: AsyncClient, mock_db):
 
     assert response.status_code == 503
     assert response.json() == {"status": "not_ready", "error": "Connection refused"}
+
+
+@pytest.mark.asyncio
+async def test_ready_db_timeout(client: AsyncClient, mock_db):
+    async def slow_health_check():
+        await asyncio.sleep(10)
+
+    mock_db.health_check.side_effect = slow_health_check
+
+    response = await client.get("/ready")
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["status"] == "not_ready"
+    assert "timed out" in data["error"]

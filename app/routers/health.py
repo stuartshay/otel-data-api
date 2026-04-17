@@ -35,6 +35,16 @@ async def ready(request: Request) -> JSONResponse:
     try:
         db = request.app.state.db
         db_info = await asyncio.wait_for(db.health_check(), timeout=_READY_TIMEOUT_S)
+        if db_info.get("status") != "healthy":
+            return JSONResponse(
+                content={
+                    "status": "not_ready",
+                    "database": db_info,
+                    "version": request.app.version,
+                    "timestamp": _utc_now().isoformat(),
+                },
+                status_code=503,
+            )
         return JSONResponse(
             content={
                 "status": "ready",

@@ -166,23 +166,10 @@
       "automerge": false
     },
     {
-      "description": "Automerge minor and patch updates",
+      "description": "Automerge minor and patch updates (excludes Docker; handled by its own rule)",
       "matchUpdateTypes": ["minor", "patch"],
+      "excludeDatasources": ["docker"],
       "automerge": true
-    }
-  ],
-  "customManagers": [
-    {
-      "customType": "regex",
-      "description": "Update Python version in Dockerfile",
-      "fileMatch": [
-        "Dockerfile$"
-      ],
-      "matchStrings": [
-        "FROM python:(?<currentValue>[\\d.]+)-slim"
-      ],
-      "depNameTemplate": "python",
-      "datasourceTemplate": "docker"
     }
   ]
 }

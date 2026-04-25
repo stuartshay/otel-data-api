@@ -113,6 +113,95 @@ async def test_get_sports(client: AsyncClient, mock_db):
 
 
 @pytest.mark.asyncio
+async def test_activity_totals_empty(client: AsyncClient, mock_db):
+    mock_db.fetch.return_value = []
+
+    response = await client.get("/api/v1/garmin/activity-totals?period=month")
+
+    assert response.status_code == 200
+    assert response.json() == []
+    query, *params = mock_db.fetch.await_args.args
+    assert "DATE_TRUNC($1::text, start_time)" in query
+    assert "GROUP BY period_start" in query
+    assert "ORDER BY period_start ASC" in query
+    assert params == ["month"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("period", ["week", "month", "year"])
+async def test_activity_totals_returns_rows(client: AsyncClient, mock_db, period):
+    mock_db.fetch.return_value = [
+        {
+            "period_start": date(2025, 5, 1),
+            "activity_count": 12,
+            "total_distance_km": 632.4,
+            "total_duration_seconds": 90123.0,
+            "total_ascent_m": 4521.0,
+            "total_calories": 18234,
+        },
+        {
+            "period_start": date(2025, 6, 1),
+            "activity_count": 9,
+            "total_distance_km": 410.5,
+            "total_duration_seconds": 60000.0,
+            "total_ascent_m": 2300.0,
+            "total_calories": 12000,
+        },
+    ]
+
+    response = await client.get(f"/api/v1/garmin/activity-totals?period={period}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert body[0]["period_start"] == "2025-05-01"
+    assert body[0]["activity_count"] == 12
+    assert body[0]["total_distance_km"] == 632.4
+    query, *params = mock_db.fetch.await_args.args
+    assert "DATE_TRUNC($1::text, start_time)" in query
+    assert params[0] == period
+
+
+@pytest.mark.asyncio
+async def test_activity_totals_invalid_period(client: AsyncClient, mock_db):
+    response = await client.get("/api/v1/garmin/activity-totals?period=decade")
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_activity_totals_missing_period(client: AsyncClient, mock_db):
+    response = await client.get("/api/v1/garmin/activity-totals")
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_activity_totals_invalid_date(client: AsyncClient, mock_db):
+    response = await client.get("/api/v1/garmin/activity-totals?period=month&date_from=not-a-date")
+
+    assert response.status_code == 422
+    assert "Invalid date format" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_activity_totals_with_filters(client: AsyncClient, mock_db):
+    mock_db.fetch.return_value = []
+
+    response = await client.get(
+        "/api/v1/garmin/activity-totals?period=week&sport=cycling&date_from=2025-05-01&date_to=2025-12-31"
+    )
+
+    assert response.status_code == 200
+    query, *params = mock_db.fetch.await_args.args
+    assert "DATE_TRUNC($1::text, start_time)" in query
+    assert "sport = $2" in query
+    assert "start_time >= $3::date" in query
+    assert "start_time < ($4::date + INTERVAL '1 day')" in query
+    assert params == ["week", "cycling", date(2025, 5, 1), date(2025, 12, 31)]
+
+
+@pytest.mark.asyncio
 async def test_get_activity_success(client: AsyncClient, mock_db):
     mock_db.fetchrow.return_value = _activity_row()
 

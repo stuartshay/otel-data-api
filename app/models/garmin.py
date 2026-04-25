@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date as date_type
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -207,4 +208,32 @@ class GarminSyncResponse(BaseModel):
                 },
             ]
         },
+    }
+
+
+class GarminActivityTotal(BaseModel):
+    """Aggregated Garmin activity totals for a single time bucket (week/month/year)."""
+
+    period_start: date_type = Field(description="UTC start date of the period bucket (week/month/year)")
+    activity_count: int = Field(description="Number of activities recorded in the period")
+    total_distance_km: float | None = Field(default=None, description="Sum of distance in kilometres")
+    total_duration_seconds: int | None = Field(
+        default=None, description="Sum of active duration in seconds (excludes pauses)"
+    )
+    total_ascent_m: int | None = Field(default=None, description="Sum of elevation gain in meters")
+    total_calories: int | None = Field(default=None, description="Sum of calories burned")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "period_start": "2025-05-01",
+                    "activity_count": 12,
+                    "total_distance_km": 632.4,
+                    "total_duration_seconds": 90123,
+                    "total_ascent_m": 4521,
+                    "total_calories": 18234,
+                }
+            ]
+        }
     }

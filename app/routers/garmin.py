@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from app.models import PaginatedResponse
 from app.models.garmin import (
     GarminActivity,
+    GarminActivityTotal,
     GarminChartPoint,
     GarminDateRange,
     GarminSyncResponse,
@@ -227,6 +228,64 @@ async def list_sports(request: Request) -> list[SportInfo]:
         "GROUP BY sport ORDER BY activity_count DESC"
     )
     return [SportInfo(**dict(row)) for row in rows]
+
+
+@router.get(
+    "/activity-totals",
+    response_model=list[GarminActivityTotal],
+    responses={422: {"description": "Invalid query parameter"}},
+)
+async def list_activity_totals(
+    request: Request,
+    period: Literal["week", "month", "year"] = Query(
+        ..., description="Time bucket for aggregation: week, month, or year"
+    ),
+    sport: str | None = Query(None, description="Filter to a single sport (e.g. cycling)"),
+    date_from: str | None = Query(None, description="Inclusive lower bound on start_time (YYYY-MM-DD, UTC)"),
+    date_to: str | None = Query(None, description="Inclusive upper bound on start_time (YYYY-MM-DD, UTC)"),
+) -> list[GarminActivityTotal]:
+    """Aggregate Garmin activities into period totals (week / month / year).
+
+    Buckets are computed via ``DATE_TRUNC(period, start_time)`` and ordered by
+    ``period_start`` ascending. Each row contains activity count plus sum of
+    distance, duration, ascent, and calories. Empty result returns ``[]``.
+    """
+    db = request.app.state.db
+
+    conditions: list[str] = []
+    params: list = []
+    idx = 1
+
+    if sport:
+        conditions.append(f"sport = ${idx}")
+        params.append(sport)
+        idx += 1
+
+    if date_from:
+        conditions.append(f"start_time >= ${idx}::date")
+        params.append(_parse_date(date_from))
+        idx += 1
+
+    if date_to:
+        conditions.append(f"start_time < (${idx}::date + INTERVAL '1 day')")
+        params.append(_parse_date(date_to))
+        idx += 1
+
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    query = (
+        f"SELECT DATE_TRUNC('{period}', start_time)::date AS period_start, "
+        f"COUNT(*) AS activity_count, "
+        f"SUM(distance_km) AS total_distance_km, "
+        f"SUM(duration_seconds) AS total_duration_seconds, "
+        f"SUM(total_ascent_m) AS total_ascent_m, "
+        f"SUM(calories) AS total_calories "
+        f"FROM public.garmin_activities {where} "
+        f"GROUP BY period_start ORDER BY period_start ASC"
+    )
+
+    rows = await db.fetch(query, *params)
+    return [GarminActivityTotal(**dict(row)) for row in rows]
 
 
 @router.get(

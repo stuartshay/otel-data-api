@@ -120,10 +120,11 @@ async def test_activity_totals_empty(client: AsyncClient, mock_db):
 
     assert response.status_code == 200
     assert response.json() == []
-    query, *_params = mock_db.fetch.await_args.args
-    assert "DATE_TRUNC('month', start_time)" in query
+    query, *params = mock_db.fetch.await_args.args
+    assert "DATE_TRUNC($1::text, start_time)" in query
     assert "GROUP BY period_start" in query
     assert "ORDER BY period_start ASC" in query
+    assert params == ["month"]
 
 
 @pytest.mark.asyncio
@@ -156,8 +157,9 @@ async def test_activity_totals_returns_rows(client: AsyncClient, mock_db, period
     assert body[0]["period_start"] == "2025-05-01"
     assert body[0]["activity_count"] == 12
     assert body[0]["total_distance_km"] == 632.4
-    query, *_params = mock_db.fetch.await_args.args
-    assert f"DATE_TRUNC('{period}', start_time)" in query
+    query, *params = mock_db.fetch.await_args.args
+    assert "DATE_TRUNC($1::text, start_time)" in query
+    assert params[0] == period
 
 
 @pytest.mark.asyncio
@@ -192,10 +194,11 @@ async def test_activity_totals_with_filters(client: AsyncClient, mock_db):
 
     assert response.status_code == 200
     query, *params = mock_db.fetch.await_args.args
-    assert "sport = $1" in query
-    assert "start_time >= $2::date" in query
-    assert "start_time < ($3::date + INTERVAL '1 day')" in query
-    assert params == ["cycling", date(2025, 5, 1), date(2025, 12, 31)]
+    assert "DATE_TRUNC($1::text, start_time)" in query
+    assert "sport = $2" in query
+    assert "start_time >= $3::date" in query
+    assert "start_time < ($4::date + INTERVAL '1 day')" in query
+    assert params == ["week", "cycling", date(2025, 5, 1), date(2025, 12, 31)]
 
 
 @pytest.mark.asyncio

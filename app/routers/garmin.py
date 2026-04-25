@@ -252,9 +252,11 @@ async def list_activity_totals(
     """
     db = request.app.state.db
 
+    # Period is the first positional parameter so the entire query stays
+    # parameterized (no string interpolation of user-controlled values into SQL).
+    params: list = [period]
     conditions: list[str] = []
-    params: list = []
-    idx = 1
+    idx = 2
 
     if sport:
         conditions.append(f"sport = ${idx}")
@@ -274,14 +276,14 @@ async def list_activity_totals(
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
     query = (
-        f"SELECT DATE_TRUNC('{period}', start_time)::date AS period_start, "
-        f"COUNT(*) AS activity_count, "
-        f"SUM(distance_km) AS total_distance_km, "
-        f"SUM(duration_seconds) AS total_duration_seconds, "
-        f"SUM(total_ascent_m) AS total_ascent_m, "
-        f"SUM(calories) AS total_calories "
+        "SELECT DATE_TRUNC($1::text, start_time)::date AS period_start, "
+        "COUNT(*) AS activity_count, "
+        "SUM(distance_km) AS total_distance_km, "
+        "SUM(duration_seconds) AS total_duration_seconds, "
+        "SUM(total_ascent_m) AS total_ascent_m, "
+        "SUM(calories) AS total_calories "
         f"FROM public.garmin_activities {where} "
-        f"GROUP BY period_start ORDER BY period_start ASC"
+        "GROUP BY period_start ORDER BY period_start ASC"
     )
 
     rows = await db.fetch(query, *params)

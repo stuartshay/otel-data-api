@@ -217,10 +217,10 @@ class GarminActivityTotal(BaseModel):
     period_start: date_type = Field(description="UTC start date of the period bucket (week/month/year)")
     activity_count: int = Field(description="Number of activities recorded in the period")
     total_distance_km: float | None = Field(default=None, description="Sum of distance in kilometres")
-    total_duration_seconds: float | None = Field(
+    total_duration_seconds: int | None = Field(
         default=None, description="Sum of active duration in seconds (excludes pauses)"
     )
-    total_ascent_m: float | None = Field(default=None, description="Sum of elevation gain in meters")
+    total_ascent_m: int | None = Field(default=None, description="Sum of elevation gain in meters")
     total_calories: int | None = Field(default=None, description="Sum of calories burned")
 
     model_config = {

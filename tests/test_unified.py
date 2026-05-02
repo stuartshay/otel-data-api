@@ -77,20 +77,28 @@ async def test_list_unified_gps_with_filters(client: AsyncClient, mock_db):
 
 @pytest.mark.asyncio
 async def test_daily_summary_with_filters(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 1
     mock_db.fetch.return_value = [_daily_summary_row()]
 
-    response = await client.get("/api/v1/gps/daily-summary?date_from=2026-02-01&date_to=2026-02-12&limit=7")
+    response = await client.get("/api/v1/gps/daily-summary?date_from=2026-02-01&date_to=2026-02-12&limit=7&offset=14")
 
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 1
-    assert data[0]["activity_date"] == "2026-02-11"
-    assert data[0]["garmin_sport"] == "cycling"
+    assert data["total"] == 1
+    assert data["limit"] == 7
+    assert data["offset"] == 14
+    assert len(data["items"]) == 1
+    assert data["items"][0]["activity_date"] == "2026-02-11"
+    assert data["items"][0]["garmin_sport"] == "cycling"
+
+    count_query = mock_db.fetchval.await_args.args[0]
+    assert "activity_date >= $1::date" in count_query
+    assert "activity_date <= $2::date" in count_query
 
     query, *params = mock_db.fetch.await_args.args
     assert "activity_date >= $1::date" in query
-    assert "activity_date <= $2::date" in query
-    assert params == [date(2026, 2, 1), date(2026, 2, 12), 7]
+    assert "LIMIT $3 OFFSET $4" in query
+    assert params == [date(2026, 2, 1), date(2026, 2, 12), 7, 14]
 
 
 @pytest.mark.asyncio
@@ -114,17 +122,50 @@ async def test_list_unified_gps_default_lookback(client: AsyncClient, mock_db):
 @pytest.mark.asyncio
 async def test_daily_summary_default_lookback(client: AsyncClient, mock_db):
     """When no date filters are provided, a 90-day lookback is applied."""
+    mock_db.fetchval.return_value = 0
     mock_db.fetch.return_value = []
 
     response = await client.get("/api/v1/gps/daily-summary")
 
     assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0, "limit": 30, "offset": 0}
+
+    count_query = mock_db.fetchval.await_args.args[0]
+    assert "activity_date >= $1::date" in count_query
 
     query, *params = mock_db.fetch.await_args.args
     assert "activity_date >= $1::date" in query
 
     expected_date = date.today() - timedelta(days=90)
     assert params[0] == expected_date
+
+
+@pytest.mark.asyncio
+async def test_daily_summary_date_range_returns_min_max(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = {
+        "min_date": date(2024, 1, 15),
+        "max_date": date(2026, 4, 6),
+    }
+
+    response = await client.get("/api/v1/gps/daily-summary/date-range")
+
+    assert response.status_code == 200
+    assert response.json() == {"min_date": "2024-01-15", "max_date": "2026-04-06"}
+
+    query = mock_db.fetchrow.await_args.args[0]
+    assert "MIN(activity_date)" in query
+    assert "MAX(activity_date)" in query
+    assert "FROM daily_activity_summary" in query
+
+
+@pytest.mark.asyncio
+async def test_daily_summary_date_range_empty_database(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = {"min_date": None, "max_date": None}
+
+    response = await client.get("/api/v1/gps/daily-summary/date-range")
+
+    assert response.status_code == 404
+    assert "No daily summary data found" in response.json()["detail"]
 
 
 @pytest.mark.asyncio

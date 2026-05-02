@@ -8,7 +8,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.models import PaginatedResponse
-from app.models.spatial import DailyActivitySummary, UnifiedGpsPoint
+from app.models.spatial import DailyActivitySummary, DailySummaryDateRange, UnifiedGpsPoint
 
 router = APIRouter(prefix="/api/v1/gps", tags=["Unified GPS"])
 
@@ -129,7 +129,7 @@ async def list_unified_gps(
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
 
 
-@router.get("/daily-summary", response_model=list[DailyActivitySummary])
+@router.get("/daily-summary", response_model=PaginatedResponse[DailyActivitySummary])
 async def daily_summary(
     request: Request,
     date_from: str | None = Query(
@@ -138,8 +138,9 @@ async def daily_summary(
         examples=["2026-02-01"],
     ),
     date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]),
-    limit: int = Query(30, ge=1, le=365, description="Maximum number of daily summaries to return"),
-) -> list[DailyActivitySummary]:
+    limit: int = Query(30, ge=1, le=365, description="Maximum number of daily summaries to return per page"),
+    offset: int = Query(0, ge=0, description="Number of daily summaries to skip for pagination"),
+) -> PaginatedResponse[DailyActivitySummary]:
     """Query the daily_activity_summary view for aggregated daily stats.
 
     Returns per-day aggregates including OwnTracks point counts, battery stats,
@@ -172,15 +173,31 @@ async def daily_summary(
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
+    total = await db.fetchval(f"SELECT COUNT(*) FROM daily_activity_summary {where}", *params)
+
     rows = await db.fetch(
         f"SELECT activity_date::text AS activity_date, owntracks_device, "
         f"owntracks_points, min_battery, max_battery, avg_accuracy, "
         f"garmin_sport, garmin_activities, total_distance_km, "
         f"total_duration_seconds, avg_heart_rate, total_calories "
         f"FROM daily_activity_summary {where} "
-        f"ORDER BY activity_date DESC LIMIT ${idx}",
+        f"ORDER BY activity_date DESC LIMIT ${idx} OFFSET ${idx + 1}",
         *params,
         limit,
+        offset,
     )
 
-    return [DailyActivitySummary(**dict(row)) for row in rows]
+    items = [DailyActivitySummary(**dict(row)) for row in rows]
+    return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/daily-summary/date-range", response_model=DailySummaryDateRange)
+async def daily_summary_date_range(request: Request) -> DailySummaryDateRange:
+    """Get the earliest and latest activity dates available in the daily summary view."""
+    db = request.app.state.db
+    row = await db.fetchrow(
+        "SELECT MIN(activity_date) AS min_date, MAX(activity_date) AS max_date FROM daily_activity_summary"
+    )
+    if not row or row["min_date"] is None:
+        raise HTTPException(status_code=404, detail="No daily summary data found")
+    return DailySummaryDateRange(min_date=row["min_date"], max_date=row["max_date"])

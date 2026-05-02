@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -73,6 +73,24 @@ class DailyActivitySummary(BaseModel):
                     "total_duration_seconds": 6932,
                     "avg_heart_rate": 142.0,
                     "total_calories": 1689,
+                }
+            ]
+        }
+    }
+
+
+class DailySummaryDateRange(BaseModel):
+    """Earliest and latest activity dates available in the daily activity summary."""
+
+    min_date: date = Field(description="Earliest activity date with daily summary data")
+    max_date: date = Field(description="Latest activity date with daily summary data")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "min_date": "2024-01-15",
+                    "max_date": "2026-04-06",
                 }
             ]
         }

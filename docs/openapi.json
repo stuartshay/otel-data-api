@@ -20,6 +20,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "type": "object",
                   "title": "Response Health Health Get"
                 }
@@ -129,9 +130,11 @@
               "type": "integer",
               "maximum": 1000,
               "minimum": 1,
+              "description": "Maximum number of locations to return per page",
               "default": 50,
               "title": "Limit"
-            }
+            },
+            "description": "Maximum number of locations to return per page"
           },
           {
             "name": "offset",
@@ -140,9 +143,11 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
+              "description": "Number of locations to skip for pagination",
               "default": 0,
               "title": "Offset"
-            }
+            },
+            "description": "Number of locations to skip for pagination"
           },
           {
             "name": "sort",
@@ -166,9 +171,11 @@
                 "desc"
               ],
               "type": "string",
+              "description": "Sort direction: asc (oldest first) or desc (newest first)",
               "default": "desc",
               "title": "Order"
-            }
+            },
+            "description": "Sort direction: asc (oldest first) or desc (newest first)"
           }
         ],
         "responses": {
@@ -214,6 +221,28 @@
                   },
                   "type": "array",
                   "title": "Response List Devices Api V1 Locations Devices Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/locations/date-range": {
+      "get": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "Location Date Range",
+        "description": "Get the earliest and latest location timestamps.",
+        "operationId": "location_date_range_api_v1_locations_date_range_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationDateRange"
                 }
               }
             }
@@ -312,8 +341,10 @@
             "required": true,
             "schema": {
               "type": "integer",
+              "description": "Unique location record ID",
               "title": "Location Id"
-            }
+            },
+            "description": "Unique location record ID"
           }
         ],
         "responses": {
@@ -333,6 +364,150 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garmin/sync": {
+      "post": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "Trigger Sync",
+        "description": "Trigger an on-demand Garmin sync via the in-cluster garmin-sync service.",
+        "operationId": "trigger_sync_api_v1_garmin_sync_post",
+        "parameters": [
+          {
+            "name": "lookback",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional activity lookback override. Non-negative integer.",
+              "title": "Lookback"
+            },
+            "description": "Optional activity lookback override. Non-negative integer."
+          },
+          {
+            "name": "window_hours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional sync window in hours. Positive integer.",
+              "title": "Window Hours"
+            },
+            "description": "Optional sync window in hours. Positive integer."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GarminSyncResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid sync trigger parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GarminSyncResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sync already in progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GarminSyncResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad gateway from Garmin sync service",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GarminSyncResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Garmin sync service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GarminSyncResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Garmin sync service timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GarminSyncResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garmin/date-range": {
+      "get": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "Garmin Date Range",
+        "description": "Get the earliest and latest Garmin activity timestamps.",
+        "operationId": "garmin_date_range_api_v1_garmin_date_range_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GarminDateRange"
                 }
               }
             }
@@ -420,9 +595,11 @@
               "type": "integer",
               "maximum": 1000,
               "minimum": 1,
+              "description": "Maximum number of activities to return per page",
               "default": 50,
               "title": "Limit"
-            }
+            },
+            "description": "Maximum number of activities to return per page"
           },
           {
             "name": "offset",
@@ -431,9 +608,11 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
+              "description": "Number of activities to skip for pagination",
               "default": 0,
               "title": "Offset"
-            }
+            },
+            "description": "Number of activities to skip for pagination"
           },
           {
             "name": "sort",
@@ -457,9 +636,11 @@
                 "desc"
               ],
               "type": "string",
+              "description": "Sort direction: asc (oldest first) or desc (newest first)",
               "default": "desc",
               "title": "Order"
-            }
+            },
+            "description": "Sort direction: asc (oldest first) or desc (newest first)"
           }
         ],
         "responses": {
@@ -569,7 +750,7 @@
           "Garmin"
         ],
         "summary": "List Track Points",
-        "description": "List track points for a specific activity.\n\nReturns GPS track points with altitude, speed, heart rate, and cadence data.\nSupports up to 10,000 points per request for full activity visualization.",
+        "description": "List track points for a specific activity.\n\nReturns GPS track points with altitude, speed, heart rate, and cadence data.\nUse the `simplify` parameter to apply Douglas-Peucker line simplification\nfor efficient map rendering of the complete route.",
         "operationId": "list_track_points_api_v1_garmin_activities__activity_id__tracks_get",
         "parameters": [
           {
@@ -592,11 +773,13 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 10000,
+              "maximum": 25000,
               "minimum": 1,
+              "description": "Maximum number of track points to return per page",
               "default": 500,
               "title": "Limit"
-            }
+            },
+            "description": "Maximum number of track points to return per page"
           },
           {
             "name": "offset",
@@ -605,9 +788,11 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
+              "description": "Number of track points to skip for pagination",
               "default": 0,
               "title": "Offset"
-            }
+            },
+            "description": "Number of track points to skip for pagination"
           },
           {
             "name": "sort",
@@ -631,9 +816,31 @@
                 "desc"
               ],
               "type": "string",
+              "description": "Sort direction: asc (earliest first) or desc (latest first)",
               "default": "asc",
               "title": "Order"
-            }
+            },
+            "description": "Sort direction: asc (earliest first) or desc (latest first)"
+          },
+          {
+            "name": "simplify",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 0.01,
+                  "minimum": 1e-06
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Douglas-Peucker simplification tolerance in degrees. When set, returns the full route simplified via PostGIS ST_Simplify, ignoring limit/offset. Recommended: 0.00001 (~1m), 0.00005 (~5m).",
+              "title": "Simplify"
+            },
+            "description": "Douglas-Peucker simplification tolerance in degrees. When set, returns the full route simplified via PostGIS ST_Simplify, ignoring limit/offset. Recommended: 0.00001 (~1m), 0.00005 (~5m)."
           }
         ],
         "responses": {
@@ -663,13 +870,68 @@
         }
       }
     },
+    "/api/v1/garmin/activities/{activity_id}/chart-data": {
+      "get": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "Get Chart Data",
+        "description": "Return all track points for chart rendering (no pagination).\n\nProvides the complete time-series data (altitude, speed, heart rate, cadence)\nfor an activity, ordered by timestamp. Uniqueness is guaranteed by the\nUNIQUE(activity_id, timestamp) database constraint.",
+        "operationId": "get_chart_data_api_v1_garmin_activities__activity_id__chart_data_get",
+        "parameters": [
+          {
+            "name": "activity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Garmin activity ID",
+              "examples": [
+                "20932993811"
+              ],
+              "title": "Activity Id"
+            },
+            "description": "Garmin activity ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GarminChartPoint"
+                  },
+                  "title": "Response Get Chart Data Api V1 Garmin Activities  Activity Id  Chart Data Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Activity not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/gps/unified": {
       "get": {
         "tags": [
           "Unified GPS"
         ],
         "summary": "List Unified Gps",
-        "description": "Query the unified_gps_points view combining OwnTracks + Garmin data.\n\nMerges OwnTracks location data and Garmin track points into a single\nchronological stream. Filter by data source or date range.",
+        "description": "Query the unified_gps_points view combining OwnTracks + Garmin data.\n\nMerges OwnTracks location data and Garmin track points into a single\nchronological stream. Filter by data source or date range.\n\nWhen no date filters are specified (both date_from and date_to omitted),\ndefaults to the last 90 days to avoid expensive full-table scans on the\nunderlying 4M+ row tables.",
         "operationId": "list_unified_gps_api_v1_gps_unified_get",
         "parameters": [
           {
@@ -706,13 +968,13 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter from date (YYYY-MM-DD)",
+              "description": "Filter from date (YYYY-MM-DD). Defaults to 90 days ago when both date_from and date_to are omitted.",
               "examples": [
                 "2026-02-01"
               ],
               "title": "Date From"
             },
-            "description": "Filter from date (YYYY-MM-DD)"
+            "description": "Filter from date (YYYY-MM-DD). Defaults to 90 days ago when both date_from and date_to are omitted."
           },
           {
             "name": "date_to",
@@ -743,9 +1005,11 @@
               "type": "integer",
               "maximum": 5000,
               "minimum": 1,
+              "description": "Maximum number of GPS points to return per page",
               "default": 100,
               "title": "Limit"
-            }
+            },
+            "description": "Maximum number of GPS points to return per page"
           },
           {
             "name": "offset",
@@ -754,9 +1018,11 @@
             "schema": {
               "type": "integer",
               "minimum": 0,
+              "description": "Number of GPS points to skip for pagination",
               "default": 0,
               "title": "Offset"
-            }
+            },
+            "description": "Number of GPS points to skip for pagination"
           },
           {
             "name": "order",
@@ -768,9 +1034,35 @@
                 "desc"
               ],
               "type": "string",
+              "description": "Sort direction: asc (oldest first) or desc (newest first)",
               "default": "desc",
               "title": "Order"
-            }
+            },
+            "description": "Sort direction: asc (oldest first) or desc (newest first)"
+          },
+          {
+            "name": "exclude_stationary",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Exclude stationary points where speed_kmh = 0",
+              "default": false,
+              "title": "Exclude Stationary"
+            },
+            "description": "Exclude stationary points where speed_kmh = 0"
+          },
+          {
+            "name": "deduplicate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Remove points with duplicate coordinates (rounded to ~11m precision)",
+              "default": false,
+              "title": "Deduplicate"
+            },
+            "description": "Remove points with duplicate coordinates (rounded to ~11m precision)"
           }
         ],
         "responses": {
@@ -803,7 +1095,7 @@
           "Unified GPS"
         ],
         "summary": "Daily Summary",
-        "description": "Query the daily_activity_summary view for aggregated daily stats.\n\nReturns per-day aggregates including OwnTracks point counts, battery stats,\nand Garmin activity metrics (distance, duration, heart rate, calories).",
+        "description": "Query the daily_activity_summary view for aggregated daily stats.\n\nReturns per-day aggregates including OwnTracks point counts, battery stats,\nand Garmin activity metrics (distance, duration, heart rate, calories).\n\nWhen no date filters are specified (both date_from and date_to omitted),\ndefaults to the last 90 days to avoid expensive full-table aggregations.",
         "operationId": "daily_summary_api_v1_gps_daily_summary_get",
         "parameters": [
           {
@@ -819,13 +1111,13 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter from date (YYYY-MM-DD)",
+              "description": "Filter from date (YYYY-MM-DD). Defaults to 90 days ago when both date_from and date_to are omitted.",
               "examples": [
                 "2026-02-01"
               ],
               "title": "Date From"
             },
-            "description": "Filter from date (YYYY-MM-DD)"
+            "description": "Filter from date (YYYY-MM-DD). Defaults to 90 days ago when both date_from and date_to are omitted."
           },
           {
             "name": "date_to",
@@ -856,9 +1148,24 @@
               "type": "integer",
               "maximum": 365,
               "minimum": 1,
+              "description": "Maximum number of daily summaries to return per page",
               "default": 30,
               "title": "Limit"
-            }
+            },
+            "description": "Maximum number of daily summaries to return per page"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of daily summaries to skip for pagination",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Number of daily summaries to skip for pagination"
           }
         ],
         "responses": {
@@ -867,11 +1174,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/DailyActivitySummary"
-                  },
-                  "title": "Response Daily Summary Api V1 Gps Daily Summary Get"
+                  "$ref": "#/components/schemas/PaginatedResponse_DailyActivitySummary_"
                 }
               }
             }
@@ -882,6 +1185,28 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gps/daily-summary/date-range": {
+      "get": {
+        "tags": [
+          "Unified GPS"
+        ],
+        "summary": "Daily Summary Date Range",
+        "description": "Get the earliest and latest activity dates available in the daily summary view.",
+        "operationId": "daily_summary_date_range_api_v1_gps_daily_summary_date_range_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailySummaryDateRange"
                 }
               }
             }
@@ -975,8 +1300,10 @@
             "required": true,
             "schema": {
               "type": "integer",
+              "description": "Unique reference location ID",
               "title": "Location Id"
-            }
+            },
+            "description": "Unique reference location ID"
           }
         ],
         "responses": {
@@ -1021,8 +1348,10 @@
             "required": true,
             "schema": {
               "type": "integer",
+              "description": "Unique reference location ID",
               "title": "Location Id"
-            }
+            },
+            "description": "Unique reference location ID"
           }
         ],
         "requestBody": {
@@ -1077,8 +1406,10 @@
             "required": true,
             "schema": {
               "type": "integer",
+              "description": "Unique reference location ID",
               "title": "Location Id"
-            }
+            },
+            "description": "Unique reference location ID"
           }
         ],
         "responses": {
@@ -1178,9 +1509,11 @@
               "type": "integer",
               "maximum": 5000,
               "minimum": 1,
+              "description": "Maximum number of nearby points to return",
               "default": 100,
               "title": "Limit"
-            }
+            },
+            "description": "Maximum number of nearby points to return"
           }
         ],
         "responses": {
@@ -1353,9 +1686,11 @@
               "type": "integer",
               "maximum": 5000,
               "minimum": 1,
+              "description": "Maximum number of points to return within the reference area",
               "default": 100,
               "title": "Limit"
-            }
+            },
+            "description": "Maximum number of points to return within the reference area"
           }
         ],
         "responses": {
@@ -1384,6 +1719,93 @@
           }
         }
       }
+    },
+    "/api/v1/geocoding/status": {
+      "get": {
+        "tags": [
+          "Geocoding"
+        ],
+        "summary": "Geocoding Status",
+        "description": "Get geocoding coverage statistics.",
+        "operationId": "geocoding_status_api_v1_geocoding_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeocodingStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/geocoding/trigger": {
+      "post": {
+        "tags": [
+          "Geocoding"
+        ],
+        "summary": "Trigger Geocoding",
+        "description": "Trigger batch reverse-geocoding of un-geocoded location records (auth required).\n\nFetches the next batch of locations without a geocoded address and calls\nthe Pelias reverse-geocoder for each one.  Duplicate nearby coordinates\n(within 50 m) that already have a geocoded address are skipped.",
+        "operationId": "trigger_geocoding_api_v1_geocoding_trigger_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "batch_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "Number of locations to geocode in this batch",
+              "default": 100,
+              "title": "Batch Size"
+            },
+            "description": "Number of locations to geocode in this batch"
+          },
+          {
+            "name": "retry_failed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Re-process records with status no_coverage",
+              "default": false,
+              "title": "Retry Failed"
+            },
+            "description": "Re-process records with status no_coverage"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeocodingTriggerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1399,7 +1821,8 @@
                 "type": "null"
               }
             ],
-            "title": "Activity Date"
+            "title": "Activity Date",
+            "description": "Calendar date in YYYY-MM-DD format"
           },
           "owntracks_device": {
             "anyOf": [
@@ -1410,7 +1833,8 @@
                 "type": "null"
               }
             ],
-            "title": "Owntracks Device"
+            "title": "Owntracks Device",
+            "description": "OwnTracks device that reported data for this day"
           },
           "owntracks_points": {
             "anyOf": [
@@ -1421,7 +1845,8 @@
                 "type": "null"
               }
             ],
-            "title": "Owntracks Points"
+            "title": "Owntracks Points",
+            "description": "Number of OwnTracks GPS points recorded"
           },
           "min_battery": {
             "anyOf": [
@@ -1432,7 +1857,8 @@
                 "type": "null"
               }
             ],
-            "title": "Min Battery"
+            "title": "Min Battery",
+            "description": "Lowest device battery percentage observed"
           },
           "max_battery": {
             "anyOf": [
@@ -1443,7 +1869,8 @@
                 "type": "null"
               }
             ],
-            "title": "Max Battery"
+            "title": "Max Battery",
+            "description": "Highest device battery percentage observed"
           },
           "avg_accuracy": {
             "anyOf": [
@@ -1454,7 +1881,8 @@
                 "type": "null"
               }
             ],
-            "title": "Avg Accuracy"
+            "title": "Avg Accuracy",
+            "description": "Mean horizontal GPS accuracy in meters"
           },
           "garmin_sport": {
             "anyOf": [
@@ -1465,7 +1893,8 @@
                 "type": "null"
               }
             ],
-            "title": "Garmin Sport"
+            "title": "Garmin Sport",
+            "description": "Garmin sport type for activities on this day"
           },
           "garmin_activities": {
             "anyOf": [
@@ -1476,7 +1905,8 @@
                 "type": "null"
               }
             ],
-            "title": "Garmin Activities"
+            "title": "Garmin Activities",
+            "description": "Number of Garmin activities recorded"
           },
           "total_distance_km": {
             "anyOf": [
@@ -1487,7 +1917,8 @@
                 "type": "null"
               }
             ],
-            "title": "Total Distance Km"
+            "title": "Total Distance Km",
+            "description": "Combined Garmin activity distance in km"
           },
           "total_duration_seconds": {
             "anyOf": [
@@ -1498,7 +1929,8 @@
                 "type": "null"
               }
             ],
-            "title": "Total Duration Seconds"
+            "title": "Total Duration Seconds",
+            "description": "Combined Garmin activity duration in seconds"
           },
           "avg_heart_rate": {
             "anyOf": [
@@ -1509,7 +1941,8 @@
                 "type": "null"
               }
             ],
-            "title": "Avg Heart Rate"
+            "title": "Avg Heart Rate",
+            "description": "Mean heart rate across Garmin activities in BPM"
           },
           "total_calories": {
             "anyOf": [
@@ -1520,11 +1953,13 @@
                 "type": "null"
               }
             ],
-            "title": "Total Calories"
+            "title": "Total Calories",
+            "description": "Total calories burned across Garmin activities"
           }
         },
         "type": "object",
         "title": "DailyActivitySummary",
+        "description": "Per-day aggregate combining OwnTracks location stats and Garmin activity metrics.",
         "examples": [
           {
             "activity_date": "2026-02-11",
@@ -1542,11 +1977,41 @@
           }
         ]
       },
+      "DailySummaryDateRange": {
+        "properties": {
+          "min_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Min Date",
+            "description": "Earliest activity date with daily summary data"
+          },
+          "max_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Max Date",
+            "description": "Latest activity date with daily summary data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "min_date",
+          "max_date"
+        ],
+        "title": "DailySummaryDateRange",
+        "description": "Earliest and latest activity dates available in the daily activity summary.",
+        "examples": [
+          {
+            "max_date": "2026-04-06",
+            "min_date": "2024-01-15"
+          }
+        ]
+      },
       "DeviceInfo": {
         "properties": {
           "device_id": {
             "type": "string",
-            "title": "Device Id"
+            "title": "Device Id",
+            "description": "OwnTracks device identifier"
           }
         },
         "type": "object",
@@ -1554,6 +2019,7 @@
           "device_id"
         ],
         "title": "DeviceInfo",
+        "description": "Distinct OwnTracks device identifier.",
         "examples": [
           {
             "device_id": "iphone_stuart"
@@ -1564,23 +2030,28 @@
         "properties": {
           "distance_meters": {
             "type": "number",
-            "title": "Distance Meters"
+            "title": "Distance Meters",
+            "description": "Geodesic distance between the two points in meters"
           },
           "from_lat": {
             "type": "number",
-            "title": "From Lat"
+            "title": "From Lat",
+            "description": "Origin latitude in decimal degrees"
           },
           "from_lon": {
             "type": "number",
-            "title": "From Lon"
+            "title": "From Lon",
+            "description": "Origin longitude in decimal degrees"
           },
           "to_lat": {
             "type": "number",
-            "title": "To Lat"
+            "title": "To Lat",
+            "description": "Destination latitude in decimal degrees"
           },
           "to_lon": {
             "type": "number",
-            "title": "To Lon"
+            "title": "To Lon",
+            "description": "Destination longitude in decimal degrees"
           }
         },
         "type": "object",
@@ -1592,6 +2063,7 @@
           "to_lon"
         ],
         "title": "DistanceResult",
+        "description": "Geodesic distance calculation result between two geographic points.",
         "examples": [
           {
             "distance_meters": 5309.71,
@@ -1606,11 +2078,13 @@
         "properties": {
           "activity_id": {
             "type": "string",
-            "title": "Activity Id"
+            "title": "Activity Id",
+            "description": "Garmin Connect activity identifier"
           },
           "sport": {
             "type": "string",
-            "title": "Sport"
+            "title": "Sport",
+            "description": "Primary sport type (e.g. cycling, running)"
           },
           "sub_sport": {
             "anyOf": [
@@ -1621,7 +2095,8 @@
                 "type": "null"
               }
             ],
-            "title": "Sub Sport"
+            "title": "Sub Sport",
+            "description": "Sub-sport classification (e.g. road, trail)"
           },
           "start_time": {
             "anyOf": [
@@ -1633,7 +2108,8 @@
                 "type": "null"
               }
             ],
-            "title": "Start Time"
+            "title": "Start Time",
+            "description": "Activity start time in UTC"
           },
           "end_time": {
             "anyOf": [
@@ -1645,7 +2121,8 @@
                 "type": "null"
               }
             ],
-            "title": "End Time"
+            "title": "End Time",
+            "description": "Activity end time in UTC"
           },
           "distance_km": {
             "anyOf": [
@@ -1656,7 +2133,8 @@
                 "type": "null"
               }
             ],
-            "title": "Distance Km"
+            "title": "Distance Km",
+            "description": "Total distance in kilometres"
           },
           "duration_seconds": {
             "anyOf": [
@@ -1667,7 +2145,8 @@
                 "type": "null"
               }
             ],
-            "title": "Duration Seconds"
+            "title": "Duration Seconds",
+            "description": "Active duration in seconds (excludes pauses)"
           },
           "avg_heart_rate": {
             "anyOf": [
@@ -1678,7 +2157,8 @@
                 "type": "null"
               }
             ],
-            "title": "Avg Heart Rate"
+            "title": "Avg Heart Rate",
+            "description": "Average heart rate in beats per minute"
           },
           "max_heart_rate": {
             "anyOf": [
@@ -1689,7 +2169,8 @@
                 "type": "null"
               }
             ],
-            "title": "Max Heart Rate"
+            "title": "Max Heart Rate",
+            "description": "Maximum heart rate in beats per minute"
           },
           "avg_cadence": {
             "anyOf": [
@@ -1700,7 +2181,8 @@
                 "type": "null"
               }
             ],
-            "title": "Avg Cadence"
+            "title": "Avg Cadence",
+            "description": "Average cadence in RPM"
           },
           "max_cadence": {
             "anyOf": [
@@ -1711,7 +2193,8 @@
                 "type": "null"
               }
             ],
-            "title": "Max Cadence"
+            "title": "Max Cadence",
+            "description": "Maximum cadence in RPM"
           },
           "calories": {
             "anyOf": [
@@ -1722,7 +2205,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calories"
+            "title": "Calories",
+            "description": "Total calories burned"
           },
           "avg_speed_kmh": {
             "anyOf": [
@@ -1733,7 +2217,8 @@
                 "type": "null"
               }
             ],
-            "title": "Avg Speed Kmh"
+            "title": "Avg Speed Kmh",
+            "description": "Average speed in km/h"
           },
           "max_speed_kmh": {
             "anyOf": [
@@ -1744,7 +2229,8 @@
                 "type": "null"
               }
             ],
-            "title": "Max Speed Kmh"
+            "title": "Max Speed Kmh",
+            "description": "Maximum speed in km/h"
           },
           "total_ascent_m": {
             "anyOf": [
@@ -1755,7 +2241,8 @@
                 "type": "null"
               }
             ],
-            "title": "Total Ascent M"
+            "title": "Total Ascent M",
+            "description": "Total elevation gain in meters"
           },
           "total_descent_m": {
             "anyOf": [
@@ -1766,7 +2253,8 @@
                 "type": "null"
               }
             ],
-            "title": "Total Descent M"
+            "title": "Total Descent M",
+            "description": "Total elevation loss in meters"
           },
           "total_distance": {
             "anyOf": [
@@ -1777,7 +2265,8 @@
                 "type": "null"
               }
             ],
-            "title": "Total Distance"
+            "title": "Total Distance",
+            "description": "Raw total distance in meters from FIT file"
           },
           "avg_pace": {
             "anyOf": [
@@ -1788,7 +2277,8 @@
                 "type": "null"
               }
             ],
-            "title": "Avg Pace"
+            "title": "Avg Pace",
+            "description": "Average pace in minutes per kilometre"
           },
           "device_manufacturer": {
             "anyOf": [
@@ -1799,7 +2289,8 @@
                 "type": "null"
               }
             ],
-            "title": "Device Manufacturer"
+            "title": "Device Manufacturer",
+            "description": "Device manufacturer (e.g. garmin)"
           },
           "avg_temperature_c": {
             "anyOf": [
@@ -1810,7 +2301,8 @@
                 "type": "null"
               }
             ],
-            "title": "Avg Temperature C"
+            "title": "Avg Temperature C",
+            "description": "Average ambient temperature in degrees C"
           },
           "min_temperature_c": {
             "anyOf": [
@@ -1821,7 +2313,8 @@
                 "type": "null"
               }
             ],
-            "title": "Min Temperature C"
+            "title": "Min Temperature C",
+            "description": "Minimum ambient temperature in degrees C"
           },
           "max_temperature_c": {
             "anyOf": [
@@ -1832,7 +2325,8 @@
                 "type": "null"
               }
             ],
-            "title": "Max Temperature C"
+            "title": "Max Temperature C",
+            "description": "Maximum ambient temperature in degrees C"
           },
           "total_elapsed_time": {
             "anyOf": [
@@ -1843,7 +2337,8 @@
                 "type": "null"
               }
             ],
-            "title": "Total Elapsed Time"
+            "title": "Total Elapsed Time",
+            "description": "Total elapsed time in seconds (includes pauses)"
           },
           "total_timer_time": {
             "anyOf": [
@@ -1854,7 +2349,8 @@
                 "type": "null"
               }
             ],
-            "title": "Total Timer Time"
+            "title": "Total Timer Time",
+            "description": "Total timer time in seconds (active recording)"
           },
           "created_at": {
             "anyOf": [
@@ -1866,7 +2362,8 @@
                 "type": "null"
               }
             ],
-            "title": "Created At"
+            "title": "Created At",
+            "description": "UTC timestamp when the record was inserted"
           },
           "uploaded_at": {
             "anyOf": [
@@ -1878,7 +2375,8 @@
                 "type": "null"
               }
             ],
-            "title": "Uploaded At"
+            "title": "Uploaded At",
+            "description": "UTC timestamp when the FIT file was uploaded"
           },
           "track_point_count": {
             "anyOf": [
@@ -1889,7 +2387,8 @@
                 "type": "null"
               }
             ],
-            "title": "Track Point Count"
+            "title": "Track Point Count",
+            "description": "Number of GPS track points in this activity"
           }
         },
         "type": "object",
@@ -1898,6 +2397,7 @@
           "sport"
         ],
         "title": "GarminActivity",
+        "description": "Summary of a Garmin Connect activity parsed from a FIT file.",
         "examples": [
           {
             "activity_id": "20932993811",
@@ -1907,18 +2407,18 @@
             "avg_speed_kmh": 26.3,
             "avg_temperature_c": 18,
             "calories": 1689,
-            "created_at": "2026-02-09T23:56:37Z",
+            "created_at": "2026-02-09T23:56:37+00:00",
             "device_manufacturer": "garmin",
             "distance_km": 50.6,
             "duration_seconds": 6932,
-            "end_time": "2025-11-08T20:16:45Z",
+            "end_time": "2025-11-08T20:16:45+00:00",
             "max_cadence": 112,
             "max_heart_rate": 178,
             "max_speed_kmh": 48.7,
             "max_temperature_c": 22,
             "min_temperature_c": 14,
             "sport": "cycling",
-            "start_time": "2025-11-08T18:21:13Z",
+            "start_time": "2025-11-08T18:21:13+00:00",
             "sub_sport": "road",
             "total_ascent_m": 385,
             "total_descent_m": 380,
@@ -1926,32 +2426,17 @@
             "total_elapsed_time": 7200.5,
             "total_timer_time": 6932.1,
             "track_point_count": 10707,
-            "uploaded_at": "2026-02-09T23:56:37Z"
+            "uploaded_at": "2026-02-09T23:56:37+00:00"
           }
         ]
       },
-      "GarminTrackPoint": {
+      "GarminChartPoint": {
         "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "activity_id": {
-            "type": "string",
-            "title": "Activity Id"
-          },
-          "latitude": {
-            "type": "number",
-            "title": "Latitude"
-          },
-          "longitude": {
-            "type": "number",
-            "title": "Longitude"
-          },
           "timestamp": {
             "type": "string",
             "format": "date-time",
-            "title": "Timestamp"
+            "title": "Timestamp",
+            "description": "UTC timestamp of the data point"
           },
           "altitude": {
             "anyOf": [
@@ -1962,7 +2447,8 @@
                 "type": "null"
               }
             ],
-            "title": "Altitude"
+            "title": "Altitude",
+            "description": "Elevation above sea level in meters"
           },
           "distance_from_start_km": {
             "anyOf": [
@@ -1973,7 +2459,8 @@
                 "type": "null"
               }
             ],
-            "title": "Distance From Start Km"
+            "title": "Distance From Start Km",
+            "description": "Cumulative distance from activity start in km"
           },
           "speed_kmh": {
             "anyOf": [
@@ -1984,7 +2471,8 @@
                 "type": "null"
               }
             ],
-            "title": "Speed Kmh"
+            "title": "Speed Kmh",
+            "description": "Instantaneous speed in km/h"
           },
           "heart_rate": {
             "anyOf": [
@@ -1995,7 +2483,8 @@
                 "type": "null"
               }
             ],
-            "title": "Heart Rate"
+            "title": "Heart Rate",
+            "description": "Heart rate in beats per minute"
           },
           "cadence": {
             "anyOf": [
@@ -2006,7 +2495,8 @@
                 "type": "null"
               }
             ],
-            "title": "Cadence"
+            "title": "Cadence",
+            "description": "Pedal/step cadence in RPM"
           },
           "temperature_c": {
             "anyOf": [
@@ -2017,7 +2507,269 @@
                 "type": "null"
               }
             ],
-            "title": "Temperature C"
+            "title": "Temperature C",
+            "description": "Ambient temperature in degrees C"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude",
+            "description": "GPS latitude in decimal degrees (WGS 84)"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude",
+            "description": "GPS longitude in decimal degrees (WGS 84)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "latitude",
+          "longitude"
+        ],
+        "title": "GarminChartPoint",
+        "description": "Lightweight track point optimised for time-series chart rendering.",
+        "examples": [
+          {
+            "altitude": 12.4,
+            "cadence": 80,
+            "distance_from_start_km": 0.0,
+            "heart_rate": 135,
+            "latitude": 40.71501586586237,
+            "longitude": -74.01768794283271,
+            "speed_kmh": 24.5,
+            "temperature_c": 18,
+            "timestamp": "2025-11-08T18:21:13Z"
+          }
+        ]
+      },
+      "GarminDateRange": {
+        "properties": {
+          "min_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Min Date",
+            "description": "Timestamp of the earliest Garmin activity"
+          },
+          "max_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Max Date",
+            "description": "Timestamp of the latest Garmin activity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "min_date",
+          "max_date"
+        ],
+        "title": "GarminDateRange",
+        "description": "Earliest and latest Garmin activity timestamps in the database.",
+        "examples": [
+          {
+            "max_date": "2026-04-06T20:00:00+00:00",
+            "min_date": "2025-11-08T18:21:13+00:00"
+          }
+        ]
+      },
+      "GarminSyncResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Sync trigger status (accepted, conflict, bad_request, error)"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Human-readable status message"
+          },
+          "triggered_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Triggered At",
+            "description": "UTC timestamp when sync was triggered"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At",
+            "description": "UTC timestamp when active sync started"
+          },
+          "lookback": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lookback",
+            "description": "Effective lookback override used for this trigger"
+          },
+          "window_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Hours",
+            "description": "Effective window in hours used for this trigger"
+          },
+          "window_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Start",
+            "description": "Computed UTC window start timestamp"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "GarminSyncResponse",
+        "description": "Response payload for Garmin on-demand sync trigger requests.",
+        "examples": [
+          {
+            "message": "Sync started",
+            "status": "accepted",
+            "triggered_at": "2026-03-12T01:25:14.586353+00:00",
+            "window_hours": 48,
+            "window_start": "2026-03-10T01:25:14.586331+00:00"
+          },
+          {
+            "message": "Sync already in progress",
+            "started_at": "2026-03-12T01:24:58.102924+00:00",
+            "status": "conflict"
+          }
+        ]
+      },
+      "GarminTrackPoint": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Unique track point record identifier"
+          },
+          "activity_id": {
+            "type": "string",
+            "title": "Activity Id",
+            "description": "Parent Garmin activity identifier"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude",
+            "description": "GPS latitude in decimal degrees (WGS 84)"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude",
+            "description": "GPS longitude in decimal degrees (WGS 84)"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "UTC timestamp of the track point recording"
+          },
+          "altitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Altitude",
+            "description": "Elevation above sea level in meters"
+          },
+          "distance_from_start_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance From Start Km",
+            "description": "Cumulative distance from activity start in km"
+          },
+          "speed_kmh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed Kmh",
+            "description": "Instantaneous speed in km/h"
+          },
+          "heart_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heart Rate",
+            "description": "Heart rate in beats per minute"
+          },
+          "cadence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cadence",
+            "description": "Pedal/step cadence in RPM"
+          },
+          "temperature_c": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature C",
+            "description": "Ambient temperature in degrees C"
           },
           "created_at": {
             "anyOf": [
@@ -2029,7 +2781,8 @@
                 "type": "null"
               }
             ],
-            "title": "Created At"
+            "title": "Created At",
+            "description": "UTC timestamp when the record was inserted"
           }
         },
         "type": "object",
@@ -2041,6 +2794,7 @@
           "timestamp"
         ],
         "title": "GarminTrackPoint",
+        "description": "Individual GPS track point within a Garmin activity.",
         "examples": [
           {
             "activity_id": "20932993811",
@@ -2055,6 +2809,253 @@
             "speed_kmh": 24.5,
             "temperature_c": 18,
             "timestamp": "2025-11-08T18:21:13Z"
+          }
+        ]
+      },
+      "GeocodedAddress": {
+        "properties": {
+          "display_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Address",
+            "description": "Full formatted address label from Pelias"
+          },
+          "street": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Street",
+            "description": "Street name"
+          },
+          "housenumber": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Housenumber",
+            "description": "House or building number"
+          },
+          "neighbourhood": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Neighbourhood",
+            "description": "Neighbourhood name"
+          },
+          "locality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locality",
+            "description": "City or town"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region",
+            "description": "State or province"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country",
+            "description": "Country name"
+          },
+          "postalcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Postalcode",
+            "description": "Postal or ZIP code"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence",
+            "description": "Pelias confidence score (0-1)"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Geocoding status: success, no_coverage, error, pending"
+          },
+          "geocoded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geocoded At",
+            "description": "UTC timestamp when geocoding was performed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "GeocodedAddress",
+        "description": "Reverse-geocoded address components from Pelias.",
+        "examples": [
+          {
+            "confidence": 0.95,
+            "country": "United States",
+            "display_address": "123 Main St, Hoboken, NJ 07030",
+            "geocoded_at": "2026-02-12T08:10:55+00:00",
+            "housenumber": "123",
+            "locality": "Hoboken",
+            "neighbourhood": "Downtown",
+            "postalcode": "07030",
+            "region": "New Jersey",
+            "status": "success",
+            "street": "Main St"
+          }
+        ]
+      },
+      "GeocodingStatus": {
+        "properties": {
+          "total_locations": {
+            "type": "integer",
+            "title": "Total Locations",
+            "description": "Total number of OwnTracks location records"
+          },
+          "geocoded": {
+            "type": "integer",
+            "title": "Geocoded",
+            "description": "Number of locations with a geocoded address (any status)"
+          },
+          "success": {
+            "type": "integer",
+            "title": "Success",
+            "description": "Number of successfully geocoded locations"
+          },
+          "pending": {
+            "type": "integer",
+            "title": "Pending",
+            "description": "Number of locations awaiting geocoding"
+          },
+          "no_coverage": {
+            "type": "integer",
+            "title": "No Coverage",
+            "description": "Number of locations outside Pelias coverage area"
+          },
+          "errors": {
+            "type": "integer",
+            "title": "Errors",
+            "description": "Number of locations that failed geocoding"
+          },
+          "coverage_percent": {
+            "type": "number",
+            "title": "Coverage Percent",
+            "description": "Percentage of locations with a geocoded address"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_locations",
+          "geocoded",
+          "success",
+          "pending",
+          "no_coverage",
+          "errors",
+          "coverage_percent"
+        ],
+        "title": "GeocodingStatus",
+        "description": "Coverage statistics for geocoded location records.",
+        "examples": [
+          {
+            "coverage_percent": 26.67,
+            "errors": 100,
+            "geocoded": 12000,
+            "no_coverage": 400,
+            "pending": 33000,
+            "success": 11500,
+            "total_locations": 45000
+          }
+        ]
+      },
+      "GeocodingTriggerResponse": {
+        "properties": {
+          "processed": {
+            "type": "integer",
+            "title": "Processed",
+            "description": "Number of records processed in this batch"
+          },
+          "remaining": {
+            "type": "integer",
+            "title": "Remaining",
+            "description": "Number of records still awaiting geocoding"
+          },
+          "skipped_dedup": {
+            "type": "integer",
+            "title": "Skipped Dedup",
+            "description": "Number of records skipped via proximity deduplication"
+          }
+        },
+        "type": "object",
+        "required": [
+          "processed",
+          "remaining",
+          "skipped_dedup"
+        ],
+        "title": "GeocodingTriggerResponse",
+        "description": "Result of triggering a batch geocoding operation.",
+        "examples": [
+          {
+            "processed": 100,
+            "remaining": 32900,
+            "skipped_dedup": 35
           }
         ]
       },
@@ -2075,11 +3076,13 @@
         "properties": {
           "id": {
             "type": "integer",
-            "title": "Id"
+            "title": "Id",
+            "description": "Unique location record identifier"
           },
           "device_id": {
             "type": "string",
-            "title": "Device Id"
+            "title": "Device Id",
+            "description": "OwnTracks device identifier (e.g. iphone_stuart)"
           },
           "tid": {
             "anyOf": [
@@ -2090,15 +3093,18 @@
                 "type": "null"
               }
             ],
-            "title": "Tid"
+            "title": "Tid",
+            "description": "Two-character tracker ID set in the OwnTracks app"
           },
           "latitude": {
             "type": "number",
-            "title": "Latitude"
+            "title": "Latitude",
+            "description": "GPS latitude in decimal degrees (WGS 84)"
           },
           "longitude": {
             "type": "number",
-            "title": "Longitude"
+            "title": "Longitude",
+            "description": "GPS longitude in decimal degrees (WGS 84)"
           },
           "accuracy": {
             "anyOf": [
@@ -2109,7 +3115,8 @@
                 "type": "null"
               }
             ],
-            "title": "Accuracy"
+            "title": "Accuracy",
+            "description": "Horizontal accuracy of the GPS fix in meters"
           },
           "altitude": {
             "anyOf": [
@@ -2120,7 +3127,8 @@
                 "type": "null"
               }
             ],
-            "title": "Altitude"
+            "title": "Altitude",
+            "description": "Altitude above sea level in meters"
           },
           "velocity": {
             "anyOf": [
@@ -2131,7 +3139,8 @@
                 "type": "null"
               }
             ],
-            "title": "Velocity"
+            "title": "Velocity",
+            "description": "Device velocity in km/h at time of report"
           },
           "battery": {
             "anyOf": [
@@ -2142,7 +3151,8 @@
                 "type": "null"
               }
             ],
-            "title": "Battery"
+            "title": "Battery",
+            "description": "Device battery level as a percentage (0-100)"
           },
           "battery_status": {
             "anyOf": [
@@ -2153,7 +3163,8 @@
                 "type": "null"
               }
             ],
-            "title": "Battery Status"
+            "title": "Battery Status",
+            "description": "Battery charging state (0=unknown, 1=unplugged, 2=charging, 3=full)"
           },
           "connection_type": {
             "anyOf": [
@@ -2164,7 +3175,8 @@
                 "type": "null"
               }
             ],
-            "title": "Connection Type"
+            "title": "Connection Type",
+            "description": "Network connection type (w=WiFi, m=mobile)"
           },
           "trigger": {
             "anyOf": [
@@ -2175,12 +3187,14 @@
                 "type": "null"
               }
             ],
-            "title": "Trigger"
+            "title": "Trigger",
+            "description": "What triggered this location report (p=ping, c=circular, t=timer)"
           },
           "timestamp": {
             "type": "string",
             "format": "date-time",
-            "title": "Timestamp"
+            "title": "Timestamp",
+            "description": "UTC timestamp when the device recorded the location"
           },
           "created_at": {
             "anyOf": [
@@ -2192,7 +3206,20 @@
                 "type": "null"
               }
             ],
-            "title": "Created At"
+            "title": "Created At",
+            "description": "UTC timestamp when the record was inserted into the database"
+          },
+          "display_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Address",
+            "description": "Short formatted address from reverse geocoding (e.g. '123 Main St, Hoboken')"
           }
         },
         "type": "object",
@@ -2204,6 +3231,7 @@
           "timestamp"
         ],
         "title": "Location",
+        "description": "GPS location recorded by the OwnTracks mobile app.",
         "examples": [
           {
             "accuracy": 7,
@@ -2211,13 +3239,14 @@
             "battery": 100,
             "battery_status": 2,
             "connection_type": "w",
-            "created_at": "2026-02-12T08:10:55Z",
+            "created_at": "2026-02-12T08:10:55+00:00",
             "device_id": "iphone_stuart",
+            "display_address": "123 Main St, Hoboken, NJ 07030",
             "id": 101160,
             "latitude": 40.736238,
             "longitude": -74.039405,
             "tid": "ss",
-            "timestamp": "2026-02-12T08:10:55Z",
+            "timestamp": "2026-02-12T08:10:55+00:00",
             "trigger": "t"
           }
         ]
@@ -2226,7 +3255,8 @@
         "properties": {
           "count": {
             "type": "integer",
-            "title": "Count"
+            "title": "Count",
+            "description": "Total number of location records matching the filter"
           },
           "date": {
             "anyOf": [
@@ -2237,7 +3267,8 @@
                 "type": "null"
               }
             ],
-            "title": "Date"
+            "title": "Date",
+            "description": "Date filter applied (YYYY-MM-DD), if any"
           },
           "device_id": {
             "anyOf": [
@@ -2248,7 +3279,8 @@
                 "type": "null"
               }
             ],
-            "title": "Device Id"
+            "title": "Device Id",
+            "description": "Device ID filter applied, if any"
           }
         },
         "type": "object",
@@ -2256,6 +3288,7 @@
           "count"
         ],
         "title": "LocationCount",
+        "description": "Aggregate location count with optional filter context.",
         "examples": [
           {
             "count": 45883,
@@ -2263,15 +3296,46 @@
           }
         ]
       },
+      "LocationDateRange": {
+        "properties": {
+          "min_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Min Date",
+            "description": "Timestamp of the earliest location record"
+          },
+          "max_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Max Date",
+            "description": "Timestamp of the latest location record"
+          }
+        },
+        "type": "object",
+        "required": [
+          "min_date",
+          "max_date"
+        ],
+        "title": "LocationDateRange",
+        "description": "Earliest and latest location timestamps in the database.",
+        "examples": [
+          {
+            "max_date": "2026-04-06T20:00:00+00:00",
+            "min_date": "2025-12-27T08:44:52+00:00"
+          }
+        ]
+      },
       "LocationDetail": {
         "properties": {
           "id": {
             "type": "integer",
-            "title": "Id"
+            "title": "Id",
+            "description": "Unique location record identifier"
           },
           "device_id": {
             "type": "string",
-            "title": "Device Id"
+            "title": "Device Id",
+            "description": "OwnTracks device identifier (e.g. iphone_stuart)"
           },
           "tid": {
             "anyOf": [
@@ -2282,15 +3346,18 @@
                 "type": "null"
               }
             ],
-            "title": "Tid"
+            "title": "Tid",
+            "description": "Two-character tracker ID set in the OwnTracks app"
           },
           "latitude": {
             "type": "number",
-            "title": "Latitude"
+            "title": "Latitude",
+            "description": "GPS latitude in decimal degrees (WGS 84)"
           },
           "longitude": {
             "type": "number",
-            "title": "Longitude"
+            "title": "Longitude",
+            "description": "GPS longitude in decimal degrees (WGS 84)"
           },
           "accuracy": {
             "anyOf": [
@@ -2301,7 +3368,8 @@
                 "type": "null"
               }
             ],
-            "title": "Accuracy"
+            "title": "Accuracy",
+            "description": "Horizontal accuracy of the GPS fix in meters"
           },
           "altitude": {
             "anyOf": [
@@ -2312,7 +3380,8 @@
                 "type": "null"
               }
             ],
-            "title": "Altitude"
+            "title": "Altitude",
+            "description": "Altitude above sea level in meters"
           },
           "velocity": {
             "anyOf": [
@@ -2323,7 +3392,8 @@
                 "type": "null"
               }
             ],
-            "title": "Velocity"
+            "title": "Velocity",
+            "description": "Device velocity in km/h at time of report"
           },
           "battery": {
             "anyOf": [
@@ -2334,7 +3404,8 @@
                 "type": "null"
               }
             ],
-            "title": "Battery"
+            "title": "Battery",
+            "description": "Device battery level as a percentage (0-100)"
           },
           "battery_status": {
             "anyOf": [
@@ -2345,7 +3416,8 @@
                 "type": "null"
               }
             ],
-            "title": "Battery Status"
+            "title": "Battery Status",
+            "description": "Battery charging state (0=unknown, 1=unplugged, 2=charging, 3=full)"
           },
           "connection_type": {
             "anyOf": [
@@ -2356,7 +3428,8 @@
                 "type": "null"
               }
             ],
-            "title": "Connection Type"
+            "title": "Connection Type",
+            "description": "Network connection type (w=WiFi, m=mobile)"
           },
           "trigger": {
             "anyOf": [
@@ -2367,12 +3440,14 @@
                 "type": "null"
               }
             ],
-            "title": "Trigger"
+            "title": "Trigger",
+            "description": "What triggered this location report (p=ping, c=circular, t=timer)"
           },
           "timestamp": {
             "type": "string",
             "format": "date-time",
-            "title": "Timestamp"
+            "title": "Timestamp",
+            "description": "UTC timestamp when the device recorded the location"
           },
           "created_at": {
             "anyOf": [
@@ -2384,18 +3459,44 @@
                 "type": "null"
               }
             ],
-            "title": "Created At"
+            "title": "Created At",
+            "description": "UTC timestamp when the record was inserted into the database"
+          },
+          "display_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Address",
+            "description": "Short formatted address from reverse geocoding (e.g. '123 Main St, Hoboken')"
           },
           "raw_payload": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Raw Payload"
+            "title": "Raw Payload",
+            "description": "Original OwnTracks JSON payload as received from the MQTT broker"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeocodedAddress"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Full reverse-geocoded address components from Pelias"
           }
         },
         "type": "object",
@@ -2407,6 +3508,7 @@
           "timestamp"
         ],
         "title": "LocationDetail",
+        "description": "Full location detail including the original OwnTracks JSON payload.",
         "examples": [
           {
             "accuracy": 7,
@@ -2437,28 +3539,34 @@
         "properties": {
           "source": {
             "type": "string",
-            "title": "Source"
+            "title": "Source",
+            "description": "Data source: 'owntracks' or 'garmin'"
           },
           "id": {
             "type": "integer",
-            "title": "Id"
+            "title": "Id",
+            "description": "Record identifier in the source table"
           },
           "latitude": {
             "type": "number",
-            "title": "Latitude"
+            "title": "Latitude",
+            "description": "GPS latitude in decimal degrees (WGS 84)"
           },
           "longitude": {
             "type": "number",
-            "title": "Longitude"
+            "title": "Longitude",
+            "description": "GPS longitude in decimal degrees (WGS 84)"
           },
           "distance_meters": {
             "type": "number",
-            "title": "Distance Meters"
+            "title": "Distance Meters",
+            "description": "Distance from the search center point in meters"
           },
           "timestamp": {
             "type": "string",
             "format": "date-time",
-            "title": "Timestamp"
+            "title": "Timestamp",
+            "description": "UTC timestamp of the GPS recording"
           }
         },
         "type": "object",
@@ -2471,6 +3579,7 @@
           "timestamp"
         ],
         "title": "NearbyPoint",
+        "description": "GPS point found within a spatial proximity search.",
         "examples": [
           {
             "distance_meters": 0.4,
@@ -2482,6 +3591,41 @@
           }
         ]
       },
+      "PaginatedResponse_DailyActivitySummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DailyActivitySummary"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "List of items in the current page"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Total number of items matching the query"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "description": "Maximum number of items per page"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset",
+            "description": "Number of items skipped from the start"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "PaginatedResponse[DailyActivitySummary]"
+      },
       "PaginatedResponse_GarminActivity_": {
         "properties": {
           "items": {
@@ -2489,19 +3633,23 @@
               "$ref": "#/components/schemas/GarminActivity"
             },
             "type": "array",
-            "title": "Items"
+            "title": "Items",
+            "description": "List of items in the current page"
           },
           "total": {
             "type": "integer",
-            "title": "Total"
+            "title": "Total",
+            "description": "Total number of items matching the query"
           },
           "limit": {
             "type": "integer",
-            "title": "Limit"
+            "title": "Limit",
+            "description": "Maximum number of items per page"
           },
           "offset": {
             "type": "integer",
-            "title": "Offset"
+            "title": "Offset",
+            "description": "Number of items skipped from the start"
           }
         },
         "type": "object",
@@ -2520,19 +3668,23 @@
               "$ref": "#/components/schemas/GarminTrackPoint"
             },
             "type": "array",
-            "title": "Items"
+            "title": "Items",
+            "description": "List of items in the current page"
           },
           "total": {
             "type": "integer",
-            "title": "Total"
+            "title": "Total",
+            "description": "Total number of items matching the query"
           },
           "limit": {
             "type": "integer",
-            "title": "Limit"
+            "title": "Limit",
+            "description": "Maximum number of items per page"
           },
           "offset": {
             "type": "integer",
-            "title": "Offset"
+            "title": "Offset",
+            "description": "Number of items skipped from the start"
           }
         },
         "type": "object",
@@ -2551,19 +3703,23 @@
               "$ref": "#/components/schemas/Location"
             },
             "type": "array",
-            "title": "Items"
+            "title": "Items",
+            "description": "List of items in the current page"
           },
           "total": {
             "type": "integer",
-            "title": "Total"
+            "title": "Total",
+            "description": "Total number of items matching the query"
           },
           "limit": {
             "type": "integer",
-            "title": "Limit"
+            "title": "Limit",
+            "description": "Maximum number of items per page"
           },
           "offset": {
             "type": "integer",
-            "title": "Offset"
+            "title": "Offset",
+            "description": "Number of items skipped from the start"
           }
         },
         "type": "object",
@@ -2582,19 +3738,23 @@
               "$ref": "#/components/schemas/UnifiedGpsPoint"
             },
             "type": "array",
-            "title": "Items"
+            "title": "Items",
+            "description": "List of items in the current page"
           },
           "total": {
             "type": "integer",
-            "title": "Total"
+            "title": "Total",
+            "description": "Total number of items matching the query"
           },
           "limit": {
             "type": "integer",
-            "title": "Limit"
+            "title": "Limit",
+            "description": "Maximum number of items per page"
           },
           "offset": {
             "type": "integer",
-            "title": "Offset"
+            "title": "Offset",
+            "description": "Number of items skipped from the start"
           }
         },
         "type": "object",
@@ -2610,23 +3770,28 @@
         "properties": {
           "id": {
             "type": "integer",
-            "title": "Id"
+            "title": "Id",
+            "description": "Unique reference location identifier"
           },
           "name": {
             "type": "string",
-            "title": "Name"
+            "title": "Name",
+            "description": "Short, unique name for the location (e.g. home, office)"
           },
           "latitude": {
             "type": "number",
-            "title": "Latitude"
+            "title": "Latitude",
+            "description": "GPS latitude in decimal degrees (WGS 84)"
           },
           "longitude": {
             "type": "number",
-            "title": "Longitude"
+            "title": "Longitude",
+            "description": "GPS longitude in decimal degrees (WGS 84)"
           },
           "radius_meters": {
             "type": "integer",
             "title": "Radius Meters",
+            "description": "Geofence radius in meters for proximity queries",
             "default": 50
           },
           "description": {
@@ -2638,7 +3803,8 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Description",
+            "description": "Optional human-readable description of the location"
           },
           "created_at": {
             "anyOf": [
@@ -2650,7 +3816,8 @@
                 "type": "null"
               }
             ],
-            "title": "Created At"
+            "title": "Created At",
+            "description": "UTC timestamp when the record was created"
           },
           "updated_at": {
             "anyOf": [
@@ -2662,7 +3829,8 @@
                 "type": "null"
               }
             ],
-            "title": "Updated At"
+            "title": "Updated At",
+            "description": "UTC timestamp when the record was last updated"
           }
         },
         "type": "object",
@@ -2673,16 +3841,17 @@
           "longitude"
         ],
         "title": "ReferenceLocation",
+        "description": "Named geographic reference point used for spatial queries (e.g. home, office).",
         "examples": [
           {
-            "created_at": "2026-02-03T22:49:07Z",
+            "created_at": "2026-02-03T22:49:07+00:00",
             "description": "Primary apartment - 40m radius",
             "id": 1,
             "latitude": 40.7362,
             "longitude": -74.0394,
             "name": "home",
             "radius_meters": 40,
-            "updated_at": "2026-02-03T22:50:01Z"
+            "updated_at": "2026-02-03T22:50:01+00:00"
           }
         ]
       },
@@ -2690,19 +3859,23 @@
         "properties": {
           "name": {
             "type": "string",
-            "title": "Name"
+            "title": "Name",
+            "description": "Short, unique name for the location (e.g. home, office)"
           },
           "latitude": {
             "type": "number",
-            "title": "Latitude"
+            "title": "Latitude",
+            "description": "GPS latitude in decimal degrees (WGS 84)"
           },
           "longitude": {
             "type": "number",
-            "title": "Longitude"
+            "title": "Longitude",
+            "description": "GPS longitude in decimal degrees (WGS 84)"
           },
           "radius_meters": {
             "type": "integer",
             "title": "Radius Meters",
+            "description": "Geofence radius in meters for proximity queries",
             "default": 50
           },
           "description": {
@@ -2714,7 +3887,8 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Description",
+            "description": "Optional human-readable description of the location"
           }
         },
         "type": "object",
@@ -2724,6 +3898,7 @@
           "longitude"
         ],
         "title": "ReferenceLocationCreate",
+        "description": "Request body for creating a new reference location.",
         "examples": [
           {
             "description": "Downtown office building",
@@ -2745,7 +3920,8 @@
                 "type": "null"
               }
             ],
-            "title": "Name"
+            "title": "Name",
+            "description": "Updated location name"
           },
           "latitude": {
             "anyOf": [
@@ -2756,7 +3932,8 @@
                 "type": "null"
               }
             ],
-            "title": "Latitude"
+            "title": "Latitude",
+            "description": "Updated GPS latitude in decimal degrees"
           },
           "longitude": {
             "anyOf": [
@@ -2767,7 +3944,8 @@
                 "type": "null"
               }
             ],
-            "title": "Longitude"
+            "title": "Longitude",
+            "description": "Updated GPS longitude in decimal degrees"
           },
           "radius_meters": {
             "anyOf": [
@@ -2778,7 +3956,8 @@
                 "type": "null"
               }
             ],
-            "title": "Radius Meters"
+            "title": "Radius Meters",
+            "description": "Updated geofence radius in meters"
           },
           "description": {
             "anyOf": [
@@ -2789,11 +3968,13 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Description",
+            "description": "Updated description text"
           }
         },
         "type": "object",
         "title": "ReferenceLocationUpdate",
+        "description": "Request body for partially updating a reference location. All fields are optional.",
         "examples": [
           {
             "description": "Updated radius for office building",
@@ -2805,11 +3986,13 @@
         "properties": {
           "sport": {
             "type": "string",
-            "title": "Sport"
+            "title": "Sport",
+            "description": "Sport type name (e.g. cycling, running)"
           },
           "activity_count": {
             "type": "integer",
-            "title": "Activity Count"
+            "title": "Activity Count",
+            "description": "Number of activities for this sport"
           }
         },
         "type": "object",
@@ -2818,6 +4001,7 @@
           "activity_count"
         ],
         "title": "SportInfo",
+        "description": "Sport type with its activity count.",
         "examples": [
           {
             "activity_count": 20,
@@ -2829,24 +4013,29 @@
         "properties": {
           "source": {
             "type": "string",
-            "title": "Source"
+            "title": "Source",
+            "description": "Data source: 'owntracks' or 'garmin'"
           },
           "identifier": {
             "type": "string",
-            "title": "Identifier"
+            "title": "Identifier",
+            "description": "Device or activity identifier from the source"
           },
           "latitude": {
             "type": "number",
-            "title": "Latitude"
+            "title": "Latitude",
+            "description": "GPS latitude in decimal degrees (WGS 84)"
           },
           "longitude": {
             "type": "number",
-            "title": "Longitude"
+            "title": "Longitude",
+            "description": "GPS longitude in decimal degrees (WGS 84)"
           },
           "timestamp": {
             "type": "string",
             "format": "date-time",
-            "title": "Timestamp"
+            "title": "Timestamp",
+            "description": "UTC timestamp of the GPS recording"
           },
           "accuracy": {
             "anyOf": [
@@ -2857,7 +4046,8 @@
                 "type": "null"
               }
             ],
-            "title": "Accuracy"
+            "title": "Accuracy",
+            "description": "Horizontal GPS accuracy in meters (OwnTracks only)"
           },
           "battery": {
             "anyOf": [
@@ -2868,7 +4058,8 @@
                 "type": "null"
               }
             ],
-            "title": "Battery"
+            "title": "Battery",
+            "description": "Device battery percentage (OwnTracks only)"
           },
           "speed_kmh": {
             "anyOf": [
@@ -2879,7 +4070,8 @@
                 "type": "null"
               }
             ],
-            "title": "Speed Kmh"
+            "title": "Speed Kmh",
+            "description": "Instantaneous speed in km/h (Garmin only)"
           },
           "heart_rate": {
             "anyOf": [
@@ -2890,7 +4082,8 @@
                 "type": "null"
               }
             ],
-            "title": "Heart Rate"
+            "title": "Heart Rate",
+            "description": "Heart rate in BPM (Garmin only)"
           },
           "created_at": {
             "anyOf": [
@@ -2902,7 +4095,8 @@
                 "type": "null"
               }
             ],
-            "title": "Created At"
+            "title": "Created At",
+            "description": "UTC timestamp when the record was inserted"
           }
         },
         "type": "object",
@@ -2914,16 +4108,17 @@
           "timestamp"
         ],
         "title": "UnifiedGpsPoint",
+        "description": "Single GPS data point from the unified view combining OwnTracks and Garmin sources.",
         "examples": [
           {
             "accuracy": 7,
             "battery": 100,
-            "created_at": "2026-02-12T08:11:55Z",
+            "created_at": "2026-02-12T08:11:55+00:00",
             "identifier": "iphone_stuart",
             "latitude": 40.736238,
             "longitude": -74.039405,
             "source": "owntracks",
-            "timestamp": "2026-02-12T08:11:55Z"
+            "timestamp": "2026-02-12T08:11:55+00:00"
           }
         ]
       },
@@ -2950,6 +4145,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",
@@ -2964,22 +4166,26 @@
         "properties": {
           "reference_name": {
             "type": "string",
-            "title": "Reference Name"
+            "title": "Reference Name",
+            "description": "Name of the reference location searched"
           },
           "radius_meters": {
             "type": "integer",
-            "title": "Radius Meters"
+            "title": "Radius Meters",
+            "description": "Geofence radius used for the search in meters"
           },
           "total_points": {
             "type": "integer",
-            "title": "Total Points"
+            "title": "Total Points",
+            "description": "Number of GPS points found within the radius"
           },
           "points": {
             "items": {
               "$ref": "#/components/schemas/NearbyPoint"
             },
             "type": "array",
-            "title": "Points"
+            "title": "Points",
+            "description": "GPS points within the radius, sorted by distance"
           }
         },
         "type": "object",
@@ -2990,6 +4196,7 @@
           "points"
         ],
         "title": "WithinReferenceResult",
+        "description": "GPS points found within a named reference location's geofence radius.",
         "examples": [
           {
             "points": [

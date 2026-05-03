@@ -25,7 +25,7 @@ repos:
         args: ['--fix', '--config', '.markdownlint.yaml']
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.11
+    rev: v0.15.12
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix, --line-length=120]
@@ -51,7 +51,7 @@ repos:
         exclude: package.lock.json
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.20.1
+    rev: v1.20.2
     hooks:
       - id: mypy
         additional_dependencies:
@@ -60,7 +60,7 @@ repos:
         args: [--ignore-missing-imports]
 
   - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.408
+    rev: v1.1.409
     hooks:
       - id: pyright
 

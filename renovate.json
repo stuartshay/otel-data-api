@@ -18,7 +18,6 @@
   "enabledManagers": [
     "pip_requirements",
     "dockerfile",
-    "regex",
     "pre-commit",
     "github-actions"
   ],
@@ -51,7 +50,10 @@
     {
       "description": "Group OpenTelemetry core packages (excluding instrumentation)",
       "matchPackageNames": [
-        "/^opentelemetry(?!-instrumentation)/"
+        "opentelemetry-api",
+        "opentelemetry-sdk",
+        "/^opentelemetry-exporter-/",
+        "/^opentelemetry-proto/"
       ],
       "groupName": "opentelemetry-core",
       "groupSlug": "opentelemetry-core"
@@ -167,8 +169,8 @@
     },
     {
       "description": "Automerge minor and patch updates (excludes Docker; handled by its own rule)",
+      "matchManagers": ["pip_requirements", "pre-commit", "github-actions"],
       "matchUpdateTypes": ["minor", "patch"],
-      "excludeDatasources": ["docker"],
       "automerge": true
     }
   ]

@@ -1,0 +1,64 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python virtual environments
+venv/
+.venv/
+env/
+
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+.secrets.baseline
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# CI / tooling configs not needed at runtime
+.github/
+.pre-commit-config.yaml
+.flake8
+.markdownlint.yaml
+cspell.json
+pyrightconfig.json
+renovate.json
+.ruff.toml
+
+# Project artifacts not needed in the image
+docs/
+loadtest/
+output/
+packages/
+scripts/
+tests/
+
+# Build / Makefile
+Makefile
+setup.sh
+AGENTS.md
+README.md
+
+# Node (in case packages/ contains JS)
+node_modules/

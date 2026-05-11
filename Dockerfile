@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM python:3.14-slim
 
 # Build arguments
@@ -13,25 +14,32 @@ LABEL org.opencontainers.image.version="${APP_VERSION}"
 LABEL org.opencontainers.image.created="${BUILD_DATE}"
 LABEL com.github.actions.build-number="${BUILD_NUMBER}"
 
+# Python runtime hygiene
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
 # Set working directory
 WORKDIR /app
 
-# Install dependencies first (layer caching)
+# Create non-root user up front so later COPY layers don't invalidate it
+RUN useradd -r -u 1000 -m -d /home/appuser appuser
+
+# Install dependencies first (layer caching + BuildKit pip cache mount)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    pip install -r requirements.txt
 
 # Copy application code
 COPY run.py .
 COPY app/ ./app/
 
-# Set version as environment variable for runtime access
-ENV APP_VERSION=${APP_VERSION}
-ENV BUILD_DATE=${BUILD_DATE}
-ENV BUILD_NUMBER=${BUILD_NUMBER}
+# Set version as environment variables for runtime access
+ENV APP_VERSION=${APP_VERSION} \
+    BUILD_DATE=${BUILD_DATE} \
+    BUILD_NUMBER=${BUILD_NUMBER}
 
-# Create non-root user for security
-RUN useradd -r -u 1000 appuser
-USER 1000:1000
+USER appuser
 
 # Expose port
 EXPOSE 8080

@@ -512,7 +512,9 @@ async def list_activity_addresses(
         "FROM public.geocoded_addresses ga "
         "INNER JOIN public.garmin_track_points gtp ON gtp.id = ga.garmin_track_point_id "
         "WHERE ga.source = 'garmin' AND ga.garmin_activity_id = $1 "
-        "ORDER BY gtp.timestamp ASC",
+        "ORDER BY CASE ga.waypoint_kind "
+        "WHEN 'start' THEN 0 WHEN 'waypoint' THEN 1 WHEN 'end' THEN 2 ELSE 3 END, "
+        "gtp.timestamp ASC",
         activity_id,
     )
 

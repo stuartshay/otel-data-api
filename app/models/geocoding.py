@@ -56,8 +56,7 @@ class GeocodingStatus(BaseModel):
     no_coverage: int = Field(description="Number of locations outside Pelias coverage area")
     errors: int = Field(description="Number of locations that failed geocoding")
     coverage_percent: float = Field(description="Percentage of locations with a geocoded address")
-    by_source: GeocodingStatusBySource | None = Field(
-        default=None,
+    by_source: GeocodingStatusBySource = Field(
         description="Per-source breakdown of geocoding coverage (owntracks, garmin)",
     )
 

@@ -781,7 +781,12 @@ async def test_list_activity_addresses_returns_ordered_list(client: AsyncClient,
     assert body[1]["waypoint_kind"] == "end"
     query = mock_db.fetch.await_args.args[0]
     assert "ga.source = 'garmin'" in query
-    assert "ORDER BY gtp.timestamp ASC" in query
+    # Addresses are ordered by waypoint kind (start, waypoint, end), then timestamp.
+    assert "CASE ga.waypoint_kind" in query
+    assert "'start' THEN 0" in query
+    assert "'waypoint' THEN 1" in query
+    assert "'end' THEN 2" in query
+    assert "gtp.timestamp ASC" in query
 
 
 @pytest.mark.asyncio

@@ -395,6 +395,17 @@ async def _process_garmin_waypoint(
         )
     except TimeoutError:
         logger.warning("Database timeout for garmin track point %d, skipping", track_point_id)
+        # Persist an error status row so this waypoint can be retried with
+        # retry_failed=True; otherwise the activity selection query would
+        # consider this activity "done" once any other waypoint succeeds.
+        try:
+            await _upsert_garmin_status(db, track_point_id, activity_id, waypoint_kind, status="error")
+        except Exception:
+            logger.warning(
+                "Failed to upsert error status after timeout for garmin track point %d",
+                track_point_id,
+                exc_info=True,
+            )
         return 0, 0
     except Exception:
         logger.warning("Unexpected error processing garmin track point %d", track_point_id, exc_info=True)

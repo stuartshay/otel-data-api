@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
+WaypointKind = Literal["start", "end", "waypoint"]
 
 
 class GeocodedAddress(BaseModel):
@@ -53,6 +56,10 @@ class GeocodingStatus(BaseModel):
     no_coverage: int = Field(description="Number of locations outside Pelias coverage area")
     errors: int = Field(description="Number of locations that failed geocoding")
     coverage_percent: float = Field(description="Percentage of locations with a geocoded address")
+    by_source: GeocodingStatusBySource | None = Field(
+        default=None,
+        description="Per-source breakdown of geocoding coverage (owntracks, garmin)",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -69,6 +76,32 @@ class GeocodingStatus(BaseModel):
             ]
         }
     }
+
+
+class GeocodingSourceStatus(BaseModel):
+    """Coverage statistics for a single geocoding source (owntracks or garmin)."""
+
+    success: int = Field(description="Number of successfully geocoded records for this source")
+    pending: int = Field(default=0, description="Number of records awaiting geocoding for this source")
+    no_coverage: int = Field(description="Number of records outside Pelias coverage area")
+    errors: int = Field(description="Number of records that failed geocoding")
+    total: int = Field(description="Total number of geocoded_addresses rows for this source")
+
+
+class GeocodingStatusBySource(BaseModel):
+    """Per-source breakdown of geocoding coverage."""
+
+    owntracks: GeocodingSourceStatus = Field(description="Coverage stats for OwnTracks rows")
+    garmin: GeocodingSourceStatus = Field(description="Coverage stats for Garmin rows")
+    garmin_activities_total: int = Field(
+        description="Total number of Garmin activities (denominator for activity-level coverage)"
+    )
+    garmin_activities_geocoded: int = Field(
+        description="Number of Garmin activities that have at least one address row"
+    )
+    garmin_coverage_percent: float = Field(
+        description="Percentage of Garmin activities with at least one geocoded address"
+    )
 
 
 class GeocodingTriggerResponse(BaseModel):
@@ -89,3 +122,36 @@ class GeocodingTriggerResponse(BaseModel):
             ]
         }
     }
+
+
+class GarminActivityAddress(BaseModel):
+    """Reverse-geocoded address attached to a Garmin activity waypoint."""
+
+    track_point_id: int = Field(description="garmin_track_points.id this address was geocoded from")
+    activity_id: str = Field(description="Parent Garmin activity identifier")
+    waypoint_kind: WaypointKind = Field(description="Role of this waypoint: start, end, or mid-route waypoint")
+    timestamp: datetime = Field(description="UTC timestamp of the track point this address was derived from")
+    latitude: float = Field(description="GPS latitude in decimal degrees (WGS 84)")
+    longitude: float = Field(description="GPS longitude in decimal degrees (WGS 84)")
+    display_address: str | None = Field(default=None, description="Full formatted address label from Pelias")
+    street: str | None = Field(default=None, description="Street name")
+    housenumber: str | None = Field(default=None, description="House or building number")
+    neighbourhood: str | None = Field(default=None, description="Neighbourhood name")
+    locality: str | None = Field(default=None, description="City or town")
+    region: str | None = Field(default=None, description="State or province")
+    country: str | None = Field(default=None, description="Country name")
+    postalcode: str | None = Field(default=None, description="Postal or ZIP code")
+    confidence: float | None = Field(default=None, description="Pelias confidence score (0-1)")
+    status: str = Field(description="Geocoding status: success, no_coverage, error, pending")
+    geocoded_at: datetime | None = Field(default=None, description="UTC timestamp when geocoding was performed")
+
+
+class GeocodedAddressSummary(BaseModel):
+    """Compact address summary embedded in track-point payloads."""
+
+    display_address: str | None = Field(default=None, description="Full formatted address label from Pelias")
+    locality: str | None = Field(default=None, description="City or town")
+    region: str | None = Field(default=None, description="State or province")
+    country: str | None = Field(default=None, description="Country name")
+    waypoint_kind: WaypointKind | None = Field(default=None, description="Role of this waypoint (Garmin only)")
+    status: str = Field(description="Geocoding status: success, no_coverage, error, pending")

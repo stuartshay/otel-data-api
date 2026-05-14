@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from datetime import date
-from typing import Literal
+from typing import Any, Literal
 
 import fastapi
 import httpx
@@ -22,6 +23,7 @@ from app.models.garmin import (
     GarminTrackPoint,
     SportInfo,
 )
+from app.models.geocoding import GarminActivityAddress, GeocodedAddressSummary
 
 router = APIRouter(prefix="/api/v1/garmin", tags=["Garmin"])
 logger = structlog.get_logger(__name__)
@@ -391,28 +393,39 @@ async def list_track_points(
             "    ON gtp.longitude = sc.lng AND gtp.latitude = sc.lat "
             "  WHERE gtp.activity_id = $1"
             ") "
-            "SELECT id, activity_id, latitude, longitude, "
-            "timestamp, altitude, distance_from_start_km, speed_kmh, "
-            "heart_rate, cadence, temperature_c, created_at "
-            "FROM matched WHERE rn = 1 "
-            f"ORDER BY timestamp {order}",
+            "SELECT m.id, m.activity_id, m.latitude, m.longitude, "
+            "m.timestamp, m.altitude, m.distance_from_start_km, m.speed_kmh, "
+            "m.heart_rate, m.cadence, m.temperature_c, m.created_at, "
+            "ga.display_address, ga.locality, ga.region, ga.country, "
+            "ga.waypoint_kind, ga.status AS address_status "
+            "FROM matched m "
+            "LEFT JOIN public.geocoded_addresses ga "
+            "  ON ga.garmin_track_point_id = m.id AND ga.source = 'garmin' "
+            "WHERE m.rn = 1 "
+            f"ORDER BY m.timestamp {order}",
             activity_id,
             simplify,
         )
-        items = [GarminTrackPoint(**dict(row)) for row in rows]
+        items = [_row_to_track_point(row) for row in rows]
         return PaginatedResponse(items=items, total=total, limit=len(items), offset=0)
 
     rows = await db.fetch(
-        "SELECT id, activity_id, latitude, longitude, timestamp, altitude, "
-        "distance_from_start_km, speed_kmh, heart_rate, cadence, temperature_c, "
-        f"created_at FROM public.garmin_track_points WHERE activity_id = $1 ORDER BY {sort} {order} "
+        "SELECT gtp.id, gtp.activity_id, gtp.latitude, gtp.longitude, gtp.timestamp, "
+        "gtp.altitude, gtp.distance_from_start_km, gtp.speed_kmh, gtp.heart_rate, "
+        "gtp.cadence, gtp.temperature_c, gtp.created_at, "
+        "ga.display_address, ga.locality, ga.region, ga.country, "
+        "ga.waypoint_kind, ga.status AS address_status "
+        "FROM public.garmin_track_points gtp "
+        "LEFT JOIN public.geocoded_addresses ga "
+        "  ON ga.garmin_track_point_id = gtp.id AND ga.source = 'garmin' "
+        f"WHERE gtp.activity_id = $1 ORDER BY gtp.{sort} {order} "
         f"LIMIT $2 OFFSET $3",
         activity_id,
         limit,
         offset,
     )
 
-    items = [GarminTrackPoint(**dict(row)) for row in rows]
+    items = [_row_to_track_point(row) for row in rows]
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
 
 
@@ -445,3 +458,62 @@ async def get_chart_data(
     )
 
     return [GarminChartPoint(**dict(row)) for row in rows]
+
+
+def _row_to_track_point(row: Mapping[str, Any]) -> GarminTrackPoint:
+    """Build a GarminTrackPoint, attaching the joined address summary when present."""
+    data: dict[str, Any] = dict(row)
+    address_status = data.pop("address_status", None)
+    display_address = data.pop("display_address", None)
+    locality = data.pop("locality", None)
+    region = data.pop("region", None)
+    country = data.pop("country", None)
+    waypoint_kind = data.pop("waypoint_kind", None)
+    address: GeocodedAddressSummary | None = None
+    if address_status is not None:
+        address = GeocodedAddressSummary(
+            display_address=display_address,
+            locality=locality,
+            region=region,
+            country=country,
+            waypoint_kind=waypoint_kind,
+            status=address_status,
+        )
+    return GarminTrackPoint(**data, address=address)
+
+
+@router.get(
+    "/activities/{activity_id}/addresses",
+    response_model=list[GarminActivityAddress],
+    responses={404: {"description": "Activity not found"}},
+)
+async def list_activity_addresses(
+    request: Request,
+    activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
+) -> list[GarminActivityAddress]:
+    """Return all reverse-geocoded addresses for a Garmin activity, in timestamp order.
+
+    Includes start, end, and mid-route waypoints as persisted by the Garmin
+    geocoding pipeline.
+    """
+    db = request.app.state.db
+
+    exists = await db.fetchval("SELECT 1 FROM public.garmin_activities WHERE activity_id = $1", activity_id)
+    if not exists:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    rows = await db.fetch(
+        "SELECT ga.garmin_track_point_id AS track_point_id, "
+        "ga.garmin_activity_id AS activity_id, ga.waypoint_kind, "
+        "gtp.timestamp, gtp.latitude, gtp.longitude, "
+        "ga.display_address, ga.street, ga.housenumber, ga.neighbourhood, "
+        "ga.locality, ga.region, ga.country, ga.postalcode, ga.confidence, "
+        "ga.status, ga.geocoded_at "
+        "FROM public.geocoded_addresses ga "
+        "INNER JOIN public.garmin_track_points gtp ON gtp.id = ga.garmin_track_point_id "
+        "WHERE ga.source = 'garmin' AND ga.garmin_activity_id = $1 "
+        "ORDER BY gtp.timestamp ASC",
+        activity_id,
+    )
+
+    return [GarminActivityAddress(**dict(row)) for row in rows]

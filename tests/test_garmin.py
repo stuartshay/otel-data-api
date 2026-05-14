@@ -240,8 +240,9 @@ async def test_list_track_points_success_and_invalid_sort_falls_back(client: Asy
     assert len(data["items"]) == 1
 
     track_query, *params = mock_db.fetch.await_args.args
-    assert "ORDER BY timestamp desc" in track_query
+    assert "ORDER BY gtp.timestamp desc" in track_query
     assert "garmin_track_points" in track_query
+    assert "LEFT JOIN public.geocoded_addresses" in track_query
     assert params == ["20932993811", 5, 1]
 
 
@@ -286,7 +287,7 @@ async def test_list_track_points_simplify_respects_order(client: AsyncClient, mo
 
     assert response.status_code == 200
     query = mock_db.fetch.await_args.args[0]
-    assert "ORDER BY timestamp desc" in query
+    assert "ORDER BY m.timestamp desc" in query
 
 
 @pytest.mark.asyncio
@@ -679,3 +680,115 @@ async def test_garmin_date_range_empty_database(client: AsyncClient, mock_db):
     assert "MIN(start_time)" in query
     assert "MAX(start_time)" in query
     assert "FROM public.garmin_activities" in query
+
+
+# ---------------------------------------------------------------------------
+# Address-aware track points + per-activity addresses endpoint
+# ---------------------------------------------------------------------------
+
+
+def _track_row_with_address(activity_id: str = "20932993811") -> dict:
+    base = _track_row(activity_id)
+    base.update(
+        {
+            "display_address": "Pier 13, Hoboken, NJ",
+            "locality": "Hoboken",
+            "region": "New Jersey",
+            "country": "United States",
+            "waypoint_kind": "start",
+            "address_status": "success",
+        }
+    )
+    return base
+
+
+@pytest.mark.asyncio
+async def test_list_track_points_includes_address_when_present(client: AsyncClient, mock_db):
+    mock_db.fetchval.side_effect = [1, 1]
+    mock_db.fetch.return_value = [_track_row_with_address()]
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/tracks")
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["address"] is not None
+    assert item["address"]["display_address"] == "Pier 13, Hoboken, NJ"
+    assert item["address"]["waypoint_kind"] == "start"
+    assert item["address"]["status"] == "success"
+
+
+@pytest.mark.asyncio
+async def test_list_track_points_address_null_when_missing(client: AsyncClient, mock_db):
+    mock_db.fetchval.side_effect = [1, 1]
+    mock_db.fetch.return_value = [_track_row()]
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/tracks")
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["address"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_activity_addresses_returns_ordered_list(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = [
+        {
+            "track_point_id": 1,
+            "activity_id": "20932993811",
+            "waypoint_kind": "start",
+            "timestamp": "2025-11-08T18:21:13+00:00",
+            "latitude": 40.715,
+            "longitude": -74.017,
+            "display_address": "Start Plaza",
+            "street": "Main St",
+            "housenumber": "1",
+            "neighbourhood": "Downtown",
+            "locality": "Hoboken",
+            "region": "New Jersey",
+            "country": "United States",
+            "postalcode": "07030",
+            "confidence": 0.9,
+            "status": "success",
+            "geocoded_at": "2026-02-12T08:10:55+00:00",
+        },
+        {
+            "track_point_id": 99,
+            "activity_id": "20932993811",
+            "waypoint_kind": "end",
+            "timestamp": "2025-11-08T19:00:00+00:00",
+            "latitude": 40.72,
+            "longitude": -74.02,
+            "display_address": "End Plaza",
+            "street": None,
+            "housenumber": None,
+            "neighbourhood": None,
+            "locality": "Hoboken",
+            "region": "New Jersey",
+            "country": "United States",
+            "postalcode": None,
+            "confidence": None,
+            "status": "success",
+            "geocoded_at": "2026-02-12T08:11:00+00:00",
+        },
+    ]
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/addresses")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert body[0]["waypoint_kind"] == "start"
+    assert body[1]["waypoint_kind"] == "end"
+    query = mock_db.fetch.await_args.args[0]
+    assert "ga.source = 'garmin'" in query
+    assert "ORDER BY gtp.timestamp ASC" in query
+
+
+@pytest.mark.asyncio
+async def test_list_activity_addresses_not_found(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = None
+
+    response = await client.get("/api/v1/garmin/activities/missing/addresses")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Activity not found"}

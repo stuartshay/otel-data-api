@@ -7,6 +7,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.models.geocoding import GeocodedAddressSummary
+
 
 class GarminActivity(BaseModel):
     """Summary of a Garmin Connect activity parsed from a FIT file."""
@@ -95,6 +97,11 @@ class GarminTrackPoint(BaseModel):
     cadence: int | None = Field(default=None, description="Pedal/step cadence in RPM")
     temperature_c: int | None = Field(default=None, description="Ambient temperature in degrees C")
     created_at: datetime | None = Field(default=None, description="UTC timestamp when the record was inserted")
+    address: GeocodedAddressSummary | None = Field(
+        default=None,
+        description="Reverse-geocoded address for this track point (Garmin pipeline). "
+        "Only populated for waypoints that have been geocoded.",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -112,6 +119,7 @@ class GarminTrackPoint(BaseModel):
                     "cadence": 80,
                     "temperature_c": 18,
                     "created_at": "2026-02-09T23:56:37Z",
+                    "address": None,
                 }
             ]
         }

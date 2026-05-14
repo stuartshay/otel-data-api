@@ -35,6 +35,7 @@
         "filterwarnings",
         "geocoded",
         "geocoder",
+        "geocodes",
         "geocoding",
         "geofence",
         "geofencing",

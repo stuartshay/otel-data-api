@@ -14,7 +14,9 @@ from app.config import Config
 
 @pytest.mark.asyncio
 async def test_geocoding_status(client: AsyncClient, mock_db: AsyncMock):
-    mock_db.fetchval.side_effect = [1000, 600, 550, 30, 10, 10]
+    # Order: total, geocoded, ot_success, ot_pending, ot_no_coverage, ot_errors,
+    # g_success, g_pending, g_no_coverage, g_errors, activities_total, activities_geocoded
+    mock_db.fetchval.side_effect = [1000, 600, 550, 30, 10, 10, 80, 5, 4, 1, 25, 12]
 
     response = await client.get("/api/v1/geocoding/status")
 
@@ -27,11 +29,18 @@ async def test_geocoding_status(client: AsyncClient, mock_db: AsyncMock):
     assert body["no_coverage"] == 10
     assert body["errors"] == 10
     assert body["coverage_percent"] == 60.0
+    assert body["by_source"]["owntracks"]["success"] == 550
+    assert body["by_source"]["owntracks"]["total"] == 600
+    assert body["by_source"]["garmin"]["success"] == 80
+    assert body["by_source"]["garmin"]["total"] == 90
+    assert body["by_source"]["garmin_activities_total"] == 25
+    assert body["by_source"]["garmin_activities_geocoded"] == 12
+    assert body["by_source"]["garmin_coverage_percent"] == 48.0
 
 
 @pytest.mark.asyncio
 async def test_geocoding_status_empty_database(client: AsyncClient, mock_db: AsyncMock):
-    mock_db.fetchval.side_effect = [0, 0, 0, 0, 0, 0]
+    mock_db.fetchval.side_effect = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
     response = await client.get("/api/v1/geocoding/status")
 
@@ -39,6 +48,7 @@ async def test_geocoding_status_empty_database(client: AsyncClient, mock_db: Asy
     body = response.json()
     assert body["total_locations"] == 0
     assert body["coverage_percent"] == 0.0
+    assert body["by_source"]["garmin_coverage_percent"] == 0.0
 
 
 @pytest.mark.asyncio
@@ -432,3 +442,85 @@ async def test_internal_trigger_disabled_by_config(config: Config, mock_db: Asyn
         response = await disabled_client.post("/internal/geocoding/trigger")
 
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Garmin trigger + waypoint selector
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_trigger_garmin_no_activities(client: AsyncClient, mock_db: AsyncMock):
+    mock_db.fetch.return_value = []
+    mock_db.fetchval.return_value = 0
+
+    app_obj = client._transport.app  # type: ignore[attr-defined]
+    app_obj.dependency_overrides[require_auth] = lambda: {"sub": "test"}
+    try:
+        response = await client.post("/api/v1/geocoding/trigger/garmin")
+    finally:
+        app_obj.dependency_overrides.pop(require_auth, None)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["processed"] == 0
+    assert body["skipped_dedup"] == 0
+
+
+@pytest.mark.asyncio
+async def test_trigger_garmin_requires_auth(client: AsyncClient, mock_db: AsyncMock):
+    app_obj = client._transport.app  # type: ignore[attr-defined]
+
+    def _deny() -> None:
+        raise HTTPException(status_code=http_status.HTTP_401_UNAUTHORIZED, detail="nope")
+
+    app_obj.dependency_overrides[require_auth] = _deny
+    try:
+        response = await client.post("/api/v1/geocoding/trigger/garmin")
+    finally:
+        app_obj.dependency_overrides.pop(require_auth, None)
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_internal_trigger_garmin_no_activities(client: AsyncClient, mock_db: AsyncMock):
+    mock_db.fetch.return_value = []
+    mock_db.fetchval.return_value = 0
+
+    response = await client.post("/internal/geocoding/trigger/garmin")
+
+    assert response.status_code == 200
+    assert response.json()["processed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_select_garmin_waypoints_picks_start_mid_end(mock_db: AsyncMock):
+    from app.routers.geocoding import _select_garmin_waypoints
+
+    mock_db.fetch.return_value = [
+        {"id": 1, "latitude": 40.0, "longitude": -74.0, "timestamp": "t1", "distance_from_start_km": 0.0},
+        {"id": 2, "latitude": 40.01, "longitude": -74.0, "timestamp": "t2", "distance_from_start_km": 0.5},
+        {"id": 3, "latitude": 40.02, "longitude": -74.0, "timestamp": "t3", "distance_from_start_km": 1.2},
+        {"id": 4, "latitude": 40.03, "longitude": -74.0, "timestamp": "t4", "distance_from_start_km": 2.5},
+        {"id": 5, "latitude": 40.04, "longitude": -74.0, "timestamp": "t5", "distance_from_start_km": 3.0},
+    ]
+
+    result = await _select_garmin_waypoints(mock_db, "act-1", 1.0)
+
+    kinds = [wp["waypoint_kind"] for wp in result]
+    assert kinds[0] == "start"
+    assert kinds[-1] == "end"
+    assert "waypoint" in kinds
+    # IDs 3 (1.2km) and 4 (2.5km) cross the 1km threshold from the previous waypoint.
+    mid_ids = [wp["id"] for wp in result if wp["waypoint_kind"] == "waypoint"]
+    assert mid_ids == [3, 4]
+
+
+@pytest.mark.asyncio
+async def test_select_garmin_waypoints_empty(mock_db: AsyncMock):
+    from app.routers.geocoding import _select_garmin_waypoints
+
+    mock_db.fetch.return_value = []
+    result = await _select_garmin_waypoints(mock_db, "act-1", 1.0)
+    assert result == []

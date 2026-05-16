@@ -361,14 +361,15 @@ async def _select_garmin_waypoints(
     waypoints: list[dict[str, Any]] = []
     waypoints.append({**points[0], "waypoint_kind": "start", "activity_id": activity_id})
 
-    last_d = points[0].get("distance_from_start_km") or 0.0
+    last_d = float(points[0].get("distance_from_start_km") or 0.0)
     for p in points[1:-1]:
         d = p.get("distance_from_start_km")
         if d is None:
             continue
-        if d - last_d >= spacing_km:
+        d_float = float(d)
+        if d_float - last_d >= spacing_km:
             waypoints.append({**p, "waypoint_kind": "waypoint", "activity_id": activity_id})
-            last_d = d
+            last_d = d_float
 
     if len(points) > 1:
         waypoints.append({**points[-1], "waypoint_kind": "end", "activity_id": activity_id})

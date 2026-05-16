@@ -524,3 +524,27 @@ async def test_select_garmin_waypoints_empty(mock_db: AsyncMock):
     mock_db.fetch.return_value = []
     result = await _select_garmin_waypoints(mock_db, "act-1", 1.0)
     assert result == []
+
+
+@pytest.mark.asyncio
+async def test_select_garmin_waypoints_decimal_distance(mock_db: AsyncMock):
+    """asyncpg returns NUMERIC columns as Decimal; spacing_km is float — must not raise."""
+    from decimal import Decimal
+
+    from app.routers.geocoding import _select_garmin_waypoints
+
+    mock_db.fetch.return_value = [
+        {"id": 1, "latitude": 40.0, "longitude": -74.0, "timestamp": "t1", "distance_from_start_km": Decimal("0.0")},
+        {"id": 2, "latitude": 40.01, "longitude": -74.0, "timestamp": "t2", "distance_from_start_km": Decimal("0.5")},
+        {"id": 3, "latitude": 40.02, "longitude": -74.0, "timestamp": "t3", "distance_from_start_km": Decimal("1.2")},
+        {"id": 4, "latitude": 40.03, "longitude": -74.0, "timestamp": "t4", "distance_from_start_km": Decimal("2.5")},
+        {"id": 5, "latitude": 40.04, "longitude": -74.0, "timestamp": "t5", "distance_from_start_km": Decimal("3.0")},
+    ]
+
+    result = await _select_garmin_waypoints(mock_db, "act-1", 1.0)
+
+    kinds = [wp["waypoint_kind"] for wp in result]
+    assert kinds[0] == "start"
+    assert kinds[-1] == "end"
+    mid_ids = [wp["id"] for wp in result if wp["waypoint_kind"] == "waypoint"]
+    assert mid_ids == [3, 4]

@@ -369,6 +369,11 @@ async def list_track_points(
     )
 
     if simplify is not None:
+        # Map-rendering path: skip the geocoded_addresses LEFT JOIN here.
+        # The CTE chain (ST_Simplify -> ST_DumpPoints -> ROW_NUMBER de-dup)
+        # combined with the address join exceeded the asyncpg statement timeout
+        # on large activities. Addresses are still served by the non-simplify
+        # branch and by /activities/{id}/addresses (see issue #113).
         rows = await db.fetch(
             "WITH simplified AS ("
             "  SELECT ST_Simplify("
@@ -395,12 +400,8 @@ async def list_track_points(
             ") "
             "SELECT m.id, m.activity_id, m.latitude, m.longitude, "
             "m.timestamp, m.altitude, m.distance_from_start_km, m.speed_kmh, "
-            "m.heart_rate, m.cadence, m.temperature_c, m.created_at, "
-            "ga.display_address, ga.locality, ga.region, ga.country, "
-            "ga.waypoint_kind, ga.status AS address_status "
+            "m.heart_rate, m.cadence, m.temperature_c, m.created_at "
             "FROM matched m "
-            "LEFT JOIN public.geocoded_addresses ga "
-            "  ON ga.garmin_track_point_id = m.id AND ga.source = 'garmin' "
             "WHERE m.rn = 1 "
             f"ORDER BY m.timestamp {order}",
             activity_id,

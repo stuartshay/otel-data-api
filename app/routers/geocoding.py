@@ -308,6 +308,10 @@ async def _trigger_garmin_geocoding_impl(
             "LEFT JOIN public.geocoded_addresses ga "
             "  ON ga.garmin_activity_id = a.activity_id AND ga.source = 'garmin' "
             "WHERE ga.id IS NULL "
+            "AND EXISTS ("
+            "  SELECT 1 FROM public.garmin_track_points gtp "
+            "  WHERE gtp.activity_id = a.activity_id"
+            ") "
             "GROUP BY a.activity_id "
             "ORDER BY MAX(a.start_time) DESC NULLS LAST "
             "LIMIT $1",
@@ -332,10 +336,14 @@ async def _trigger_garmin_geocoding_impl(
                 skipped_dedup += skip
 
     remaining = await db.fetchval(
-        "SELECT COUNT(*) FROM public.garmin_activities a "
+        "SELECT COUNT(DISTINCT a.activity_id) FROM public.garmin_activities a "
         "LEFT JOIN public.geocoded_addresses ga "
         "  ON ga.garmin_activity_id = a.activity_id AND ga.source = 'garmin' "
-        "WHERE ga.id IS NULL"
+        "WHERE ga.id IS NULL "
+        "AND EXISTS ("
+        "  SELECT 1 FROM public.garmin_track_points gtp "
+        "  WHERE gtp.activity_id = a.activity_id"
+        ")"
     )
 
     return GeocodingTriggerResponse(processed=processed, remaining=remaining, skipped_dedup=skipped_dedup)

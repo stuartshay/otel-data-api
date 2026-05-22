@@ -493,6 +493,14 @@ async def test_internal_trigger_garmin_no_activities(client: AsyncClient, mock_d
     assert response.status_code == 200
     assert response.json()["processed"] == 0
 
+    # Activities without track points are excluded from selection and remaining count.
+    selection_sql = mock_db.fetch.call_args[0][0]
+    remaining_sql = mock_db.fetchval.call_args[0][0]
+    assert "EXISTS" in selection_sql
+    assert "garmin_track_points" in selection_sql
+    assert "EXISTS" in remaining_sql
+    assert "garmin_track_points" in remaining_sql
+
 
 @pytest.mark.asyncio
 async def test_select_garmin_waypoints_picks_start_mid_end(mock_db: AsyncMock):

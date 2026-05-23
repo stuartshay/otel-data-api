@@ -234,9 +234,11 @@ async def test_trigger_geocoding_retry_failed(client: AsyncClient, mock_db: Asyn
     response = await client.post("/api/v1/geocoding/trigger?retry_failed=true")
 
     assert response.status_code == 200
-    # Verify the retry_failed query was used (INNER JOIN with status='no_coverage')
+    # Verify the retry_failed query targets both no_coverage and error rows
     call_args = mock_db.fetch.call_args
-    assert "no_coverage" in call_args[0][0]
+    sql = call_args[0][0]
+    assert "no_coverage" in sql
+    assert "error" in sql
 
 
 # --- Internal geocoding endpoint tests ---
@@ -267,7 +269,9 @@ async def test_internal_trigger_retry_failed(client: AsyncClient, mock_db: Async
 
     assert response.status_code == 200
     call_args = mock_db.fetch.call_args
-    assert "no_coverage" in call_args[0][0]
+    sql = call_args[0][0]
+    assert "no_coverage" in sql
+    assert "error" in sql
 
 
 @pytest.mark.asyncio
@@ -500,6 +504,22 @@ async def test_internal_trigger_garmin_no_activities(client: AsyncClient, mock_d
     assert "garmin_track_points" in selection_sql
     assert "EXISTS" in remaining_sql
     assert "garmin_track_points" in remaining_sql
+
+
+@pytest.mark.asyncio
+async def test_internal_trigger_garmin_retry_failed_targets_error_and_no_coverage(
+    client: AsyncClient, mock_db: AsyncMock
+):
+    """retry_failed=true should re-pick activities with no_coverage OR error waypoints."""
+    mock_db.fetch.return_value = []
+    mock_db.fetchval.return_value = 0
+
+    response = await client.post("/internal/geocoding/trigger/garmin?retry_failed=true")
+
+    assert response.status_code == 200
+    selection_sql = mock_db.fetch.call_args[0][0]
+    assert "no_coverage" in selection_sql
+    assert "error" in selection_sql
 
 
 @pytest.mark.asyncio

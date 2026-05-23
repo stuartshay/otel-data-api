@@ -113,7 +113,7 @@ async def geocoding_status(request: Request) -> GeocodingStatus:
 async def trigger_geocoding(
     request: Request,
     batch_size: int = Query(100, ge=1, le=500, description="Number of locations to geocode in this batch"),
-    retry_failed: bool = Query(False, description="Re-process records with status no_coverage"),
+    retry_failed: bool = Query(False, description="Re-process records with statuses no_coverage or error"),
     _user: dict = Depends(require_auth),
 ) -> GeocodingTriggerResponse:
     """Trigger batch reverse-geocoding of OwnTracks location records (auth required)."""
@@ -124,7 +124,7 @@ async def trigger_geocoding(
 async def internal_trigger_geocoding(
     request: Request,
     batch_size: int = Query(100, ge=1, le=1000, description="Number of locations to geocode in this batch"),
-    retry_failed: bool = Query(False, description="Re-process records with status no_coverage"),
+    retry_failed: bool = Query(False, description="Re-process records with statuses no_coverage or error"),
 ) -> GeocodingTriggerResponse:
     """Trigger batch OwnTracks reverse-geocoding (internal, no auth)."""
     return await _trigger_geocoding_impl(request, batch_size, retry_failed)
@@ -145,7 +145,7 @@ async def _trigger_geocoding_impl(
             "SELECT l.id, l.latitude, l.longitude "
             "FROM public.locations l "
             "INNER JOIN public.geocoded_addresses ga ON ga.location_id = l.id "
-            "WHERE ga.source = 'owntracks' AND ga.status = 'no_coverage' "
+            "WHERE ga.source = 'owntracks' AND ga.status IN ('no_coverage', 'error') "
             "ORDER BY l.id LIMIT $1",
             batch_size,
         )
@@ -253,7 +253,10 @@ async def internal_trigger_garmin_geocoding(
         le=50.0,
         description="Approximate spacing between mid-route waypoints in kilometres",
     ),
-    retry_failed: bool = Query(False, description="Re-process activities with at least one no_coverage waypoint"),
+    retry_failed: bool = Query(
+        False,
+        description="Re-process activities with at least one waypoint in statuses no_coverage or error",
+    ),
 ) -> GeocodingTriggerResponse:
     """Trigger batch reverse-geocoding of Garmin activity waypoints (internal, no auth).
 
@@ -273,7 +276,10 @@ async def trigger_garmin_geocoding(
         le=50.0,
         description="Approximate spacing between mid-route waypoints in kilometres",
     ),
-    retry_failed: bool = Query(False, description="Re-process activities with at least one no_coverage waypoint"),
+    retry_failed: bool = Query(
+        False,
+        description="Re-process activities with at least one waypoint in statuses no_coverage or error",
+    ),
     _user: dict = Depends(require_auth),
 ) -> GeocodingTriggerResponse:
     """Trigger batch reverse-geocoding of Garmin activity waypoints (auth required)."""
@@ -297,7 +303,7 @@ async def _trigger_garmin_geocoding_impl(
             "FROM public.garmin_activities a "
             "INNER JOIN public.geocoded_addresses ga "
             "  ON ga.garmin_activity_id = a.activity_id AND ga.source = 'garmin' "
-            "WHERE ga.status = 'no_coverage' "
+            "WHERE ga.status IN ('no_coverage', 'error') "
             "ORDER BY a.activity_id LIMIT $1",
             batch_size,
         )

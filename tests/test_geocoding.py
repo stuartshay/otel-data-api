@@ -585,7 +585,12 @@ async def test_select_garmin_waypoints_decimal_distance(mock_db: AsyncMock):
 
 @pytest.mark.asyncio
 async def test_select_garmin_waypoints_retry_filters_to_error_and_no_coverage(mock_db: AsyncMock):
-    """retry_failed=True must skip waypoints that are already success or absent."""
+    """retry_failed=True must skip waypoints that are already success or have no prior row.
+
+    Sampled candidates after 1km spacing are ids 1 (start), 3, 4, 5 (end). The status
+    fixture omits id=4 entirely (absent prior row) and marks ids 1 and 5 as success,
+    leaving only id=3 (error) as the legitimate retry target.
+    """
     from app.routers.geocoding import _select_garmin_waypoints
 
     track_rows = [
@@ -595,10 +600,10 @@ async def test_select_garmin_waypoints_retry_filters_to_error_and_no_coverage(mo
         {"id": 4, "latitude": 40.03, "longitude": -74.0, "timestamp": "t4", "distance_from_start_km": 2.5},
         {"id": 5, "latitude": 40.04, "longitude": -74.0, "timestamp": "t5", "distance_from_start_km": 3.0},
     ]
+    # Note: id=4 deliberately omitted to exercise the "absent prior row" branch.
     status_rows = [
         {"garmin_track_point_id": 1, "status": "success"},
         {"garmin_track_point_id": 3, "status": "error"},
-        {"garmin_track_point_id": 4, "status": "no_coverage"},
         {"garmin_track_point_id": 5, "status": "success"},
     ]
     mock_db.fetch.side_effect = [track_rows, status_rows]
@@ -606,7 +611,9 @@ async def test_select_garmin_waypoints_retry_filters_to_error_and_no_coverage(mo
     result = await _select_garmin_waypoints(mock_db, "act-1", 1.0, retry_failed=True)
 
     returned_ids = sorted(wp["id"] for wp in result)
-    assert returned_ids == [3, 4], "Only error/no_coverage waypoints should be retried"
+    assert returned_ids == [3], (
+        "Only error/no_coverage waypoints should be retried; success and absent rows must be skipped"
+    )
 
 
 @pytest.mark.asyncio

@@ -695,11 +695,17 @@ def _track_row_with_address(activity_id: str = "20932993811") -> dict:
     base.update(
         {
             "display_address": "Pier 13, Hoboken, NJ",
+            "street": "Sinatra Drive",
+            "housenumber": "1301",
+            "neighbourhood": "Waterfront",
             "locality": "Hoboken",
             "region": "New Jersey",
             "country": "United States",
+            "postalcode": "07030",
+            "confidence": 0.92,
             "waypoint_kind": "start",
             "address_status": "success",
+            "geocoded_at": "2026-02-12T08:10:55+00:00",
         }
     )
     return base
@@ -716,8 +722,14 @@ async def test_list_track_points_includes_address_when_present(client: AsyncClie
     item = response.json()["items"][0]
     assert item["address"] is not None
     assert item["address"]["display_address"] == "Pier 13, Hoboken, NJ"
+    assert item["address"]["street"] == "Sinatra Drive"
+    assert item["address"]["housenumber"] == "1301"
+    assert item["address"]["neighbourhood"] == "Waterfront"
+    assert item["address"]["postalcode"] == "07030"
+    assert item["address"]["confidence"] == 0.92
     assert item["address"]["waypoint_kind"] == "start"
     assert item["address"]["status"] == "success"
+    assert item["address"]["geocoded_at"] == "2026-02-12T08:10:55Z"
 
 
 @pytest.mark.asyncio

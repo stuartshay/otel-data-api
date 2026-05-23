@@ -419,7 +419,9 @@ async def list_track_points(
         "ga.waypoint_kind, ga.status AS address_status, ga.geocoded_at "
         "FROM public.garmin_track_points gtp "
         "LEFT JOIN public.geocoded_addresses ga "
-        "  ON ga.garmin_track_point_id = gtp.id AND ga.source = 'garmin' "
+        "  ON ga.garmin_track_point_id = gtp.id "
+        " AND ga.garmin_activity_id = gtp.activity_id "
+        " AND ga.source = 'garmin' "
         f"WHERE gtp.activity_id = $1 ORDER BY gtp.{sort} {order} "
         f"LIMIT $2 OFFSET $3",
         activity_id,

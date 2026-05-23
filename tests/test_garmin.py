@@ -243,6 +243,7 @@ async def test_list_track_points_success_and_invalid_sort_falls_back(client: Asy
     assert "ORDER BY gtp.timestamp desc" in track_query
     assert "garmin_track_points" in track_query
     assert "LEFT JOIN public.geocoded_addresses" in track_query
+    assert "ga.garmin_activity_id = gtp.activity_id" in track_query
     assert params == ["20932993811", 5, 1]
 
 

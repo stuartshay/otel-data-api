@@ -298,13 +298,17 @@ async def _trigger_garmin_geocoding_impl(
     pelias_timeout = config.pelias_timeout_seconds
 
     if retry_failed:
+        # Rotate across the backlog by least-recently-attempted activity so consecutive
+        # batches process distinct activities until the error/no_coverage set is drained.
         activity_rows = await db.fetch(
-            "SELECT DISTINCT a.activity_id "
+            "SELECT a.activity_id "
             "FROM public.garmin_activities a "
             "INNER JOIN public.geocoded_addresses ga "
             "  ON ga.garmin_activity_id = a.activity_id AND ga.source = 'garmin' "
             "WHERE ga.status IN ('no_coverage', 'error') "
-            "ORDER BY a.activity_id LIMIT $1",
+            "GROUP BY a.activity_id "
+            "ORDER BY MIN(ga.geocoded_at) ASC NULLS FIRST "
+            "LIMIT $1",
             batch_size,
         )
     else:
@@ -335,22 +339,30 @@ async def _trigger_garmin_geocoding_impl(
     async with httpx.AsyncClient(timeout=pelias_timeout) as client:
         for activity in activity_rows:
             activity_id = activity["activity_id"]
-            waypoints = await _select_garmin_waypoints(db, activity_id, waypoint_spacing_km)
+            waypoints = await _select_garmin_waypoints(db, activity_id, waypoint_spacing_km, retry_failed=retry_failed)
             results = await asyncio.gather(*[_geocode_one(client, wp) for wp in waypoints])
             for proc, skip in results:
                 processed += proc
                 skipped_dedup += skip
 
-    remaining = await db.fetchval(
-        "SELECT COUNT(DISTINCT a.activity_id) FROM public.garmin_activities a "
-        "LEFT JOIN public.geocoded_addresses ga "
-        "  ON ga.garmin_activity_id = a.activity_id AND ga.source = 'garmin' "
-        "WHERE ga.id IS NULL "
-        "AND EXISTS ("
-        "  SELECT 1 FROM public.garmin_track_points gtp "
-        "  WHERE gtp.activity_id = a.activity_id"
-        ")"
-    )
+    if retry_failed:
+        remaining = await db.fetchval(
+            "SELECT COUNT(DISTINCT ga.garmin_activity_id) "
+            "FROM public.geocoded_addresses ga "
+            "WHERE ga.source = 'garmin' "
+            "AND ga.status IN ('no_coverage', 'error')"
+        )
+    else:
+        remaining = await db.fetchval(
+            "SELECT COUNT(DISTINCT a.activity_id) FROM public.garmin_activities a "
+            "LEFT JOIN public.geocoded_addresses ga "
+            "  ON ga.garmin_activity_id = a.activity_id AND ga.source = 'garmin' "
+            "WHERE ga.id IS NULL "
+            "AND EXISTS ("
+            "  SELECT 1 FROM public.garmin_track_points gtp "
+            "  WHERE gtp.activity_id = a.activity_id"
+            ")"
+        )
 
     return GeocodingTriggerResponse(processed=processed, remaining=remaining, skipped_dedup=skipped_dedup)
 
@@ -359,8 +371,16 @@ async def _select_garmin_waypoints(
     db: Any,
     activity_id: str,
     spacing_km: float,
+    *,
+    retry_failed: bool = False,
 ) -> list[dict[str, Any]]:
-    """Pick start, end, and every-``spacing_km`` mid-route waypoints from an activity's track."""
+    """Pick start, end, and every-``spacing_km`` mid-route waypoints from an activity's track.
+
+    When ``retry_failed`` is True, the returned list is filtered to only waypoints whose
+    current ``geocoded_addresses`` row has status in ('error', 'no_coverage'). Waypoints with
+    status ``success`` are skipped so transient Pelias failures cannot demote them, and
+    waypoints with no existing row are skipped because they belong to the fresh-pass path.
+    """
     rows = await db.fetch(
         "SELECT id, latitude, longitude, timestamp, distance_from_start_km "
         "FROM public.garmin_track_points "
@@ -387,6 +407,17 @@ async def _select_garmin_waypoints(
 
     if len(points) > 1:
         waypoints.append({**points[-1], "waypoint_kind": "end", "activity_id": activity_id})
+
+    if retry_failed and waypoints:
+        track_point_ids = [wp["id"] for wp in waypoints]
+        status_rows = await db.fetch(
+            "SELECT garmin_track_point_id, status "
+            "FROM public.geocoded_addresses "
+            "WHERE source = 'garmin' AND garmin_track_point_id = ANY($1::bigint[])",
+            track_point_ids,
+        )
+        retryable = {r["garmin_track_point_id"] for r in status_rows if r["status"] in ("error", "no_coverage")}
+        waypoints = [wp for wp in waypoints if wp["id"] in retryable]
 
     return waypoints
 

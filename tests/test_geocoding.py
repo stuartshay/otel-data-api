@@ -576,3 +576,110 @@ async def test_select_garmin_waypoints_decimal_distance(mock_db: AsyncMock):
     assert kinds[-1] == "end"
     mid_ids = [wp["id"] for wp in result if wp["waypoint_kind"] == "waypoint"]
     assert mid_ids == [3, 4]
+
+
+# ---------------------------------------------------------------------------
+# Retry-mode safety: prior success rows must not be overwritten (issue #124)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_select_garmin_waypoints_retry_filters_to_error_and_no_coverage(mock_db: AsyncMock):
+    """retry_failed=True must skip waypoints that are already success or have no prior row.
+
+    Sampled candidates after 1km spacing are ids 1 (start), 3, 4, 5 (end). The status
+    fixture omits id=4 entirely (absent prior row) and marks ids 1 and 5 as success,
+    leaving only id=3 (error) as the legitimate retry target.
+    """
+    from app.routers.geocoding import _select_garmin_waypoints
+
+    track_rows = [
+        {"id": 1, "latitude": 40.0, "longitude": -74.0, "timestamp": "t1", "distance_from_start_km": 0.0},
+        {"id": 2, "latitude": 40.01, "longitude": -74.0, "timestamp": "t2", "distance_from_start_km": 0.5},
+        {"id": 3, "latitude": 40.02, "longitude": -74.0, "timestamp": "t3", "distance_from_start_km": 1.2},
+        {"id": 4, "latitude": 40.03, "longitude": -74.0, "timestamp": "t4", "distance_from_start_km": 2.5},
+        {"id": 5, "latitude": 40.04, "longitude": -74.0, "timestamp": "t5", "distance_from_start_km": 3.0},
+    ]
+    # Note: id=4 deliberately omitted to exercise the "absent prior row" branch.
+    status_rows = [
+        {"garmin_track_point_id": 1, "status": "success"},
+        {"garmin_track_point_id": 3, "status": "error"},
+        {"garmin_track_point_id": 5, "status": "success"},
+    ]
+    mock_db.fetch.side_effect = [track_rows, status_rows]
+
+    result = await _select_garmin_waypoints(mock_db, "act-1", 1.0, retry_failed=True)
+
+    returned_ids = sorted(wp["id"] for wp in result)
+    assert returned_ids == [3], (
+        "Only error/no_coverage waypoints should be retried; success and absent rows must be skipped"
+    )
+
+
+@pytest.mark.asyncio
+async def test_select_garmin_waypoints_retry_no_match_returns_empty(mock_db: AsyncMock):
+    """If every candidate waypoint is success, retry mode returns nothing — prevents demotion."""
+    from app.routers.geocoding import _select_garmin_waypoints
+
+    track_rows = [
+        {"id": 1, "latitude": 40.0, "longitude": -74.0, "timestamp": "t1", "distance_from_start_km": 0.0},
+        {"id": 2, "latitude": 40.04, "longitude": -74.0, "timestamp": "t2", "distance_from_start_km": 3.0},
+    ]
+    status_rows = [
+        {"garmin_track_point_id": 1, "status": "success"},
+        {"garmin_track_point_id": 2, "status": "success"},
+    ]
+    mock_db.fetch.side_effect = [track_rows, status_rows]
+
+    result = await _select_garmin_waypoints(mock_db, "act-1", 1.0, retry_failed=True)
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_select_garmin_waypoints_non_retry_ignores_status(mock_db: AsyncMock):
+    """Default (retry_failed=False) path must not issue the status query."""
+    from app.routers.geocoding import _select_garmin_waypoints
+
+    mock_db.fetch.return_value = [
+        {"id": 1, "latitude": 40.0, "longitude": -74.0, "timestamp": "t1", "distance_from_start_km": 0.0},
+        {"id": 2, "latitude": 40.04, "longitude": -74.0, "timestamp": "t2", "distance_from_start_km": 3.0},
+    ]
+
+    result = await _select_garmin_waypoints(mock_db, "act-1", 1.0)
+
+    assert {wp["id"] for wp in result} == {1, 2}
+    # Only one fetch call (track points); no follow-up status query in non-retry mode.
+    assert mock_db.fetch.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_internal_trigger_garmin_retry_uses_rotation_order_by(client: AsyncClient, mock_db: AsyncMock):
+    """retry_failed activity selection must rotate by least-recently-attempted, not activity_id."""
+    mock_db.fetch.return_value = []
+    mock_db.fetchval.return_value = 0
+
+    response = await client.post("/internal/geocoding/trigger/garmin?retry_failed=true")
+
+    assert response.status_code == 200
+    selection_sql = mock_db.fetch.call_args_list[0][0][0]
+    assert "MIN(ga.geocoded_at)" in selection_sql
+    assert "ASC NULLS FIRST" in selection_sql
+    # Must not rely on activity_id ordering (which caused starvation in issue #124).
+    assert "ORDER BY a.activity_id" not in selection_sql
+
+
+@pytest.mark.asyncio
+async def test_internal_trigger_garmin_retry_remaining_counts_retry_backlog(client: AsyncClient, mock_db: AsyncMock):
+    """In retry mode, remaining must reflect the error/no_coverage backlog, not the fresh queue."""
+    mock_db.fetch.return_value = []
+    mock_db.fetchval.return_value = 42
+
+    response = await client.post("/internal/geocoding/trigger/garmin?retry_failed=true")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["remaining"] == 42
+    remaining_sql = mock_db.fetchval.call_args[0][0]
+    assert "no_coverage" in remaining_sql
+    assert "error" in remaining_sql
+    assert "ga.source = 'garmin'" in remaining_sql

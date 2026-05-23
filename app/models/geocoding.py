@@ -149,8 +149,14 @@ class GeocodedAddressSummary(BaseModel):
     """Compact address summary embedded in track-point payloads."""
 
     display_address: str | None = Field(default=None, description="Full formatted address label from Pelias")
+    street: str | None = Field(default=None, description="Street name")
+    housenumber: str | None = Field(default=None, description="House or building number")
+    neighbourhood: str | None = Field(default=None, description="Neighbourhood name")
     locality: str | None = Field(default=None, description="City or town")
     region: str | None = Field(default=None, description="State or province")
     country: str | None = Field(default=None, description="Country name")
+    postalcode: str | None = Field(default=None, description="Postal or ZIP code")
+    confidence: float | None = Field(default=None, description="Pelias confidence score (0-1)")
     waypoint_kind: WaypointKind | None = Field(default=None, description="Role of this waypoint (Garmin only)")
     status: str = Field(description="Geocoding status: success, no_coverage, error, pending")
+    geocoded_at: datetime | None = Field(default=None, description="UTC timestamp when geocoding was performed")

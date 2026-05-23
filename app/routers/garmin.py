@@ -414,8 +414,9 @@ async def list_track_points(
         "SELECT gtp.id, gtp.activity_id, gtp.latitude, gtp.longitude, gtp.timestamp, "
         "gtp.altitude, gtp.distance_from_start_km, gtp.speed_kmh, gtp.heart_rate, "
         "gtp.cadence, gtp.temperature_c, gtp.created_at, "
-        "ga.display_address, ga.locality, ga.region, ga.country, "
-        "ga.waypoint_kind, ga.status AS address_status "
+        "ga.display_address, ga.street, ga.housenumber, ga.neighbourhood, "
+        "ga.locality, ga.region, ga.country, ga.postalcode, ga.confidence, "
+        "ga.waypoint_kind, ga.status AS address_status, ga.geocoded_at "
         "FROM public.garmin_track_points gtp "
         "LEFT JOIN public.geocoded_addresses ga "
         "  ON ga.garmin_track_point_id = gtp.id AND ga.source = 'garmin' "
@@ -466,19 +467,31 @@ def _row_to_track_point(row: Mapping[str, Any]) -> GarminTrackPoint:
     data: dict[str, Any] = dict(row)
     address_status = data.pop("address_status", None)
     display_address = data.pop("display_address", None)
+    street = data.pop("street", None)
+    housenumber = data.pop("housenumber", None)
+    neighbourhood = data.pop("neighbourhood", None)
     locality = data.pop("locality", None)
     region = data.pop("region", None)
     country = data.pop("country", None)
+    postalcode = data.pop("postalcode", None)
+    confidence = data.pop("confidence", None)
     waypoint_kind = data.pop("waypoint_kind", None)
+    geocoded_at = data.pop("geocoded_at", None)
     address: GeocodedAddressSummary | None = None
     if address_status is not None:
         address = GeocodedAddressSummary(
             display_address=display_address,
+            street=street,
+            housenumber=housenumber,
+            neighbourhood=neighbourhood,
             locality=locality,
             region=region,
             country=country,
+            postalcode=postalcode,
+            confidence=confidence,
             waypoint_kind=waypoint_kind,
             status=address_status,
+            geocoded_at=geocoded_at,
         )
     return GarminTrackPoint(**data, address=address)
 

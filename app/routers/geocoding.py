@@ -113,7 +113,7 @@ async def geocoding_status(request: Request) -> GeocodingStatus:
 async def trigger_geocoding(
     request: Request,
     batch_size: int = Query(100, ge=1, le=500, description="Number of locations to geocode in this batch"),
-    retry_failed: bool = Query(False, description="Re-process records with status no_coverage or error"),
+    retry_failed: bool = Query(False, description="Re-process records with statuses no_coverage or error"),
     _user: dict = Depends(require_auth),
 ) -> GeocodingTriggerResponse:
     """Trigger batch reverse-geocoding of OwnTracks location records (auth required)."""
@@ -124,7 +124,7 @@ async def trigger_geocoding(
 async def internal_trigger_geocoding(
     request: Request,
     batch_size: int = Query(100, ge=1, le=1000, description="Number of locations to geocode in this batch"),
-    retry_failed: bool = Query(False, description="Re-process records with status no_coverage or error"),
+    retry_failed: bool = Query(False, description="Re-process records with statuses no_coverage or error"),
 ) -> GeocodingTriggerResponse:
     """Trigger batch OwnTracks reverse-geocoding (internal, no auth)."""
     return await _trigger_geocoding_impl(request, batch_size, retry_failed)
@@ -255,7 +255,7 @@ async def internal_trigger_garmin_geocoding(
     ),
     retry_failed: bool = Query(
         False,
-        description="Re-process activities with at least one no_coverage or error waypoint",
+        description="Re-process activities with at least one waypoint in statuses no_coverage or error",
     ),
 ) -> GeocodingTriggerResponse:
     """Trigger batch reverse-geocoding of Garmin activity waypoints (internal, no auth).
@@ -278,7 +278,7 @@ async def trigger_garmin_geocoding(
     ),
     retry_failed: bool = Query(
         False,
-        description="Re-process activities with at least one no_coverage or error waypoint",
+        description="Re-process activities with at least one waypoint in statuses no_coverage or error",
     ),
     _user: dict = Depends(require_auth),
 ) -> GeocodingTriggerResponse:

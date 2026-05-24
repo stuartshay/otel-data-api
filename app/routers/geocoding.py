@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from typing import Any
 
 import httpx
@@ -144,8 +145,7 @@ async def pelias_health(request: Request) -> PeliasHealth:
     """
     cfg = request.app.state.config
     pelias_base_url = cfg.pelias_base_url
-    loop = asyncio.get_event_loop()
-    start = loop.time()
+    start = time.perf_counter()
     healthy = False
     detail: str | None = None
     features = 0
@@ -160,24 +160,27 @@ async def pelias_health(request: Request) -> PeliasHealth:
                 },
             )
         if 200 <= resp.status_code < 300:
-            body = resp.json()
-            features = len(body.get("features", []))
-            healthy = features > 0
-            if not healthy:
-                detail = "Pelias responded but returned zero features for probe coordinate"
+            try:
+                body = resp.json()
+            except (ValueError, json.JSONDecodeError) as e:
+                detail = f"invalid JSON response: {e}"
+            else:
+                features = len(body.get("features", []))
+                healthy = features > 0
+                if not healthy:
+                    detail = "Pelias responded but returned zero features for probe coordinate"
         else:
             detail = f"Pelias HTTP {resp.status_code}"
     except httpx.TimeoutException as e:
         detail = f"timeout: {e}"
     except httpx.HTTPError as e:
         detail = f"transport error: {e}"
-    latency_ms = round((loop.time() - start) * 1000, 1)
+    latency_ms = round((time.perf_counter() - start) * 1000, 1)
     return PeliasHealth(
         healthy=healthy,
         latency_ms=latency_ms,
         sample_features_count=features,
         detail=detail,
-        pelias_base_url=pelias_base_url,
     )
 
 
@@ -465,8 +468,9 @@ async def _select_garmin_waypoints(
     """Pick start, end, and every-``spacing_km`` mid-route waypoints from an activity's track.
 
     When ``retry_failed`` is True, the returned list is filtered to only waypoints whose
-    current ``geocoded_addresses`` row has status in ('error', 'no_coverage'). Waypoints with
-    status ``success`` are skipped so transient Pelias failures cannot demote them, and
+    current ``geocoded_addresses`` row has a retryable status (see ``RETRY_STATUSES`` —
+    currently ``no_coverage``, ``error``, and ``pending``). Waypoints with status
+    ``success`` are skipped so transient Pelias failures cannot demote them, and
     waypoints with no existing row are skipped because they belong to the fresh-pass path.
     """
     rows = await db.fetch(
@@ -691,7 +695,7 @@ async def _call_pelias(
             await asyncio.sleep(PELIAS_BACKOFF_SECONDS[attempt])
 
     logger.warning(
-        "Pelias unavailable after %d attempts; marking waypoint pending",
+        "Pelias unavailable after %d attempts; marking row pending",
         PELIAS_MAX_ATTEMPTS,
     )
     raise PeliasTransientError(f"Pelias unavailable after {PELIAS_MAX_ATTEMPTS} attempts") from last_err

@@ -162,8 +162,8 @@ def main() -> int:
             else:
                 consecutive_zero = 0
 
-            if remaining == 0 and processed == 0:
-                print("[drain] queue drained (remaining=0, processed=0)", flush=True)
+            if remaining == 0:
+                print(f"[drain] queue drained (remaining=0, final batch processed={processed})", flush=True)
                 break
             if consecutive_zero >= 3:
                 print(

@@ -122,7 +122,6 @@ class PeliasHealth(BaseModel):
         default=None,
         description="Failure detail when not healthy (timeout, transport error, non-2xx status).",
     )
-    pelias_base_url: str = Field(description="Base URL the probe was sent to.")
 
 
 class GeocodingTriggerResponse(BaseModel):

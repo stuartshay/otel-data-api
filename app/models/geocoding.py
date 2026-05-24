@@ -101,6 +101,27 @@ class GeocodingStatusBySource(BaseModel):
     garmin_coverage_percent: float = Field(
         description="Percentage of Garmin activities with at least one geocoded address"
     )
+    garmin_waypoint_success_percent: float = Field(
+        default=0.0,
+        description=(
+            "Percentage of Garmin waypoint rows with status='success' "
+            "(success / (success + pending + no_coverage + error))."
+        ),
+    )
+
+
+class PeliasHealth(BaseModel):
+    """Result of an upstream Pelias reverse-geocoder health probe."""
+
+    healthy: bool = Field(description="True when Pelias returned a usable feature for the probe coordinate.")
+    latency_ms: float = Field(description="Round-trip latency for the probe request, in milliseconds.")
+    sample_features_count: int = Field(
+        default=0, description="Number of features returned by the probe (0 means the probe failed)."
+    )
+    detail: str | None = Field(
+        default=None,
+        description="Failure detail when not healthy (timeout, transport error, non-2xx status).",
+    )
 
 
 class GeocodingTriggerResponse(BaseModel):

@@ -94,6 +94,7 @@ async def test_trigger_geocoding_pelias_success(client: AsyncClient, mock_db: As
     mock_httpx_response = MagicMock()
     mock_httpx_response.json.return_value = pelias_response
     mock_httpx_response.raise_for_status = MagicMock()
+    mock_httpx_response.status_code = 200
 
     with patch("app.routers.geocoding.httpx.AsyncClient") as mock_client_cls:
         mock_client_instance = AsyncMock()
@@ -131,6 +132,7 @@ async def test_trigger_geocoding_pelias_no_features(client: AsyncClient, mock_db
     mock_httpx_response = MagicMock()
     mock_httpx_response.json.return_value = pelias_response
     mock_httpx_response.raise_for_status = MagicMock()
+    mock_httpx_response.status_code = 200
 
     with patch("app.routers.geocoding.httpx.AsyncClient") as mock_client_cls:
         mock_client_instance = AsyncMock()
@@ -234,11 +236,14 @@ async def test_trigger_geocoding_retry_failed(client: AsyncClient, mock_db: Asyn
     response = await client.post("/api/v1/geocoding/trigger?retry_failed=true")
 
     assert response.status_code == 200
-    # Verify the retry_failed query targets both no_coverage and error rows
+    # Verify the retry_failed query targets the retryable status set (no_coverage, error, pending)
     call_args = mock_db.fetch.call_args
     sql = call_args[0][0]
-    assert "no_coverage" in sql
-    assert "error" in sql
+    statuses = call_args[0][2]
+    assert "status = ANY" in sql
+    assert "no_coverage" in statuses
+    assert "error" in statuses
+    assert "pending" in statuses
 
 
 # --- Internal geocoding endpoint tests ---
@@ -270,8 +275,11 @@ async def test_internal_trigger_retry_failed(client: AsyncClient, mock_db: Async
     assert response.status_code == 200
     call_args = mock_db.fetch.call_args
     sql = call_args[0][0]
-    assert "no_coverage" in sql
-    assert "error" in sql
+    statuses = call_args[0][2]
+    assert "status = ANY" in sql
+    assert "no_coverage" in statuses
+    assert "error" in statuses
+    assert "pending" in statuses
 
 
 @pytest.mark.asyncio
@@ -304,6 +312,7 @@ async def test_internal_trigger_happy_path(client: AsyncClient, mock_db: AsyncMo
     mock_httpx_response = MagicMock()
     mock_httpx_response.json.return_value = pelias_response
     mock_httpx_response.raise_for_status = MagicMock()
+    mock_httpx_response.status_code = 200
 
     with patch("app.routers.geocoding.httpx.AsyncClient") as mock_client_cls:
         mock_client_instance = AsyncMock()
@@ -351,6 +360,7 @@ async def test_trigger_geocoding_db_timeout_handled(client: AsyncClient, mock_db
     mock_httpx_response = MagicMock()
     mock_httpx_response.json.return_value = pelias_response
     mock_httpx_response.raise_for_status = MagicMock()
+    mock_httpx_response.status_code = 200
 
     with patch("app.routers.geocoding.httpx.AsyncClient") as mock_client_cls:
         mock_client_instance = AsyncMock()
@@ -400,6 +410,7 @@ async def test_trigger_geocoding_unexpected_error_upserts_error_status(client: A
     mock_httpx_response = MagicMock()
     mock_httpx_response.json.return_value = pelias_response
     mock_httpx_response.raise_for_status = MagicMock()
+    mock_httpx_response.status_code = 200
 
     with patch("app.routers.geocoding.httpx.AsyncClient") as mock_client_cls:
         mock_client_instance = AsyncMock()
@@ -517,9 +528,13 @@ async def test_internal_trigger_garmin_retry_failed_targets_error_and_no_coverag
     response = await client.post("/internal/geocoding/trigger/garmin?retry_failed=true")
 
     assert response.status_code == 200
-    selection_sql = mock_db.fetch.call_args[0][0]
-    assert "no_coverage" in selection_sql
-    assert "error" in selection_sql
+    call_args = mock_db.fetch.call_args
+    selection_sql = call_args[0][0]
+    statuses = call_args[0][2]
+    assert "status = ANY" in selection_sql
+    assert "no_coverage" in statuses
+    assert "error" in statuses
+    assert "pending" in statuses
 
 
 @pytest.mark.asyncio
@@ -680,6 +695,123 @@ async def test_internal_trigger_garmin_retry_remaining_counts_retry_backlog(clie
     body = response.json()
     assert body["remaining"] == 42
     remaining_sql = mock_db.fetchval.call_args[0][0]
-    assert "no_coverage" in remaining_sql
-    assert "error" in remaining_sql
+    remaining_statuses = mock_db.fetchval.call_args[0][1]
+    assert "status = ANY" in remaining_sql
     assert "ga.source = 'garmin'" in remaining_sql
+    assert "no_coverage" in remaining_statuses
+    assert "error" in remaining_statuses
+    assert "pending" in remaining_statuses
+
+
+# --- Pelias transient-error / retry hardening tests ---
+
+
+@pytest.mark.asyncio
+async def test_call_pelias_retries_on_timeout_then_raises():
+    """Three consecutive timeouts should raise PeliasTransientError."""
+    import httpx
+
+    from app.routers.geocoding import PeliasTransientError, _call_pelias
+
+    client = AsyncMock()
+    client.get = AsyncMock(side_effect=httpx.TimeoutException("boom"))
+
+    with patch("app.routers.geocoding.asyncio.sleep", new=AsyncMock()), pytest.raises(PeliasTransientError):
+        await _call_pelias(client, "http://pelias.test", 40.0, -74.0)
+
+    assert client.get.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_call_pelias_retries_on_5xx_then_raises():
+    """Three consecutive 5xx responses should raise PeliasTransientError."""
+    from app.routers.geocoding import PeliasTransientError, _call_pelias
+
+    bad = MagicMock()
+    bad.status_code = 503
+    bad.raise_for_status = MagicMock()
+
+    client = AsyncMock()
+    client.get = AsyncMock(return_value=bad)
+
+    with patch("app.routers.geocoding.asyncio.sleep", new=AsyncMock()), pytest.raises(PeliasTransientError):
+        await _call_pelias(client, "http://pelias.test", 40.0, -74.0)
+
+    assert client.get.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_call_pelias_4xx_is_permanent_no_retry():
+    """A 4xx response should return None (permanent) without retrying."""
+    from app.routers.geocoding import _call_pelias
+
+    bad = MagicMock()
+    bad.status_code = 400
+    bad.raise_for_status = MagicMock()
+
+    client = AsyncMock()
+    client.get = AsyncMock(return_value=bad)
+
+    result = await _call_pelias(client, "http://pelias.test", 40.0, -74.0)
+    assert result is None
+    assert client.get.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_call_pelias_success_first_try():
+    """A 2xx response with valid JSON should return parsed body on the first attempt."""
+    from app.routers.geocoding import _call_pelias
+
+    ok = MagicMock()
+    ok.status_code = 200
+    ok.raise_for_status = MagicMock()
+    ok.json.return_value = {"features": [{"properties": {"label": "X"}}]}
+
+    client = AsyncMock()
+    client.get = AsyncMock(return_value=ok)
+
+    result = await _call_pelias(client, "http://pelias.test", 40.0, -74.0)
+    assert result == {"features": [{"properties": {"label": "X"}}]}
+    assert client.get.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_pelias_health_endpoint_healthy(client: AsyncClient):
+    """/pelias-health returns healthy=true when probe returns features."""
+    ok = MagicMock()
+    ok.status_code = 200
+    ok.raise_for_status = MagicMock()
+    ok.json.return_value = {"features": [{"properties": {"label": "Times Square"}}]}
+
+    with patch("app.routers.geocoding.httpx.AsyncClient") as mock_async_client:
+        instance = AsyncMock()
+        instance.get = AsyncMock(return_value=ok)
+        mock_async_client.return_value.__aenter__.return_value = instance
+
+        response = await client.get("/api/v1/geocoding/pelias-health")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["healthy"] is True
+    assert body["sample_features_count"] == 1
+    assert body["detail"] is None
+
+
+@pytest.mark.asyncio
+async def test_pelias_health_endpoint_unhealthy_on_timeout(client: AsyncClient):
+    """/pelias-health returns healthy=false when probe times out."""
+    import httpx
+
+    with patch("app.routers.geocoding.httpx.AsyncClient") as mock_async_client:
+        instance = AsyncMock()
+        instance.get = AsyncMock(side_effect=httpx.TimeoutException("slow"))
+        mock_async_client.return_value.__aenter__.return_value = instance
+
+        response = await client.get("/api/v1/geocoding/pelias-health")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["healthy"] is False
+    assert body["sample_features_count"] == 0
+    assert body["detail"] is not None
+    assert "timeout" in body["detail"].lower()

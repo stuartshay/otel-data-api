@@ -16,6 +16,7 @@ from app.models.geocoding import (
     GeocodingStatus,
     GeocodingStatusBySource,
     GeocodingTriggerResponse,
+    PeliasHealth,
 )
 
 logger = structlog.get_logger(__name__)
@@ -27,8 +28,29 @@ PELIAS_REVERSE_PATH = "/v1/reverse"
 MAX_GEOCODE_CONCURRENCY = 5
 DEFAULT_GARMIN_WAYPOINT_SPACING_KM = 1.0
 
+# Pelias retry policy: transient failures (timeout, connection, 5xx) are retried
+# with exponential backoff; if all attempts fail the caller upserts status=
+# 'pending' so the retry path can pick the row up again on the next pass.
+# Permanent failures (4xx) short-circuit to status='error' immediately.
+PELIAS_MAX_ATTEMPTS = 3
+PELIAS_BACKOFF_SECONDS = (0.2, 0.8)
+
+# Known-good coordinate used by /pelias-health to probe upstream availability.
+# Times Square, NYC — inside dense Pelias coverage; expected confidence ≥ 0.5.
+PELIAS_HEALTH_PROBE_LAT = 40.7580
+PELIAS_HEALTH_PROBE_LON = -73.9855
+
+# Status values that the retry path should re-process. 'pending' was previously
+# only used for OwnTracks; Garmin now also writes 'pending' on transient
+# Pelias failures so they can be drained without manual intervention.
+RETRY_STATUSES = ("no_coverage", "error", "pending")
+
 _OT_CONFLICT = "ON CONFLICT (location_id) WHERE source = 'owntracks'"
 _GARMIN_CONFLICT = "ON CONFLICT (garmin_track_point_id) WHERE source = 'garmin'"
+
+
+class PeliasTransientError(Exception):
+    """Raised by ``_call_pelias`` after all retry attempts have failed transiently."""
 
 
 @router.get("/status", response_model=GeocodingStatus)
@@ -71,6 +93,7 @@ async def geocoding_status(request: Request) -> GeocodingStatus:
         "SELECT COUNT(DISTINCT garmin_activity_id) FROM public.geocoded_addresses WHERE source = 'garmin'"
     )
     garmin_coverage_percent = round((activities_geocoded / activities_total * 100), 2) if activities_total else 0.0
+    garmin_waypoint_success_percent = round(((g_success or 0) / g_total_rows * 100), 2) if g_total_rows else 0.0
 
     by_source = GeocodingStatusBySource(
         owntracks=GeocodingSourceStatus(
@@ -90,6 +113,7 @@ async def geocoding_status(request: Request) -> GeocodingStatus:
         garmin_activities_total=activities_total or 0,
         garmin_activities_geocoded=activities_geocoded or 0,
         garmin_coverage_percent=garmin_coverage_percent,
+        garmin_waypoint_success_percent=garmin_waypoint_success_percent,
     )
 
     return GeocodingStatus(
@@ -101,6 +125,59 @@ async def geocoding_status(request: Request) -> GeocodingStatus:
         errors=ot_errors,
         coverage_percent=coverage_percent,
         by_source=by_source,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Pelias health probe
+# ---------------------------------------------------------------------------
+
+
+@router.get("/pelias-health", response_model=PeliasHealth)
+async def pelias_health(request: Request) -> PeliasHealth:
+    """Probe the upstream Pelias reverse-geocoder with a known-good coordinate.
+
+    Returns 200 with ``healthy=false`` rather than failing so that callers
+    (Airflow sensors, dashboards) can branch on the boolean. Used as a
+    pre-flight gate before batched trigger runs to avoid recording large
+    numbers of false-positive errors during a Pelias outage.
+    """
+    cfg = request.app.state.config
+    pelias_base_url = cfg.pelias_base_url
+    loop = asyncio.get_event_loop()
+    start = loop.time()
+    healthy = False
+    detail: str | None = None
+    features = 0
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                f"{pelias_base_url}{PELIAS_REVERSE_PATH}",
+                params={
+                    "point.lat": PELIAS_HEALTH_PROBE_LAT,
+                    "point.lon": PELIAS_HEALTH_PROBE_LON,
+                    "size": 1,
+                },
+            )
+        if 200 <= resp.status_code < 300:
+            body = resp.json()
+            features = len(body.get("features", []))
+            healthy = features > 0
+            if not healthy:
+                detail = "Pelias responded but returned zero features for probe coordinate"
+        else:
+            detail = f"Pelias HTTP {resp.status_code}"
+    except httpx.TimeoutException as e:
+        detail = f"timeout: {e}"
+    except httpx.HTTPError as e:
+        detail = f"transport error: {e}"
+    latency_ms = round((loop.time() - start) * 1000, 1)
+    return PeliasHealth(
+        healthy=healthy,
+        latency_ms=latency_ms,
+        sample_features_count=features,
+        detail=detail,
+        pelias_base_url=pelias_base_url,
     )
 
 
@@ -145,9 +222,10 @@ async def _trigger_geocoding_impl(
             "SELECT l.id, l.latitude, l.longitude "
             "FROM public.locations l "
             "INNER JOIN public.geocoded_addresses ga ON ga.location_id = l.id "
-            "WHERE ga.source = 'owntracks' AND ga.status IN ('no_coverage', 'error') "
+            "WHERE ga.source = 'owntracks' AND ga.status = ANY($2::text[]) "
             "ORDER BY l.id LIMIT $1",
             batch_size,
+            list(RETRY_STATUSES),
         )
     else:
         rows = await db.fetch(
@@ -223,8 +301,16 @@ async def _process_location_inner(
         await _persist_owntracks_from_neighbour(db, location_id, neighbour)
         return 0, 1
 
-    pelias_data = await _call_pelias(client, pelias_base_url, lat, lon)
+    try:
+        pelias_data = await _call_pelias(client, pelias_base_url, lat, lon)
+    except PeliasTransientError:
+        # Transport / 5xx after retries: mark pending so the retry path picks
+        # it up again. Avoids burning permanent 'error' rows during outages.
+        await _upsert_owntracks_status(db, location_id, status="pending")
+        return 1, 0
+
     if pelias_data is None:
+        # Permanent failure (4xx response or invalid JSON body).
         await _upsert_owntracks_status(db, location_id, status="error")
         return 1, 0
 
@@ -299,17 +385,18 @@ async def _trigger_garmin_geocoding_impl(
 
     if retry_failed:
         # Rotate across the backlog by least-recently-attempted activity so consecutive
-        # batches process distinct activities until the error/no_coverage set is drained.
+        # batches process distinct activities until the failure-status set is drained.
         activity_rows = await db.fetch(
             "SELECT a.activity_id "
             "FROM public.garmin_activities a "
             "INNER JOIN public.geocoded_addresses ga "
             "  ON ga.garmin_activity_id = a.activity_id AND ga.source = 'garmin' "
-            "WHERE ga.status IN ('no_coverage', 'error') "
+            "WHERE ga.status = ANY($2::text[]) "
             "GROUP BY a.activity_id "
             "ORDER BY MIN(ga.geocoded_at) ASC NULLS FIRST "
             "LIMIT $1",
             batch_size,
+            list(RETRY_STATUSES),
         )
     else:
         activity_rows = await db.fetch(
@@ -350,7 +437,8 @@ async def _trigger_garmin_geocoding_impl(
             "SELECT COUNT(DISTINCT ga.garmin_activity_id) "
             "FROM public.geocoded_addresses ga "
             "WHERE ga.source = 'garmin' "
-            "AND ga.status IN ('no_coverage', 'error')"
+            "AND ga.status = ANY($1::text[])",
+            list(RETRY_STATUSES),
         )
     else:
         remaining = await db.fetchval(
@@ -416,7 +504,7 @@ async def _select_garmin_waypoints(
             "WHERE source = 'garmin' AND garmin_track_point_id = ANY($1::bigint[])",
             track_point_ids,
         )
-        retryable = {r["garmin_track_point_id"] for r in status_rows if r["status"] in ("error", "no_coverage")}
+        retryable = {r["garmin_track_point_id"] for r in status_rows if r["status"] in RETRY_STATUSES}
         waypoints = [wp for wp in waypoints if wp["id"] in retryable]
 
     return waypoints
@@ -482,7 +570,15 @@ async def _process_garmin_waypoint_inner(
         await _persist_garmin_from_neighbour(db, track_point_id, activity_id, waypoint_kind, neighbour)
         return 0, 1
 
-    pelias_data = await _call_pelias(client, pelias_base_url, lat, lon)
+    try:
+        pelias_data = await _call_pelias(client, pelias_base_url, lat, lon)
+    except PeliasTransientError:
+        # Transport / 5xx after retries: mark pending so the next retry pass
+        # picks this waypoint up. Prevents a Pelias outage from being recorded
+        # as a permanent 'error' that requires manual intervention.
+        await _upsert_garmin_status(db, track_point_id, activity_id, waypoint_kind, status="pending")
+        return 1, 0
+
     if pelias_data is None:
         await _upsert_garmin_status(db, track_point_id, activity_id, waypoint_kind, status="error")
         return 1, 0
@@ -534,18 +630,71 @@ async def _call_pelias(
     lat: float,
     lon: float,
 ) -> dict[str, Any] | None:
-    """Call the Pelias reverse-geocoder. Returns parsed JSON or None on transport error."""
-    try:
-        resp = await client.get(
-            f"{pelias_base_url}{PELIAS_REVERSE_PATH}",
-            params={"point.lat": lat, "point.lon": lon, "size": 1},
-        )
-        resp.raise_for_status()
-        data: dict[str, Any] = resp.json()
-        return data
-    except httpx.HTTPError:
-        logger.warning("Pelias request failed", exc_info=True)
-        return None
+    """Call Pelias reverse-geocoder with retry/backoff.
+
+    Returns:
+        Parsed JSON dict on success, or ``None`` on a permanent failure (4xx
+        response, malformed JSON).
+
+    Raises:
+        PeliasTransientError: after ``PELIAS_MAX_ATTEMPTS`` attempts have all
+            failed with a transient condition (timeout, transport error, 5xx).
+            Callers should upsert ``status='pending'`` so the retry path will
+            pick the row up again.
+    """
+    last_err: Exception | None = None
+    for attempt in range(PELIAS_MAX_ATTEMPTS):
+        try:
+            resp = await client.get(
+                f"{pelias_base_url}{PELIAS_REVERSE_PATH}",
+                params={"point.lat": lat, "point.lon": lon, "size": 1},
+            )
+        except httpx.TimeoutException as e:
+            last_err = e
+            logger.warning("Pelias timeout (attempt %d/%d)", attempt + 1, PELIAS_MAX_ATTEMPTS, exc_info=True)
+        except httpx.TransportError as e:
+            last_err = e
+            logger.warning(
+                "Pelias transport error (attempt %d/%d)",
+                attempt + 1,
+                PELIAS_MAX_ATTEMPTS,
+                exc_info=True,
+            )
+        else:
+            status_code = resp.status_code
+            if 200 <= status_code < 300:
+                try:
+                    data: dict[str, Any] = resp.json()
+                    return data
+                except (ValueError, json.JSONDecodeError) as e:
+                    logger.warning("Pelias returned non-JSON body", exc_info=True)
+                    last_err = e
+                    # Treat invalid JSON on 2xx as permanent—no point retrying.
+                    return None
+            if 400 <= status_code < 500:
+                logger.warning(
+                    "Pelias permanent client error",
+                    status_code=status_code,
+                    body_preview=resp.text[:200],
+                )
+                return None
+            # 5xx and anything else (e.g. 1xx/3xx) — treat as transient.
+            last_err = httpx.HTTPStatusError(f"Pelias status {status_code}", request=resp.request, response=resp)
+            logger.warning(
+                "Pelias server error (attempt %d/%d, status=%d)",
+                attempt + 1,
+                PELIAS_MAX_ATTEMPTS,
+                status_code,
+            )
+
+        if attempt < PELIAS_MAX_ATTEMPTS - 1:
+            await asyncio.sleep(PELIAS_BACKOFF_SECONDS[attempt])
+
+    logger.warning(
+        "Pelias unavailable after %d attempts; marking waypoint pending",
+        PELIAS_MAX_ATTEMPTS,
+    )
+    raise PeliasTransientError(f"Pelias unavailable after {PELIAS_MAX_ATTEMPTS} attempts") from last_err
 
 
 # --- OwnTracks persistence -------------------------------------------------

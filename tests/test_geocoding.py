@@ -880,20 +880,28 @@ async def test_internal_trigger_garmin_retry_uses_single_query_selector(client: 
     retry_failed=True (which would issue two fetches per activity).
     """
     activity_selection = [{"activity_id": "act-1"}, {"activity_id": "act-2"}]
-    retry_waypoints_act1 = [
-        {"id": 10, "latitude": 40.0, "longitude": -74.0, "waypoint_kind": "waypoint"},
-    ]
-    retry_waypoints_act2: list[dict] = []
+    retry_waypoints_by_activity = {
+        "act-1": [
+            {"id": 10, "latitude": 40.0, "longitude": -74.0, "waypoint_kind": "waypoint"},
+        ],
+        "act-2": [],
+    }
 
-    # Fetch sequence (act-1 and act-2 run concurrently, so retry-selector ordering
-    # is non-deterministic; identify by SQL content instead of position).
-    mock_db.fetch.side_effect = [
-        activity_selection,
-        retry_waypoints_act1,
-        retry_waypoints_act2,
-        [],
-        [],
-    ]
+    # act-1 and act-2 run concurrently, so any positional side_effect ordering
+    # is racy. Dispatch on SQL content + bound activity_id parameter instead.
+    def fetch_side_effect(*args: object, **_kwargs: object) -> list[dict]:
+        sql = args[0] if args else ""
+        assert isinstance(sql, str)
+        if "FROM public.garmin_activities" in sql:
+            return activity_selection
+        if "INNER JOIN public.garmin_track_points" in sql and "ga.status = ANY" in sql:
+            activity_id = args[1] if len(args) > 1 else None
+            return retry_waypoints_by_activity.get(str(activity_id), [])
+        if "ST_DWithin" in sql:
+            return []  # _find_nearby_address candidate probes
+        return []
+
+    mock_db.fetch.side_effect = fetch_side_effect
     mock_db.fetchval.return_value = 0
     mock_db.fetchrow.return_value = None  # _find_nearby_address final lookup
     mock_db.execute.return_value = None
@@ -1022,5 +1030,9 @@ async def test_find_nearby_address_does_not_use_coalesce_query(mock_db: AsyncMoc
         assert "COALESCE" not in sql, "Candidate lookup must hit GIST indexes directly — no COALESCE allowed."
         assert "ST_DWithin(geog" in sql
     final_sql = mock_db.fetchrow.call_args[0][0]
-    assert "COALESCE" not in final_sql
-    assert "LEFT JOIN" not in final_sql
+    # Final lookup must filter via the indexed id columns, NOT via geog over the
+    # whole geocoded_addresses table. COALESCE/LEFT JOIN are now permitted in
+    # ORDER BY over the small candidate set, but the WHERE clause must use ANY.
+    assert "ga.location_id = ANY" in final_sql
+    assert "ga.garmin_track_point_id = ANY" in final_sql
+    assert "ST_DWithin" not in final_sql, "Final lookup must not re-filter by distance."

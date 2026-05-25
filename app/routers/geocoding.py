@@ -706,19 +706,32 @@ async def _find_nearby_address(db: Any, lat: float, lon: float) -> dict[str, Any
     if not ow_ids and not gt_ids:
         return None
 
+    # Order by true distance against the candidate's geog so dedup picks the
+    # *nearest* neighbour deterministically. Candidate set is bounded by
+    # 2 * _NEARBY_CANDIDATE_LIMIT rows, so the join + sort is cheap.
     neighbour = await db.fetchrow(
         "SELECT ga.display_address, ga.street, ga.housenumber, ga.neighbourhood, "
         "ga.locality, ga.region, ga.country, ga.postalcode, ga.confidence, "
         "ga.raw_response "
         "FROM public.geocoded_addresses ga "
+        "LEFT JOIN public.locations l "
+        "  ON ga.source = 'owntracks' AND ga.location_id = l.id "
+        "LEFT JOIN public.garmin_track_points gtp "
+        "  ON ga.source = 'garmin' AND ga.garmin_track_point_id = gtp.id "
         "WHERE ga.status = 'success' "
         "AND ("
         "  (ga.source = 'owntracks' AND ga.location_id = ANY($1::bigint[])) "
         "  OR (ga.source = 'garmin' AND ga.garmin_track_point_id = ANY($2::bigint[]))"
         ") "
+        "ORDER BY ST_Distance("
+        "  COALESCE(l.geog, gtp.geog), "
+        "  ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography"
+        ") ASC "
         "LIMIT 1",
         ow_ids,
         gt_ids,
+        lon,
+        lat,
     )
     return dict(neighbour) if neighbour else None
 

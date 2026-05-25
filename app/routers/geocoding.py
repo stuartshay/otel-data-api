@@ -666,28 +666,59 @@ async def _process_garmin_waypoint_inner(
 # ---------------------------------------------------------------------------
 
 
+_NEARBY_RADIUS_METRES = 50
+_NEARBY_CANDIDATE_LIMIT = 5
+
+
 async def _find_nearby_address(db: Any, lat: float, lon: float) -> dict[str, Any] | None:
-    """Return the nearest successfully geocoded address within 50 m, or None."""
+    """Return the nearest successfully geocoded address within 50 m, or None.
+
+    Implemented as two GIST-indexed candidate lookups (locations + garmin
+    track points) followed by a single lookup in ``geocoded_addresses`` via
+    the existing unique partial btree indexes. A combined ``COALESCE``-based
+    query would force a sequential scan over all success rows; see #132.
+    """
+    ow_candidates = await db.fetch(
+        "SELECT id "
+        "FROM public.locations "
+        "WHERE ST_DWithin(geog, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3) "
+        "ORDER BY geog <-> ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography "
+        "LIMIT $4",
+        lon,
+        lat,
+        _NEARBY_RADIUS_METRES,
+        _NEARBY_CANDIDATE_LIMIT,
+    )
+    gt_candidates = await db.fetch(
+        "SELECT id "
+        "FROM public.garmin_track_points "
+        "WHERE ST_DWithin(geog, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3) "
+        "ORDER BY geog <-> ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography "
+        "LIMIT $4",
+        lon,
+        lat,
+        _NEARBY_RADIUS_METRES,
+        _NEARBY_CANDIDATE_LIMIT,
+    )
+
+    ow_ids = [row["id"] for row in ow_candidates]
+    gt_ids = [row["id"] for row in gt_candidates]
+    if not ow_ids and not gt_ids:
+        return None
+
     neighbour = await db.fetchrow(
         "SELECT ga.display_address, ga.street, ga.housenumber, ga.neighbourhood, "
         "ga.locality, ga.region, ga.country, ga.postalcode, ga.confidence, "
         "ga.raw_response "
         "FROM public.geocoded_addresses ga "
-        "LEFT JOIN public.locations l ON l.id = ga.location_id AND ga.source = 'owntracks' "
-        "LEFT JOIN public.garmin_track_points gtp "
-        "  ON gtp.id = ga.garmin_track_point_id AND ga.source = 'garmin' "
         "WHERE ga.status = 'success' "
-        "AND ST_DWithin("
-        "  COALESCE(l.geog, ST_SetSRID(ST_MakePoint(gtp.longitude, gtp.latitude), 4326)::geography), "
-        "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, "
-        "  50"
+        "AND ("
+        "  (ga.source = 'owntracks' AND ga.location_id = ANY($1::bigint[])) "
+        "  OR (ga.source = 'garmin' AND ga.garmin_track_point_id = ANY($2::bigint[]))"
         ") "
-        "ORDER BY ST_Distance("
-        "  COALESCE(l.geog, ST_SetSRID(ST_MakePoint(gtp.longitude, gtp.latitude), 4326)::geography), "
-        "  ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography"
-        ") LIMIT 1",
-        lon,
-        lat,
+        "LIMIT 1",
+        ow_ids,
+        gt_ids,
     )
     return dict(neighbour) if neighbour else None
 

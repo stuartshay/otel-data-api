@@ -26,7 +26,12 @@ router = APIRouter(prefix="/api/v1/geocoding", tags=["Geocoding"])
 internal_router = APIRouter(prefix="/internal/geocoding", tags=["Internal"])
 
 PELIAS_REVERSE_PATH = "/v1/reverse"
-MAX_GEOCODE_CONCURRENCY = 5
+# Per-request cap on concurrent Pelias calls. Raised from 5 to 20 in #129
+# so the slow Pelias retry tail no longer dominates drain wall time.
+MAX_GEOCODE_CONCURRENCY = 20
+# Per-request cap on concurrently processed Garmin activities. Bounds the
+# fan-out so the new parallel activity loop does not spike DB connections.
+GARMIN_ACTIVITY_CONCURRENCY = 4
 DEFAULT_GARMIN_WAYPOINT_SPACING_KM = 1.0
 
 # Pelias retry policy: transient failures (timeout, connection, 5xx) are retried
@@ -421,19 +426,42 @@ async def _trigger_garmin_geocoding_impl(
     processed = 0
     skipped_dedup = 0
     sem = asyncio.Semaphore(MAX_GEOCODE_CONCURRENCY)
+    activity_sem = asyncio.Semaphore(GARMIN_ACTIVITY_CONCURRENCY)
+    started_at = time.monotonic()
 
     async def _geocode_one(client: httpx.AsyncClient, waypoint: dict[str, Any]) -> tuple[int, int]:
         async with sem:
             return await _process_garmin_waypoint(db, client, pelias_base_url, waypoint)
 
+    async def _process_activity(client: httpx.AsyncClient, activity_id: str) -> tuple[int, int]:
+        async with activity_sem:
+            if retry_failed:
+                # Single-query selector: returns ONLY rows already flagged for retry.
+                # Avoids the full-track scan + Python-side thinning + second status
+                # query that the fresh-pass path needs.
+                waypoints = await _select_garmin_retry_waypoints(db, activity_id)
+            else:
+                waypoints = await _select_garmin_waypoints(db, activity_id, waypoint_spacing_km)
+            wp_results = await asyncio.gather(*[_geocode_one(client, wp) for wp in waypoints])
+            return (
+                sum(proc for proc, _ in wp_results),
+                sum(skip for _, skip in wp_results),
+            )
+
     async with httpx.AsyncClient(timeout=pelias_timeout) as client:
-        for activity in activity_rows:
-            activity_id = activity["activity_id"]
-            waypoints = await _select_garmin_waypoints(db, activity_id, waypoint_spacing_km, retry_failed=retry_failed)
-            results = await asyncio.gather(*[_geocode_one(client, wp) for wp in waypoints])
-            for proc, skip in results:
-                processed += proc
-                skipped_dedup += skip
+        activity_results = await asyncio.gather(*[_process_activity(client, a["activity_id"]) for a in activity_rows])
+    for proc, skip in activity_results:
+        processed += proc
+        skipped_dedup += skip
+
+    logger.info(
+        "garmin_geocoding_batch_complete",
+        retry_failed=retry_failed,
+        activities=len(activity_rows),
+        processed=processed,
+        skipped_dedup=skipped_dedup,
+        elapsed_seconds=round(time.monotonic() - started_at, 2),
+    )
 
     if retry_failed:
         remaining = await db.fetchval(
@@ -456,6 +484,41 @@ async def _trigger_garmin_geocoding_impl(
         )
 
     return GeocodingTriggerResponse(processed=processed, remaining=remaining, skipped_dedup=skipped_dedup)
+
+
+async def _select_garmin_retry_waypoints(
+    db: Any,
+    activity_id: str,
+) -> list[dict[str, Any]]:
+    """Return only the waypoints that already need a retry — in one SQL query.
+
+    The fresh-pass path uses ``_select_garmin_waypoints`` which pulls every
+    track point for the activity (often 5k-20k rows) and thins them to ~1 km
+    in Python, then re-queries status to filter to retryable rows. For an
+    activity with 3 failed waypoints that's >99% wasted I/O.
+    """
+    rows = await db.fetch(
+        "SELECT gtp.id, gtp.latitude, gtp.longitude, ga.waypoint_kind "
+        "FROM public.geocoded_addresses ga "
+        "INNER JOIN public.garmin_track_points gtp "
+        "  ON gtp.id = ga.garmin_track_point_id "
+        "WHERE ga.source = 'garmin' "
+        "AND ga.garmin_activity_id = $1 "
+        "AND ga.status = ANY($2::text[]) "
+        "ORDER BY ga.geocoded_at ASC NULLS FIRST",
+        activity_id,
+        list(RETRY_STATUSES),
+    )
+    return [
+        {
+            "id": r["id"],
+            "latitude": r["latitude"],
+            "longitude": r["longitude"],
+            "waypoint_kind": r["waypoint_kind"] or "waypoint",
+            "activity_id": activity_id,
+        }
+        for r in rows
+    ]
 
 
 async def _select_garmin_waypoints(

@@ -815,3 +815,102 @@ async def test_pelias_health_endpoint_unhealthy_on_timeout(client: AsyncClient):
     assert body["sample_features_count"] == 0
     assert body["detail"] is not None
     assert "timeout" in body["detail"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Perf optimization (#129): single-query retry selector + parallel activities
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_select_garmin_retry_waypoints_single_join_query(mock_db: AsyncMock):
+    """retry-mode selector must use one JOIN query returning only retryable rows."""
+    from app.routers.geocoding import _select_garmin_retry_waypoints
+
+    mock_db.fetch.return_value = [
+        {"id": 7, "latitude": 40.7, "longitude": -73.9, "waypoint_kind": "waypoint"},
+        {"id": 11, "latitude": 40.71, "longitude": -73.91, "waypoint_kind": "start"},
+    ]
+
+    result = await _select_garmin_retry_waypoints(mock_db, "act-99")
+
+    # Exactly ONE fetch call (no Python-side thinning, no second status query).
+    assert mock_db.fetch.call_count == 1
+    sql, activity_id, statuses = mock_db.fetch.call_args[0]
+    assert "INNER JOIN public.garmin_track_points" in sql
+    assert "ga.status = ANY" in sql
+    assert "ORDER BY ga.geocoded_at ASC NULLS FIRST" in sql
+    assert activity_id == "act-99"
+    assert set(statuses) == {"no_coverage", "error", "pending"}
+
+    assert [wp["id"] for wp in result] == [7, 11]
+    assert [wp["waypoint_kind"] for wp in result] == ["waypoint", "start"]
+    assert all(wp["activity_id"] == "act-99" for wp in result)
+
+
+@pytest.mark.asyncio
+async def test_select_garmin_retry_waypoints_empty(mock_db: AsyncMock):
+    """No retryable rows -> empty list, still a single query."""
+    from app.routers.geocoding import _select_garmin_retry_waypoints
+
+    mock_db.fetch.return_value = []
+    result = await _select_garmin_retry_waypoints(mock_db, "act-empty")
+    assert result == []
+    assert mock_db.fetch.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_select_garmin_retry_waypoints_defaults_waypoint_kind(mock_db: AsyncMock):
+    """Legacy rows missing waypoint_kind default to 'waypoint' (not None)."""
+    from app.routers.geocoding import _select_garmin_retry_waypoints
+
+    mock_db.fetch.return_value = [
+        {"id": 1, "latitude": 40.0, "longitude": -74.0, "waypoint_kind": None},
+    ]
+    result = await _select_garmin_retry_waypoints(mock_db, "act-1")
+    assert result[0]["waypoint_kind"] == "waypoint"
+
+
+@pytest.mark.asyncio
+async def test_internal_trigger_garmin_retry_uses_single_query_selector(client: AsyncClient, mock_db: AsyncMock):
+    """retry_failed=True must NOT issue the fresh-pass track-scan + status-filter pair.
+
+    Confirms the trigger impl routes through `_select_garmin_retry_waypoints`
+    (one fetch per activity) rather than `_select_garmin_waypoints` with
+    retry_failed=True (which would issue two fetches per activity).
+    """
+    activity_selection = [{"activity_id": "act-1"}, {"activity_id": "act-2"}]
+    retry_waypoints_act1 = [
+        {"id": 10, "latitude": 40.0, "longitude": -74.0, "waypoint_kind": "waypoint"},
+    ]
+    retry_waypoints_act2: list[dict] = []
+
+    mock_db.fetch.side_effect = [activity_selection, retry_waypoints_act1, retry_waypoints_act2]
+    mock_db.fetchval.return_value = 0
+    mock_db.fetchrow.return_value = None  # _find_nearby_address -> no neighbour
+    mock_db.execute.return_value = None
+
+    with patch("app.routers.geocoding._call_pelias", AsyncMock(return_value=None)):
+        response = await client.post("/internal/geocoding/trigger/garmin?retry_failed=true")
+
+    assert response.status_code == 200
+    # Exactly 3 fetch calls: 1 activity selector + 1 per activity (no extra status query).
+    assert mock_db.fetch.call_count == 3
+    # Second + third calls must be the new single-query retry selector.
+    for call in mock_db.fetch.call_args_list[1:]:
+        sql = call[0][0]
+        assert "INNER JOIN public.garmin_track_points" in sql
+        assert "ga.status = ANY" in sql
+
+
+@pytest.mark.asyncio
+async def test_concurrency_constants_increased_for_drain_throughput(mock_db: AsyncMock):
+    """Guard against accidental reversion of the #129 throughput tuning."""
+    from app.routers import geocoding
+
+    assert geocoding.MAX_GEOCODE_CONCURRENCY >= 20, (
+        "MAX_GEOCODE_CONCURRENCY must stay >= 20 to keep drain wall time <5min/batch"
+    )
+    assert geocoding.GARMIN_ACTIVITY_CONCURRENCY >= 2, (
+        "GARMIN_ACTIVITY_CONCURRENCY must allow >= 2 activities in parallel"
+    )

@@ -26,7 +26,8 @@ router = APIRouter(prefix="/api/v1/geocoding", tags=["Geocoding"])
 internal_router = APIRouter(prefix="/internal/geocoding", tags=["Internal"])
 
 PELIAS_REVERSE_PATH = "/v1/reverse"
-# Per-request cap on concurrent Pelias calls. Raised from 5 to 20 in #129
+# Per-request cap on concurrent waypoint geocoding tasks (end-to-end:
+# neighbour lookup + Pelias call + upsert). Raised from 5 to 20 in #129
 # so the slow Pelias retry tail no longer dominates drain wall time.
 MAX_GEOCODE_CONCURRENCY = 20
 # Per-request cap on concurrently processed Garmin activities. Bounds the

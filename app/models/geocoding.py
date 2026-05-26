@@ -59,6 +59,22 @@ class GeocodingStatus(BaseModel):
     by_source: GeocodingStatusBySource = Field(
         description="Per-source breakdown of geocoding coverage (owntracks, garmin)",
     )
+    dense_cells_total: int = Field(
+        default=0,
+        description="Total number of distinct 4dp (~11m) GPS cells observed in garmin_track_points",
+    )
+    dense_cells_geocoded: int = Field(
+        default=0,
+        description="Number of dense cells with any geocoding row (any status)",
+    )
+    dense_cells_success: int = Field(default=0, description="Number of dense cells with status='success'")
+    dense_cells_pending: int = Field(default=0, description="Number of dense cells awaiting geocoding")
+    dense_cells_no_coverage: int = Field(default=0, description="Number of dense cells outside Pelias coverage")
+    dense_cells_errors: int = Field(default=0, description="Number of dense cells that failed geocoding")
+    dense_point_coverage_percent: float = Field(
+        default=0.0,
+        description="Percentage of garmin_track_points whose 4dp cell has any geocoded row",
+    )
 
     model_config = {
         "json_schema_extra": {

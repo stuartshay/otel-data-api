@@ -102,6 +102,31 @@ async def geocoding_status(request: Request) -> GeocodingStatus:
     garmin_coverage_percent = round((activities_geocoded / activities_total * 100), 2) if activities_total else 0.0
     garmin_waypoint_success_percent = round(((g_success or 0) / g_total_rows * 100), 2) if g_total_rows else 0.0
 
+    # Dense per-point cell coverage (geocoded_point_cells, 4dp ~ 11 m resolution).
+    dense_total_cells = await db.fetchval(
+        "SELECT COUNT(DISTINCT (ROUND(latitude * 10000)::INTEGER, ROUND(longitude * 10000)::INTEGER)) "
+        "FROM public.garmin_track_points"
+    )
+    dense_success = await db.fetchval("SELECT COUNT(*) FROM public.geocoded_point_cells WHERE status = 'success'")
+    dense_pending = await db.fetchval("SELECT COUNT(*) FROM public.geocoded_point_cells WHERE status = 'pending'")
+    dense_no_coverage = await db.fetchval(
+        "SELECT COUNT(*) FROM public.geocoded_point_cells WHERE status = 'no_coverage'"
+    )
+    dense_errors = await db.fetchval("SELECT COUNT(*) FROM public.geocoded_point_cells WHERE status = 'error'")
+    dense_geocoded = (dense_success or 0) + (dense_pending or 0) + (dense_no_coverage or 0) + (dense_errors or 0)
+    total_track_points = await db.fetchval("SELECT COUNT(*) FROM public.garmin_track_points")
+    covered_track_points = await db.fetchval(
+        "SELECT COUNT(*) FROM public.garmin_track_points gtp "
+        "WHERE EXISTS ("
+        "  SELECT 1 FROM public.geocoded_point_cells gpc "
+        "  WHERE gpc.lat_4dp = ROUND(gtp.latitude * 10000)::INTEGER "
+        "    AND gpc.lon_4dp = ROUND(gtp.longitude * 10000)::INTEGER"
+        ")"
+    )
+    dense_point_coverage_percent = (
+        round((covered_track_points / total_track_points * 100), 2) if total_track_points else 0.0
+    )
+
     by_source = GeocodingStatusBySource(
         owntracks=GeocodingSourceStatus(
             success=ot_success or 0,
@@ -132,6 +157,13 @@ async def geocoding_status(request: Request) -> GeocodingStatus:
         errors=ot_errors,
         coverage_percent=coverage_percent,
         by_source=by_source,
+        dense_cells_total=dense_total_cells or 0,
+        dense_cells_geocoded=dense_geocoded,
+        dense_cells_success=dense_success or 0,
+        dense_cells_pending=dense_pending or 0,
+        dense_cells_no_coverage=dense_no_coverage or 0,
+        dense_cells_errors=dense_errors or 0,
+        dense_point_coverage_percent=dense_point_coverage_percent,
     )
 
 
@@ -990,5 +1022,204 @@ async def _upsert_garmin_status(
         track_point_id,
         activity_id,
         waypoint_kind,
+        status,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Dense per-point cell geocoding (geocoded_point_cells, 4dp ~ 11 m resolution)
+# ---------------------------------------------------------------------------
+
+
+_CELL_CONFLICT = "ON CONFLICT (lat_4dp, lon_4dp)"
+
+
+@internal_router.post("/trigger/garmin-dense", response_model=GeocodingTriggerResponse)
+async def internal_trigger_garmin_dense(
+    request: Request,
+    batch_size: int = Query(100, ge=1, le=1000, description="Number of dense cells to process in this batch"),
+    retry_failed: bool = Query(
+        False,
+        description="Re-process cells whose status is no_coverage, error, or pending",
+    ),
+) -> GeocodingTriggerResponse:
+    """Trigger batch reverse-geocoding of distinct 4dp GPS cells (internal, no auth)."""
+    return await _trigger_garmin_dense_impl(request, batch_size, retry_failed)
+
+
+@router.post("/trigger/garmin-dense", response_model=GeocodingTriggerResponse)
+async def trigger_garmin_dense(
+    request: Request,
+    batch_size: int = Query(100, ge=1, le=500, description="Number of dense cells to process in this batch"),
+    retry_failed: bool = Query(
+        False,
+        description="Re-process cells whose status is no_coverage, error, or pending",
+    ),
+    _user: dict = Depends(require_auth),
+) -> GeocodingTriggerResponse:
+    """Trigger batch reverse-geocoding of distinct 4dp GPS cells (auth required)."""
+    return await _trigger_garmin_dense_impl(request, batch_size, retry_failed)
+
+
+async def _trigger_garmin_dense_impl(
+    request: Request,
+    batch_size: int,
+    retry_failed: bool,
+) -> GeocodingTriggerResponse:
+    db = request.app.state.db
+    config = request.app.state.config
+    pelias_base_url = config.pelias_base_url
+    pelias_timeout = config.pelias_timeout_seconds
+
+    if retry_failed:
+        cell_rows = await db.fetch(
+            "SELECT lat_4dp, lon_4dp FROM public.geocoded_point_cells "
+            "WHERE status = ANY($2::text[]) "
+            "ORDER BY geocoded_at ASC NULLS FIRST "
+            "LIMIT $1",
+            batch_size,
+            list(RETRY_STATUSES),
+        )
+    else:
+        # Distinct cells observed in garmin_track_points that have no row yet
+        # in geocoded_point_cells. Indexed equality on (lat_4dp, lon_4dp).
+        cell_rows = await db.fetch(
+            "SELECT DISTINCT "
+            "  ROUND(gtp.latitude * 10000)::INTEGER AS lat_4dp, "
+            "  ROUND(gtp.longitude * 10000)::INTEGER AS lon_4dp "
+            "FROM public.garmin_track_points gtp "
+            "WHERE NOT EXISTS ("
+            "  SELECT 1 FROM public.geocoded_point_cells gpc "
+            "  WHERE gpc.lat_4dp = ROUND(gtp.latitude * 10000)::INTEGER "
+            "    AND gpc.lon_4dp = ROUND(gtp.longitude * 10000)::INTEGER"
+            ") "
+            "LIMIT $1",
+            batch_size,
+        )
+
+    processed = 0
+    sem = asyncio.Semaphore(MAX_GEOCODE_CONCURRENCY)
+
+    async def _process_one(client: httpx.AsyncClient, lat_4dp: int, lon_4dp: int) -> int:
+        async with sem:
+            return await _process_cell(db, client, pelias_base_url, lat_4dp, lon_4dp)
+
+    if cell_rows:
+        async with httpx.AsyncClient(timeout=pelias_timeout) as client:
+            results = await asyncio.gather(*[_process_one(client, row["lat_4dp"], row["lon_4dp"]) for row in cell_rows])
+            processed = sum(results)
+
+    # Remaining distinct cells not yet geocoded.
+    remaining = await db.fetchval(
+        "SELECT COUNT(*) FROM ("
+        "  SELECT DISTINCT "
+        "    ROUND(gtp.latitude * 10000)::INTEGER AS lat_4dp, "
+        "    ROUND(gtp.longitude * 10000)::INTEGER AS lon_4dp "
+        "  FROM public.garmin_track_points gtp "
+        "  WHERE NOT EXISTS ("
+        "    SELECT 1 FROM public.geocoded_point_cells gpc "
+        "    WHERE gpc.lat_4dp = ROUND(gtp.latitude * 10000)::INTEGER "
+        "      AND gpc.lon_4dp = ROUND(gtp.longitude * 10000)::INTEGER"
+        "  )"
+        ") AS pending_cells"
+    )
+
+    return GeocodingTriggerResponse(
+        processed=processed,
+        remaining=remaining or 0,
+        skipped_dedup=0,
+    )
+
+
+async def _process_cell(
+    db: Any,
+    client: httpx.AsyncClient,
+    pelias_base_url: str,
+    lat_4dp: int,
+    lon_4dp: int,
+) -> int:
+    """Reverse-geocode a single 4dp cell and upsert the result.
+
+    Returns 1 if a row was upserted (success/no_coverage/error/pending), 0 if
+    the cell was skipped due to an unexpected exception (already logged).
+    """
+    lat = lat_4dp / 10000.0
+    lon = lon_4dp / 10000.0
+    try:
+        try:
+            pelias_data = await _call_pelias(client, pelias_base_url, lat, lon)
+        except PeliasTransientError:
+            await _upsert_cell_status(db, lat_4dp, lon_4dp, status="pending")
+            return 1
+
+        if pelias_data is None:
+            await _upsert_cell_status(db, lat_4dp, lon_4dp, status="error")
+            return 1
+
+        features = pelias_data.get("features", [])
+        if not features:
+            await _upsert_cell_status(db, lat_4dp, lon_4dp, status="no_coverage")
+            return 1
+
+        props = features[0].get("properties", {})
+        await _upsert_cell_from_pelias(db, lat_4dp, lon_4dp, props, pelias_data)
+        return 1
+    except Exception:
+        logger.warning(
+            "Unexpected error processing dense cell (%d, %d)",
+            lat_4dp,
+            lon_4dp,
+            exc_info=True,
+        )
+        try:
+            await _upsert_cell_status(db, lat_4dp, lon_4dp, status="error")
+        except Exception:
+            logger.warning("Failed to upsert error status for cell (%d, %d)", lat_4dp, lon_4dp, exc_info=True)
+        return 0
+
+
+async def _upsert_cell_from_pelias(
+    db: Any,
+    lat_4dp: int,
+    lon_4dp: int,
+    props: dict[str, Any],
+    raw_data: dict[str, Any],
+) -> None:
+    await db.execute(
+        "INSERT INTO public.geocoded_point_cells "
+        "(lat_4dp, lon_4dp, display_address, street, housenumber, neighbourhood, "
+        "locality, region, country, postalcode, confidence, status, raw_response) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'success', $12) "
+        f"{_CELL_CONFLICT} DO UPDATE SET "
+        "display_address = EXCLUDED.display_address, "
+        "street = EXCLUDED.street, housenumber = EXCLUDED.housenumber, "
+        "neighbourhood = EXCLUDED.neighbourhood, locality = EXCLUDED.locality, "
+        "region = EXCLUDED.region, country = EXCLUDED.country, "
+        "postalcode = EXCLUDED.postalcode, confidence = EXCLUDED.confidence, "
+        "status = EXCLUDED.status, raw_response = EXCLUDED.raw_response, "
+        "geocoded_at = CURRENT_TIMESTAMP",
+        lat_4dp,
+        lon_4dp,
+        props.get("label"),
+        props.get("street"),
+        props.get("housenumber"),
+        props.get("neighbourhood"),
+        props.get("locality"),
+        props.get("region"),
+        props.get("country"),
+        props.get("postalcode"),
+        props.get("confidence"),
+        json.dumps(raw_data),
+    )
+
+
+async def _upsert_cell_status(db: Any, lat_4dp: int, lon_4dp: int, *, status: str) -> None:
+    """Insert or update a status-only row in geocoded_point_cells."""
+    await db.execute(
+        "INSERT INTO public.geocoded_point_cells (lat_4dp, lon_4dp, status) "
+        "VALUES ($1, $2, $3) "
+        f"{_CELL_CONFLICT} DO UPDATE SET status = $3, geocoded_at = CURRENT_TIMESTAMP",
+        lat_4dp,
+        lon_4dp,
         status,
     )

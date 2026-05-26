@@ -416,12 +416,21 @@ async def list_track_points(
         "gtp.cadence, gtp.temperature_c, gtp.created_at, "
         "ga.display_address, ga.street, ga.housenumber, ga.neighbourhood, "
         "ga.locality, ga.region, ga.country, ga.postalcode, ga.confidence, "
-        "ga.waypoint_kind, ga.status AS address_status, ga.geocoded_at "
+        "ga.waypoint_kind, ga.status AS address_status, ga.geocoded_at, "
+        "gpc.display_address AS cell_display_address, gpc.street AS cell_street, "
+        "gpc.housenumber AS cell_housenumber, gpc.neighbourhood AS cell_neighbourhood, "
+        "gpc.locality AS cell_locality, gpc.region AS cell_region, "
+        "gpc.country AS cell_country, gpc.postalcode AS cell_postalcode, "
+        "gpc.confidence AS cell_confidence, gpc.status AS cell_status, "
+        "gpc.geocoded_at AS cell_geocoded_at "
         "FROM public.garmin_track_points gtp "
         "LEFT JOIN public.geocoded_addresses ga "
         "  ON ga.garmin_track_point_id = gtp.id "
         " AND ga.garmin_activity_id = gtp.activity_id "
         " AND ga.source = 'garmin' "
+        "LEFT JOIN public.geocoded_point_cells gpc "
+        "  ON gpc.lat_4dp = ROUND(gtp.latitude * 10000)::INTEGER "
+        " AND gpc.lon_4dp = ROUND(gtp.longitude * 10000)::INTEGER "
         f"WHERE gtp.activity_id = $1 ORDER BY gtp.{sort} {order} "
         f"LIMIT $2 OFFSET $3",
         activity_id,
@@ -465,8 +474,14 @@ async def get_chart_data(
 
 
 def _row_to_track_point(row: Mapping[str, Any]) -> GarminTrackPoint:
-    """Build a GarminTrackPoint, attaching the joined address summary when present."""
+    """Build a GarminTrackPoint, attaching the joined address summary when present.
+
+    When both a dense-cell row and a waypoint row exist for the same point,
+    the cell address takes precedence (denser, always populated once backfilled);
+    the waypoint row is used as a fallback while the cell backfill is in-flight.
+    """
     data: dict[str, Any] = dict(row)
+    # Waypoint columns (legacy / sparse).
     address_status = data.pop("address_status", None)
     display_address = data.pop("display_address", None)
     street = data.pop("street", None)
@@ -479,8 +494,36 @@ def _row_to_track_point(row: Mapping[str, Any]) -> GarminTrackPoint:
     confidence = data.pop("confidence", None)
     waypoint_kind = data.pop("waypoint_kind", None)
     geocoded_at = data.pop("geocoded_at", None)
+    # Dense-cell columns (preferred when present).
+    cell_status = data.pop("cell_status", None)
+    cell_display_address = data.pop("cell_display_address", None)
+    cell_street = data.pop("cell_street", None)
+    cell_housenumber = data.pop("cell_housenumber", None)
+    cell_neighbourhood = data.pop("cell_neighbourhood", None)
+    cell_locality = data.pop("cell_locality", None)
+    cell_region = data.pop("cell_region", None)
+    cell_country = data.pop("cell_country", None)
+    cell_postalcode = data.pop("cell_postalcode", None)
+    cell_confidence = data.pop("cell_confidence", None)
+    cell_geocoded_at = data.pop("cell_geocoded_at", None)
+
     address: GeocodedAddressSummary | None = None
-    if address_status is not None:
+    if cell_status is not None:
+        address = GeocodedAddressSummary(
+            display_address=cell_display_address,
+            street=cell_street,
+            housenumber=cell_housenumber,
+            neighbourhood=cell_neighbourhood,
+            locality=cell_locality,
+            region=cell_region,
+            country=cell_country,
+            postalcode=cell_postalcode,
+            confidence=cell_confidence,
+            waypoint_kind=None,
+            status=cell_status,
+            geocoded_at=cell_geocoded_at,
+        )
+    elif address_status is not None:
         address = GeocodedAddressSummary(
             display_address=display_address,
             street=street,

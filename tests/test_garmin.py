@@ -813,3 +813,95 @@ async def test_list_activity_addresses_not_found(client: AsyncClient, mock_db):
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Activity not found"}
+
+
+# ---------------------------------------------------------------------------
+# Dense per-point cell address (geocoded_point_cells) — cell-first precedence
+# ---------------------------------------------------------------------------
+
+
+def _track_row_with_cell_address(activity_id: str = "20932993811") -> dict:
+    """Row with only the dense-cell address columns populated (no waypoint row)."""
+    base = _track_row(activity_id)
+    base.update(
+        {
+            # No waypoint join match -> all NULL
+            "display_address": None,
+            "street": None,
+            "housenumber": None,
+            "neighbourhood": None,
+            "locality": None,
+            "region": None,
+            "country": None,
+            "postalcode": None,
+            "confidence": None,
+            "waypoint_kind": None,
+            "address_status": None,
+            "geocoded_at": None,
+            # Dense cell join match
+            "cell_display_address": "501 Sinatra Dr, Hoboken, NJ",
+            "cell_street": "Sinatra Drive",
+            "cell_housenumber": "501",
+            "cell_neighbourhood": "Waterfront",
+            "cell_locality": "Hoboken",
+            "cell_region": "New Jersey",
+            "cell_country": "United States",
+            "cell_postalcode": "07030",
+            "cell_confidence": 0.88,
+            "cell_status": "success",
+            "cell_geocoded_at": "2026-02-13T09:00:00+00:00",
+        }
+    )
+    return base
+
+
+@pytest.mark.asyncio
+async def test_list_track_points_uses_cell_address_when_present(client: AsyncClient, mock_db):
+    mock_db.fetchval.side_effect = [1, 1]
+    mock_db.fetch.return_value = [_track_row_with_cell_address()]
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/tracks")
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["address"] is not None
+    assert item["address"]["display_address"] == "501 Sinatra Dr, Hoboken, NJ"
+    assert item["address"]["status"] == "success"
+    # Cell-source addresses never carry a waypoint_kind.
+    assert item["address"]["waypoint_kind"] is None
+    assert item["address"]["geocoded_at"] == "2026-02-13T09:00:00Z"
+    # Query must include the dense cell LEFT JOIN.
+    query = mock_db.fetch.await_args.args[0]
+    assert "geocoded_point_cells" in query
+    assert "ROUND(gtp.latitude * 10000)" in query
+
+
+@pytest.mark.asyncio
+async def test_cell_overrides_waypoint_when_both_present(client: AsyncClient, mock_db):
+    """When both cell and waypoint rows exist, cell wins (denser source)."""
+    row = _track_row_with_address()  # has waypoint_kind='start' + display_address
+    row.update(
+        {
+            "cell_display_address": "Cell Address Wins",
+            "cell_street": None,
+            "cell_housenumber": None,
+            "cell_neighbourhood": None,
+            "cell_locality": None,
+            "cell_region": None,
+            "cell_country": None,
+            "cell_postalcode": None,
+            "cell_confidence": 0.5,
+            "cell_status": "success",
+            "cell_geocoded_at": "2026-02-13T09:00:00+00:00",
+        }
+    )
+    mock_db.fetchval.side_effect = [1, 1]
+    mock_db.fetch.return_value = [row]
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/tracks")
+
+    assert response.status_code == 200
+    addr = response.json()["items"][0]["address"]
+    assert addr["display_address"] == "Cell Address Wins"
+    # waypoint_kind from the waypoint row is dropped because cell wins.
+    assert addr["waypoint_kind"] is None

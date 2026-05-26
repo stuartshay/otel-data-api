@@ -15,8 +15,30 @@ from app.config import Config
 @pytest.mark.asyncio
 async def test_geocoding_status(client: AsyncClient, mock_db: AsyncMock):
     # Order: total, geocoded, ot_success, ot_pending, ot_no_coverage, ot_errors,
-    # g_success, g_pending, g_no_coverage, g_errors, activities_total, activities_geocoded
-    mock_db.fetchval.side_effect = [1000, 600, 550, 30, 10, 10, 80, 5, 4, 1, 25, 12]
+    # g_success, g_pending, g_no_coverage, g_errors, activities_total, activities_geocoded,
+    # dense_total_cells, dense_success, dense_pending, dense_no_coverage, dense_errors,
+    # total_track_points, covered_track_points
+    mock_db.fetchval.side_effect = [
+        1000,
+        600,
+        550,
+        30,
+        10,
+        10,
+        80,
+        5,
+        4,
+        1,
+        25,
+        12,
+        4500,
+        3000,
+        100,
+        50,
+        20,
+        50000,
+        35000,
+    ]
 
     response = await client.get("/api/v1/geocoding/status")
 
@@ -36,11 +58,18 @@ async def test_geocoding_status(client: AsyncClient, mock_db: AsyncMock):
     assert body["by_source"]["garmin_activities_total"] == 25
     assert body["by_source"]["garmin_activities_geocoded"] == 12
     assert body["by_source"]["garmin_coverage_percent"] == 48.0
+    assert body["dense_cells_total"] == 4500
+    assert body["dense_cells_success"] == 3000
+    assert body["dense_cells_pending"] == 100
+    assert body["dense_cells_no_coverage"] == 50
+    assert body["dense_cells_errors"] == 20
+    assert body["dense_cells_geocoded"] == 3170
+    assert body["dense_point_coverage_percent"] == 70.0
 
 
 @pytest.mark.asyncio
 async def test_geocoding_status_empty_database(client: AsyncClient, mock_db: AsyncMock):
-    mock_db.fetchval.side_effect = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    mock_db.fetchval.side_effect = [0] * 19
 
     response = await client.get("/api/v1/geocoding/status")
 
@@ -49,6 +78,9 @@ async def test_geocoding_status_empty_database(client: AsyncClient, mock_db: Asy
     assert body["total_locations"] == 0
     assert body["coverage_percent"] == 0.0
     assert body["by_source"]["garmin_coverage_percent"] == 0.0
+    assert body["dense_cells_total"] == 0
+    assert body["dense_cells_geocoded"] == 0
+    assert body["dense_point_coverage_percent"] == 0.0
 
 
 @pytest.mark.asyncio
@@ -1036,3 +1068,165 @@ async def test_find_nearby_address_does_not_use_coalesce_query(mock_db: AsyncMoc
     assert "ga.location_id = ANY" in final_sql
     assert "ga.garmin_track_point_id = ANY" in final_sql
     assert "ST_DWithin" not in final_sql, "Final lookup must not re-filter by distance."
+
+
+# ---------------------------------------------------------------------------
+# Dense per-point cell geocoding tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_internal_trigger_garmin_dense_no_pending(client: AsyncClient, mock_db: AsyncMock):
+    """No pending cells -> processed=0, remaining=0."""
+    mock_db.fetch.return_value = []
+    mock_db.fetchval.return_value = 0
+
+    response = await client.post("/internal/geocoding/trigger/garmin-dense")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["processed"] == 0
+    assert body["remaining"] == 0
+    selection_sql = mock_db.fetch.call_args[0][0]
+    assert "DISTINCT" in selection_sql
+    assert "geocoded_point_cells" in selection_sql
+    assert "ROUND(gtp.latitude * 10000)" in selection_sql
+
+
+@pytest.mark.asyncio
+async def test_internal_trigger_garmin_dense_happy_path(
+    client: AsyncClient, mock_db: AsyncMock, monkeypatch: pytest.MonkeyPatch
+):
+    """Cells get reverse-geocoded and upserted with status=success."""
+    from app.routers import geocoding as geo_mod
+
+    mock_db.fetch.return_value = [
+        {"lat_4dp": 405000, "lon_4dp": -740000},
+        {"lat_4dp": 405001, "lon_4dp": -740001},
+    ]
+    mock_db.fetchval.return_value = 5  # remaining
+
+    async def _fake_pelias(client, base, lat, lon):
+        return {
+            "features": [
+                {
+                    "properties": {
+                        "label": "1 Main St, NYC",
+                        "street": "Main St",
+                        "housenumber": "1",
+                        "neighbourhood": "Downtown",
+                        "locality": "NYC",
+                        "region": "NY",
+                        "country": "USA",
+                        "postalcode": "10001",
+                        "confidence": 0.9,
+                    }
+                }
+            ]
+        }
+
+    monkeypatch.setattr(geo_mod, "_call_pelias", _fake_pelias)
+
+    response = await client.post("/internal/geocoding/trigger/garmin-dense?batch_size=10")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["processed"] == 2
+    assert body["remaining"] == 5
+
+    # Two upserts to geocoded_point_cells with status='success'.
+    upsert_calls = [c for c in mock_db.execute.call_args_list if "geocoded_point_cells" in c[0][0]]
+    assert len(upsert_calls) == 2
+    for c in upsert_calls:
+        assert "'success'" in c[0][0]
+
+
+@pytest.mark.asyncio
+async def test_internal_trigger_garmin_dense_no_coverage(
+    client: AsyncClient, mock_db: AsyncMock, monkeypatch: pytest.MonkeyPatch
+):
+    """Empty features -> status='no_coverage' upsert."""
+    from app.routers import geocoding as geo_mod
+
+    mock_db.fetch.return_value = [{"lat_4dp": 405000, "lon_4dp": -740000}]
+    mock_db.fetchval.return_value = 0
+
+    async def _fake_pelias(client, base, lat, lon):
+        return {"features": []}
+
+    monkeypatch.setattr(geo_mod, "_call_pelias", _fake_pelias)
+
+    response = await client.post("/internal/geocoding/trigger/garmin-dense")
+
+    assert response.status_code == 200
+    assert response.json()["processed"] == 1
+    upsert_sql = mock_db.execute.call_args[0][0]
+    assert "geocoded_point_cells" in upsert_sql
+    assert mock_db.execute.call_args[0][3] == "no_coverage"
+
+
+@pytest.mark.asyncio
+async def test_internal_trigger_garmin_dense_retry_failed_targets_statuses(client: AsyncClient, mock_db: AsyncMock):
+    """retry_failed=true selects cells with status in (no_coverage, error, pending)."""
+    mock_db.fetch.return_value = []
+    mock_db.fetchval.return_value = 0
+
+    response = await client.post("/internal/geocoding/trigger/garmin-dense?retry_failed=true")
+
+    assert response.status_code == 200
+    call_args = mock_db.fetch.call_args
+    selection_sql = call_args[0][0]
+    statuses = call_args[0][2]
+    assert "status = ANY" in selection_sql
+    assert "geocoded_point_cells" in selection_sql
+    assert "no_coverage" in statuses
+    assert "error" in statuses
+    assert "pending" in statuses
+
+
+@pytest.mark.asyncio
+async def test_trigger_garmin_dense_requires_auth(client: AsyncClient, mock_db: AsyncMock):
+    """Public dense endpoint must require auth."""
+    app_obj = client._transport.app  # type: ignore[attr-defined]
+
+    def _deny() -> None:
+        raise HTTPException(status_code=http_status.HTTP_401_UNAUTHORIZED, detail="nope")
+
+    app_obj.dependency_overrides[require_auth] = _deny
+    try:
+        response = await client.post("/api/v1/geocoding/trigger/garmin-dense")
+    finally:
+        app_obj.dependency_overrides.pop(require_auth, None)
+
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_trigger_garmin_dense_public_batch_size_limit(client: AsyncClient, mock_db: AsyncMock):
+    """Public endpoint caps batch_size at 500."""
+    app_obj = client._transport.app  # type: ignore[attr-defined]
+    app_obj.dependency_overrides[require_auth] = lambda: {"sub": "test"}
+    try:
+        response = await client.post("/api/v1/geocoding/trigger/garmin-dense?batch_size=501")
+    finally:
+        app_obj.dependency_overrides.pop(require_auth, None)
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_internal_trigger_garmin_dense_retry_remaining_counts_retryable(client: AsyncClient, mock_db: AsyncMock):
+    """In retry mode, `remaining` must count cells in retryable statuses, not unmatched track-point cells."""
+    mock_db.fetch.return_value = []
+    mock_db.fetchval.return_value = 7
+
+    response = await client.post("/internal/geocoding/trigger/garmin-dense?retry_failed=true")
+
+    assert response.status_code == 200
+    assert response.json()["remaining"] == 7
+    remaining_sql = mock_db.fetchval.call_args[0][0]
+    remaining_statuses = mock_db.fetchval.call_args[0][1]
+    assert "geocoded_point_cells" in remaining_sql
+    assert "status = ANY" in remaining_sql
+    assert "no_coverage" in remaining_statuses
+    assert "error" in remaining_statuses
+    assert "pending" in remaining_statuses

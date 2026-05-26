@@ -65,6 +65,11 @@ async def test_geocoding_status(client: AsyncClient, mock_db: AsyncMock):
     assert body["dense_cells_errors"] == 20
     assert body["dense_cells_geocoded"] == 3170
     assert body["dense_point_coverage_percent"] == 70.0
+    # Guard against regressing dense_cells_total back to the slow
+    # COUNT(DISTINCT ...) over garmin_track_points (migration 18 MV).
+    fetchval_queries = [call.args[0] for call in mock_db.fetchval.await_args_list]
+    assert any("mv_garmin_track_point_cells" in sql for sql in fetchval_queries)
+    assert not any("COUNT(DISTINCT" in sql and "garmin_track_points" in sql for sql in fetchval_queries)
 
 
 @pytest.mark.asyncio

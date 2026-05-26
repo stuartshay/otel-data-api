@@ -1211,3 +1211,22 @@ async def test_trigger_garmin_dense_public_batch_size_limit(client: AsyncClient,
     finally:
         app_obj.dependency_overrides.pop(require_auth, None)
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_internal_trigger_garmin_dense_retry_remaining_counts_retryable(client: AsyncClient, mock_db: AsyncMock):
+    """In retry mode, `remaining` must count cells in retryable statuses, not unmatched track-point cells."""
+    mock_db.fetch.return_value = []
+    mock_db.fetchval.return_value = 7
+
+    response = await client.post("/internal/geocoding/trigger/garmin-dense?retry_failed=true")
+
+    assert response.status_code == 200
+    assert response.json()["remaining"] == 7
+    remaining_sql = mock_db.fetchval.call_args[0][0]
+    remaining_statuses = mock_db.fetchval.call_args[0][1]
+    assert "geocoded_point_cells" in remaining_sql
+    assert "status = ANY" in remaining_sql
+    assert "no_coverage" in remaining_statuses
+    assert "error" in remaining_statuses
+    assert "pending" in remaining_statuses

@@ -508,7 +508,10 @@ def _row_to_track_point(row: Mapping[str, Any]) -> GarminTrackPoint:
     cell_geocoded_at = data.pop("cell_geocoded_at", None)
 
     address: GeocodedAddressSummary | None = None
-    if cell_status is not None:
+    # Only prefer the cell address when it actually carries a usable address.
+    # Non-success cell rows (pending/error/no_coverage) must not hide a waypoint
+    # address that was successfully geocoded.
+    if cell_status == "success" and cell_display_address is not None:
         address = GeocodedAddressSummary(
             display_address=cell_display_address,
             street=cell_street,

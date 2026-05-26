@@ -1109,20 +1109,27 @@ async def _trigger_garmin_dense_impl(
             results = await asyncio.gather(*[_process_one(client, row["lat_4dp"], row["lon_4dp"]) for row in cell_rows])
             processed = sum(results)
 
-    # Remaining distinct cells not yet geocoded.
-    remaining = await db.fetchval(
-        "SELECT COUNT(*) FROM ("
-        "  SELECT DISTINCT "
-        "    ROUND(gtp.latitude * 10000)::INTEGER AS lat_4dp, "
-        "    ROUND(gtp.longitude * 10000)::INTEGER AS lon_4dp "
-        "  FROM public.garmin_track_points gtp "
-        "  WHERE NOT EXISTS ("
-        "    SELECT 1 FROM public.geocoded_point_cells gpc "
-        "    WHERE gpc.lat_4dp = ROUND(gtp.latitude * 10000)::INTEGER "
-        "      AND gpc.lon_4dp = ROUND(gtp.longitude * 10000)::INTEGER"
-        "  )"
-        ") AS pending_cells"
-    )
+    # Remaining work. In retry mode, count cells still in a retryable status;
+    # otherwise count distinct track-point cells that have no row yet.
+    if retry_failed:
+        remaining = await db.fetchval(
+            "SELECT COUNT(*) FROM public.geocoded_point_cells WHERE status = ANY($1::text[])",
+            list(RETRY_STATUSES),
+        )
+    else:
+        remaining = await db.fetchval(
+            "SELECT COUNT(*) FROM ("
+            "  SELECT DISTINCT "
+            "    ROUND(gtp.latitude * 10000)::INTEGER AS lat_4dp, "
+            "    ROUND(gtp.longitude * 10000)::INTEGER AS lon_4dp "
+            "  FROM public.garmin_track_points gtp "
+            "  WHERE NOT EXISTS ("
+            "    SELECT 1 FROM public.geocoded_point_cells gpc "
+            "    WHERE gpc.lat_4dp = ROUND(gtp.latitude * 10000)::INTEGER "
+            "      AND gpc.lon_4dp = ROUND(gtp.longitude * 10000)::INTEGER"
+            "  )"
+            ") AS pending_cells"
+        )
 
     return GeocodingTriggerResponse(
         processed=processed,
@@ -1173,9 +1180,10 @@ async def _process_cell(
         )
         try:
             await _upsert_cell_status(db, lat_4dp, lon_4dp, status="error")
+            return 1
         except Exception:
             logger.warning("Failed to upsert error status for cell (%d, %d)", lat_4dp, lon_4dp, exc_info=True)
-        return 0
+            return 0
 
 
 async def _upsert_cell_from_pelias(

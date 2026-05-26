@@ -905,3 +905,35 @@ async def test_cell_overrides_waypoint_when_both_present(client: AsyncClient, mo
     assert addr["display_address"] == "Cell Address Wins"
     # waypoint_kind from the waypoint row is dropped because cell wins.
     assert addr["waypoint_kind"] is None
+
+
+@pytest.mark.asyncio
+async def test_pending_cell_does_not_hide_waypoint_address(client: AsyncClient, mock_db):
+    """A non-success cell row (pending/error/no_coverage) must not hide a successful waypoint address."""
+    row = _track_row_with_address()  # waypoint_kind='start', display_address set, status='success'
+    row.update(
+        {
+            "cell_display_address": None,
+            "cell_street": None,
+            "cell_housenumber": None,
+            "cell_neighbourhood": None,
+            "cell_locality": None,
+            "cell_region": None,
+            "cell_country": None,
+            "cell_postalcode": None,
+            "cell_confidence": None,
+            "cell_status": "pending",
+            "cell_geocoded_at": None,
+        }
+    )
+    mock_db.fetchval.side_effect = [1, 1]
+    mock_db.fetch.return_value = [row]
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/tracks")
+
+    assert response.status_code == 200
+    addr = response.json()["items"][0]["address"]
+    # Waypoint address survives because cell is not 'success'.
+    assert addr["display_address"] == row["display_address"]
+    assert addr["waypoint_kind"] == "start"
+    assert addr["status"] == "success"

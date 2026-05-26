@@ -103,10 +103,10 @@ async def geocoding_status(request: Request) -> GeocodingStatus:
     garmin_waypoint_success_percent = round(((g_success or 0) / g_total_rows * 100), 2) if g_total_rows else 0.0
 
     # Dense per-point cell coverage (geocoded_point_cells, 4dp ~ 11 m resolution).
-    dense_total_cells = await db.fetchval(
-        "SELECT COUNT(DISTINCT (ROUND(latitude * 10000)::INTEGER, ROUND(longitude * 10000)::INTEGER)) "
-        "FROM public.garmin_track_points"
-    )
+    # Read distinct-cell totals from the mv_garmin_track_point_cells materialized view
+    # (migration 18) — a direct COUNT(DISTINCT ...) over garmin_track_points takes ~18s on
+    # prod and exceeds the API's database command timeout.
+    dense_total_cells = await db.fetchval("SELECT COUNT(*) FROM public.mv_garmin_track_point_cells")
     dense_success = await db.fetchval("SELECT COUNT(*) FROM public.geocoded_point_cells WHERE status = 'success'")
     dense_pending = await db.fetchval("SELECT COUNT(*) FROM public.geocoded_point_cells WHERE status = 'pending'")
     dense_no_coverage = await db.fetchval(

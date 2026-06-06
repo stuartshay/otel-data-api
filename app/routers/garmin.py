@@ -203,6 +203,10 @@ async def list_activities(
     data_query = (
         f"SELECT a.activity_id, a.sport, a.sub_sport, a.start_time, a.end_time, "
         f"a.distance_km, a.duration_seconds, a.avg_heart_rate, a.max_heart_rate, "
+        f"(a.avg_heart_rate IS NOT NULL OR a.max_heart_rate IS NOT NULL OR EXISTS ("
+        f"SELECT 1 FROM public.garmin_track_points t_hr "
+        f"WHERE t_hr.activity_id = a.activity_id AND t_hr.heart_rate IS NOT NULL"
+        f")) AS hr_available, "
         f"a.avg_cadence, a.max_cadence, a.calories, a.avg_speed_kmh, a.max_speed_kmh, "
         f"a.total_ascent_m, a.total_descent_m, a.total_distance, a.avg_pace, "
         f"a.device_manufacturer, a.avg_temperature_c, a.min_temperature_c, "
@@ -306,6 +310,10 @@ async def get_activity(
     row = await db.fetchrow(
         "SELECT a.activity_id, a.sport, a.sub_sport, a.start_time, a.end_time, "
         "a.distance_km, a.duration_seconds, a.avg_heart_rate, a.max_heart_rate, "
+        "(a.avg_heart_rate IS NOT NULL OR a.max_heart_rate IS NOT NULL OR EXISTS ("
+        "SELECT 1 FROM public.garmin_track_points t_hr "
+        "WHERE t_hr.activity_id = a.activity_id AND t_hr.heart_rate IS NOT NULL"
+        ")) AS hr_available, "
         "a.avg_cadence, a.max_cadence, a.calories, a.avg_speed_kmh, a.max_speed_kmh, "
         "a.total_ascent_m, a.total_descent_m, a.total_distance, a.avg_pace, "
         "a.device_manufacturer, a.avg_temperature_c, a.min_temperature_c, "

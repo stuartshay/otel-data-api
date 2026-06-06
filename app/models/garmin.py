@@ -22,6 +22,23 @@ class GarminActivity(BaseModel):
     duration_seconds: int | None = Field(default=None, description="Active duration in seconds (excludes pauses)")
     avg_heart_rate: int | None = Field(default=None, description="Average heart rate in beats per minute")
     max_heart_rate: int | None = Field(default=None, description="Maximum heart rate in beats per minute")
+    hr_available: bool = Field(
+        default=False,
+        description="Whether this activity has usable heart-rate data in summary or track points",
+    )
+    min_heart_rate: int | None = Field(default=None, description="Minimum heart rate in beats per minute")
+    aerobic_training_effect: float | None = Field(default=None, description="Aerobic training effect score")
+    anaerobic_training_effect: float | None = Field(default=None, description="Anaerobic training effect score")
+    exercise_load: int | None = Field(default=None, description="Exercise load score")
+    avg_respiration_rate: int | None = Field(default=None, description="Average respiration rate in breaths per minute")
+    min_respiration_rate: int | None = Field(default=None, description="Minimum respiration rate in breaths per minute")
+    max_respiration_rate: int | None = Field(default=None, description="Maximum respiration rate in breaths per minute")
+    sweat_loss_ml: int | None = Field(default=None, description="Estimated sweat loss in millilitres")
+    moderate_intensity_minutes: int | None = Field(default=None, description="Moderate intensity minutes")
+    vigorous_intensity_minutes: int | None = Field(default=None, description="Vigorous intensity minutes")
+    total_intensity_minutes: int | None = Field(default=None, description="Total intensity minutes")
+    paved_distance_km: float | None = Field(default=None, description="Distance over paved surfaces in kilometres")
+    unpaved_distance_km: float | None = Field(default=None, description="Distance over unpaved surfaces in kilometres")
     avg_cadence: int | None = Field(default=None, description="Average cadence in RPM")
     max_cadence: int | None = Field(default=None, description="Maximum cadence in RPM")
     calories: int | None = Field(default=None, description="Total calories burned")
@@ -56,6 +73,20 @@ class GarminActivity(BaseModel):
                     "duration_seconds": 6932,
                     "avg_heart_rate": 142,
                     "max_heart_rate": 178,
+                    "hr_available": True,
+                    "min_heart_rate": 98,
+                    "aerobic_training_effect": 2.6,
+                    "anaerobic_training_effect": 0.0,
+                    "exercise_load": 48,
+                    "avg_respiration_rate": 25,
+                    "min_respiration_rate": 16,
+                    "max_respiration_rate": 32,
+                    "sweat_loss_ml": 1629,
+                    "moderate_intensity_minutes": 88,
+                    "vigorous_intensity_minutes": 29,
+                    "total_intensity_minutes": 146,
+                    "paved_distance_km": 21.09,
+                    "unpaved_distance_km": 0.65,
                     "avg_cadence": 78,
                     "max_cadence": 112,
                     "calories": 1689,

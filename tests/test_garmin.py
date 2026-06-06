@@ -20,6 +20,7 @@ def _activity_row(activity_id: str = "20932993811") -> dict:
         "duration_seconds": 6932,
         "avg_heart_rate": 142,
         "max_heart_rate": 178,
+        "hr_available": True,
         "avg_cadence": 78,
         "max_cadence": 112,
         "calories": 1689,
@@ -211,6 +212,21 @@ async def test_get_activity_success(client: AsyncClient, mock_db):
     data = response.json()
     assert data["activity_id"] == "20932993811"
     assert data["sport"] == "cycling"
+    assert data["hr_available"] is True
+
+
+@pytest.mark.asyncio
+async def test_get_activity_hr_availability_defaults_false(client: AsyncClient, mock_db):
+    row = _activity_row()
+    row["avg_heart_rate"] = None
+    row["max_heart_rate"] = None
+    row["hr_available"] = False
+    mock_db.fetchrow.return_value = row
+
+    response = await client.get("/api/v1/garmin/activities/20932993811")
+
+    assert response.status_code == 200
+    assert response.json()["hr_available"] is False
 
 
 @pytest.mark.asyncio

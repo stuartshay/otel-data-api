@@ -42,6 +42,9 @@ def create_app(config: Config) -> FastAPI:
         tracer_provider = getattr(app.state, "tracer_provider", None)
         if tracer_provider is not None:
             tracer_provider.shutdown()
+        log_provider = getattr(app.state, "log_provider", None)
+        if log_provider is not None:
+            log_provider.shutdown()
         logger.info("Application shutdown — database pool closed")
 
     app = FastAPI(

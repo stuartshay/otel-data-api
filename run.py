@@ -12,23 +12,12 @@ from app.logging import configure_logging
 load_dotenv()
 
 config = Config.from_env()
-configure_logging(config)
+log_provider = configure_logging(config)
 
 logger = structlog.get_logger("otel-data-api")
 
-# --- New Relic (optional, env-gated) ---
-if os.getenv("NEW_RELIC_LICENSE_KEY"):
-    try:
-        import newrelic.agent  # pyright: ignore[reportMissingImports]
-
-        newrelic.agent.initialize()
-        newrelic.agent.register_application(timeout=10)
-
-        logger.info("New Relic agent initialized with trace correlation")
-    except Exception:
-        logger.exception("New Relic agent failed to initialize — continuing without it")
-
 app = create_app(config)
+app.state.log_provider = log_provider
 
 if __name__ == "__main__":
     import uvicorn

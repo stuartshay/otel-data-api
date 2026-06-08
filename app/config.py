@@ -30,6 +30,7 @@ class Config:
     # OpenTelemetry
     otel_endpoint: str = "localhost:4317"
     otel_traces_enabled: bool = False
+    otel_logs_enabled: bool = False
     service_name: str = "otel-data-api"
     service_namespace: str = "otel-data-api"
     environment: str = "homelab"
@@ -86,6 +87,7 @@ class Config:
             # OpenTelemetry
             otel_endpoint=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317"),
             otel_traces_enabled=os.getenv("OTEL_TRACES_ENABLED", "false").lower() == "true",
+            otel_logs_enabled=os.getenv("OTEL_LOGS_ENABLED", "false").lower() == "true",
             service_name=os.getenv("OTEL_SERVICE_NAME", "otel-data-api"),
             service_namespace=os.getenv("OTEL_SERVICE_NAMESPACE", "otel-data-api"),
             environment=os.getenv("OTEL_ENVIRONMENT", "homelab"),

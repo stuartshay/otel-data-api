@@ -38,11 +38,14 @@ def create_app(config: Config) -> FastAPI:
         yield
         # Shutdown
         await db.close()
+        logger.info("Application shutdown — database pool closed")
         # Flush remaining OTel spans before exit
         tracer_provider = getattr(app.state, "tracer_provider", None)
         if tracer_provider is not None:
             tracer_provider.shutdown()
-        logger.info("Application shutdown — database pool closed")
+        log_provider = getattr(app.state, "log_provider", None)
+        if log_provider is not None:
+            log_provider.shutdown()
 
     app = FastAPI(
         title="OTel Data API",

@@ -10,12 +10,14 @@ from typing import Any, Literal
 import fastapi
 import httpx
 import structlog
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import ValidationError
 
+from app.auth import require_auth
 from app.models import PaginatedResponse
 from app.models.garmin import (
     GarminActivity,
+    GarminActivityManualUpdate,
     GarminActivityTotal,
     GarminChartPoint,
     GarminDateRange,
@@ -30,6 +32,27 @@ logger = structlog.get_logger(__name__)
 
 ACTIVITY_SORT_WHITELIST = {"start_time", "distance_km", "duration_seconds", "sport", "created_at"}
 TRACK_SORT_WHITELIST = {"timestamp", "altitude", "speed_kmh", "heart_rate", "created_at"}
+
+ACTIVITY_BY_ID_SELECT = (
+    "SELECT a.activity_id, a.sport, a.sub_sport, a.start_time, a.end_time, "
+    "a.distance_km, a.duration_seconds, a.avg_heart_rate, a.max_heart_rate, "
+    "(a.avg_heart_rate IS NOT NULL OR a.max_heart_rate IS NOT NULL OR EXISTS ("
+    "SELECT 1 FROM public.garmin_track_points t_hr "
+    "WHERE t_hr.activity_id = a.activity_id AND t_hr.heart_rate IS NOT NULL"
+    ")) AS hr_available, "
+    "a.min_heart_rate, a.aerobic_training_effect, a.anaerobic_training_effect, "
+    "a.exercise_load, a.avg_respiration_rate, a.min_respiration_rate, "
+    "a.max_respiration_rate, a.sweat_loss_ml, a.moderate_intensity_minutes, "
+    "a.vigorous_intensity_minutes, a.total_intensity_minutes, "
+    "a.paved_distance_km, a.unpaved_distance_km, a.avg_cadence, a.max_cadence, "
+    "a.calories, a.avg_speed_kmh, a.max_speed_kmh, a.total_ascent_m, "
+    "a.total_descent_m, a.total_distance, a.avg_pace, a.device_manufacturer, "
+    "a.avg_temperature_c, a.min_temperature_c, a.max_temperature_c, "
+    "a.total_elapsed_time, a.total_timer_time, a.created_at, a.uploaded_at, "
+    "(SELECT COUNT(*) FROM public.garmin_track_points t "
+    "WHERE t.activity_id = a.activity_id) AS track_point_count "
+    "FROM public.garmin_activities a WHERE a.activity_id = $1"
+)
 
 
 def _parse_date(value: str) -> date:
@@ -75,6 +98,18 @@ async def trigger_sync(
         ge=1,
         description="Optional sync window in hours. Positive integer.",
     ),
+    resync_existing: bool | None = Query(
+        None,
+        description="Whether to re-sync activities that already exist in the database.",
+    ),
+    activity_id: list[str] | None = Query(
+        None,
+        description="Optional Garmin activity_id filter (repeatable).",
+    ),
+    activity_ids: list[str] | None = Query(
+        None,
+        description="Optional Garmin activity_ids filter (repeatable).",
+    ),
 ) -> GarminSyncResponse:
     """Trigger an on-demand Garmin sync via the in-cluster garmin-sync service."""
     sync_id = request.headers.get("X-Garmin-Sync-Id") or str(uuid.uuid4())
@@ -89,11 +124,17 @@ async def trigger_sync(
 
     config = request.app.state.config
     base_url = config.garmin_sync_base_url.rstrip("/")
-    params = {}
+    params: dict[str, Any] = {}
     if lookback is not None:
         params["lookback"] = lookback
     if window_hours is not None:
         params["window_hours"] = window_hours
+    if resync_existing is not None:
+        params["resync_existing"] = "true" if resync_existing else "false"
+    if activity_id:
+        params["activity_id"] = activity_id
+    if activity_ids:
+        params["activity_ids"] = activity_ids
 
     logger.info("garmin_sync_trigger", sync_id=sync_id, params=params)
 
@@ -307,23 +348,51 @@ async def get_activity(
 ) -> GarminActivity:
     """Get a single Garmin activity by ID with track point count."""
     db = request.app.state.db
-    row = await db.fetchrow(
-        "SELECT a.activity_id, a.sport, a.sub_sport, a.start_time, a.end_time, "
-        "a.distance_km, a.duration_seconds, a.avg_heart_rate, a.max_heart_rate, "
-        "(a.avg_heart_rate IS NOT NULL OR a.max_heart_rate IS NOT NULL OR EXISTS ("
-        "SELECT 1 FROM public.garmin_track_points t_hr "
-        "WHERE t_hr.activity_id = a.activity_id AND t_hr.heart_rate IS NOT NULL"
-        ")) AS hr_available, "
-        "a.avg_cadence, a.max_cadence, a.calories, a.avg_speed_kmh, a.max_speed_kmh, "
-        "a.total_ascent_m, a.total_descent_m, a.total_distance, a.avg_pace, "
-        "a.device_manufacturer, a.avg_temperature_c, a.min_temperature_c, "
-        "a.max_temperature_c, a.total_elapsed_time, a.total_timer_time, "
-        "a.created_at, a.uploaded_at, "
-        "(SELECT COUNT(*) FROM public.garmin_track_points t "
-        "WHERE t.activity_id = a.activity_id) AS track_point_count "
-        "FROM public.garmin_activities a WHERE a.activity_id = $1",
-        activity_id,
+    row = await db.fetchrow(ACTIVITY_BY_ID_SELECT, activity_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    return GarminActivity(**dict(row))
+
+
+@router.patch(
+    "/activities/{activity_id}",
+    response_model=GarminActivity,
+    responses={
+        400: {"description": "No fields to update"},
+        401: {"description": "Authentication required"},
+        404: {"description": "Activity not found"},
+    },
+)
+async def patch_activity(
+    request: Request,
+    body: GarminActivityManualUpdate = fastapi.Body(...),
+    activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
+    _user: dict = Depends(require_auth),
+) -> GarminActivity:
+    """Manually patch Garmin activity fields (auth required when OAuth2 is enabled)."""
+    db = request.app.state.db
+
+    updates = body.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    set_parts: list[str] = []
+    params: list[Any] = []
+    idx = 1
+    for field_name, value in updates.items():
+        set_parts.append(f"{field_name} = ${idx}")
+        params.append(value)
+        idx += 1
+
+    params.append(activity_id)
+    updated = await db.fetchrow(
+        f"UPDATE public.garmin_activities SET {', '.join(set_parts)} WHERE activity_id = ${idx} RETURNING activity_id",
+        *params,
     )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    row = await db.fetchrow(ACTIVITY_BY_ID_SELECT, activity_id)
     if not row:
         raise HTTPException(status_code=404, detail="Activity not found")
     return GarminActivity(**dict(row))
@@ -396,7 +465,8 @@ async def list_track_points(
             "), matched AS ("
             "  SELECT gtp.id, gtp.activity_id, gtp.latitude, gtp.longitude, "
             "  gtp.timestamp, gtp.altitude, gtp.distance_from_start_km, gtp.speed_kmh, "
-            "  gtp.heart_rate, gtp.cadence, gtp.temperature_c, gtp.created_at, "
+            "  gtp.heart_rate, gtp.hr_zone, gtp.respiration_rate, gtp.cadence, "
+            "  gtp.temperature_c, gtp.surface_type, gtp.effort_level, gtp.created_at, "
             "  ROW_NUMBER() OVER ("
             "    PARTITION BY gtp.longitude, gtp.latitude "
             "    ORDER BY gtp.timestamp, (gtp.altitude IS NOT NULL) DESC, gtp.id"
@@ -408,7 +478,8 @@ async def list_track_points(
             ") "
             "SELECT m.id, m.activity_id, m.latitude, m.longitude, "
             "m.timestamp, m.altitude, m.distance_from_start_km, m.speed_kmh, "
-            "m.heart_rate, m.cadence, m.temperature_c, m.created_at "
+            "m.heart_rate, m.hr_zone, m.respiration_rate, m.cadence, "
+            "m.temperature_c, m.surface_type, m.effort_level, m.created_at "
             "FROM matched m "
             "WHERE m.rn = 1 "
             f"ORDER BY m.timestamp {order}",
@@ -421,7 +492,8 @@ async def list_track_points(
     rows = await db.fetch(
         "SELECT gtp.id, gtp.activity_id, gtp.latitude, gtp.longitude, gtp.timestamp, "
         "gtp.altitude, gtp.distance_from_start_km, gtp.speed_kmh, gtp.heart_rate, "
-        "gtp.cadence, gtp.temperature_c, gtp.created_at, "
+        "gtp.hr_zone, gtp.respiration_rate, gtp.cadence, gtp.temperature_c, "
+        "gtp.surface_type, gtp.effort_level, gtp.created_at, "
         "ga.display_address, ga.street, ga.housenumber, ga.neighbourhood, "
         "ga.locality, ga.region, ga.country, ga.postalcode, ga.confidence, "
         "ga.waypoint_kind, ga.status AS address_status, ga.geocoded_at, "
@@ -473,7 +545,8 @@ async def get_chart_data(
 
     rows = await db.fetch(
         "SELECT latitude, longitude, timestamp, altitude, "
-        "distance_from_start_km, speed_kmh, heart_rate, cadence, temperature_c "
+        "distance_from_start_km, speed_kmh, heart_rate, hr_zone, respiration_rate, "
+        "cadence, temperature_c, surface_type, effort_level "
         "FROM public.garmin_track_points WHERE activity_id = $1 ORDER BY timestamp ASC",
         activity_id,
     )

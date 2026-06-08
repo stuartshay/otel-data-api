@@ -2,10 +2,12 @@
 
 from datetime import date
 
+import fastapi
 import httpx
 import pytest
 from httpx import AsyncClient
 
+from app.auth import require_auth
 from app.config import Config
 
 
@@ -53,8 +55,12 @@ def _track_row(activity_id: str = "20932993811") -> dict:
         "distance_from_start_km": 0.0,
         "speed_kmh": 24.5,
         "heart_rate": 135,
+        "hr_zone": 3,
+        "respiration_rate": 22,
         "cadence": 80,
         "temperature_c": 18,
+        "surface_type": "paved",
+        "effort_level": "steady",
         "created_at": "2026-02-09T23:56:37+00:00",
     }
 
@@ -240,6 +246,70 @@ async def test_get_activity_not_found(client: AsyncClient, mock_db):
 
 
 @pytest.mark.asyncio
+async def test_patch_activity_success(client: AsyncClient, mock_db):
+    updated = _activity_row()
+    updated["avg_heart_rate"] = 141
+    updated["aerobic_training_effect"] = 3.2
+
+    mock_db.fetchrow.side_effect = [{"activity_id": "20932993811"}, updated]
+
+    response = await client.patch(
+        "/api/v1/garmin/activities/20932993811",
+        json={"avg_heart_rate": 141, "aerobic_training_effect": 3.2},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["activity_id"] == "20932993811"
+    assert response.json()["avg_heart_rate"] == 141
+    assert response.json()["aerobic_training_effect"] == 3.2
+
+    update_query, *update_params = mock_db.fetchrow.await_args_list[0].args
+    assert "UPDATE public.garmin_activities SET" in update_query
+    assert "avg_heart_rate = $1" in update_query
+    assert "aerobic_training_effect = $2" in update_query
+    assert update_params == [141, 3.2, "20932993811"]
+
+
+@pytest.mark.asyncio
+async def test_patch_activity_requires_body_fields(client: AsyncClient, mock_db):
+    response = await client.patch("/api/v1/garmin/activities/20932993811", json={})
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "No fields to update"}
+
+
+@pytest.mark.asyncio
+async def test_patch_activity_not_found(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = None
+
+    response = await client.patch(
+        "/api/v1/garmin/activities/missing",
+        json={"avg_heart_rate": 141},
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Activity not found"}
+
+
+@pytest.mark.asyncio
+async def test_patch_activity_auth_required_when_dependency_denies(client: AsyncClient, app):
+    async def _deny_auth():
+        raise fastapi.HTTPException(status_code=401, detail="Authentication required")
+
+    app.dependency_overrides[require_auth] = _deny_auth
+    try:
+        response = await client.patch(
+            "/api/v1/garmin/activities/20932993811",
+            json={"avg_heart_rate": 141},
+        )
+    finally:
+        app.dependency_overrides.pop(require_auth, None)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required"}
+
+
+@pytest.mark.asyncio
 async def test_list_track_points_success_and_invalid_sort_falls_back(client: AsyncClient, mock_db):
     mock_db.fetchval.side_effect = [1, 2]
     mock_db.fetch.return_value = [_track_row()]
@@ -254,6 +324,10 @@ async def test_list_track_points_success_and_invalid_sort_falls_back(client: Asy
     assert data["limit"] == 5
     assert data["offset"] == 1
     assert len(data["items"]) == 1
+    assert data["items"][0]["hr_zone"] == 3
+    assert data["items"][0]["respiration_rate"] == 22
+    assert data["items"][0]["surface_type"] == "paved"
+    assert data["items"][0]["effort_level"] == "steady"
 
     track_query, *params = mock_db.fetch.await_args.args
     assert "ORDER BY gtp.timestamp desc" in track_query
@@ -336,8 +410,12 @@ def _chart_row() -> dict:
         "distance_from_start_km": 0.0,
         "speed_kmh": 24.5,
         "heart_rate": 135,
+        "hr_zone": 3,
+        "respiration_rate": 22,
         "cadence": 80,
         "temperature_c": 18,
+        "surface_type": "paved",
+        "effort_level": "steady",
         "latitude": 40.715,
         "longitude": -74.017,
     }
@@ -357,6 +435,10 @@ async def test_get_chart_data_success(client: AsyncClient, mock_db):
     assert data[0]["latitude"] == 40.715
     assert data[0]["altitude"] == 12.4
     assert data[0]["speed_kmh"] == 24.5
+    assert data[0]["hr_zone"] == 3
+    assert data[0]["respiration_rate"] == 22
+    assert data[0]["surface_type"] == "paved"
+    assert data[0]["effort_level"] == "steady"
 
     query = mock_db.fetch.await_args.args[0]
     assert "garmin_track_points" in query
@@ -466,6 +548,55 @@ async def test_trigger_sync_lookback_passthrough(client: AsyncClient, monkeypatc
     assert response.json()["lookback"] == 7
     assert captured["path"] == "/api/v1/sync"
     assert captured["params"] == {"lookback": 7}
+    assert "X-Garmin-Sync-Id" in captured["headers"]
+
+
+@pytest.mark.asyncio
+async def test_trigger_sync_passthrough_resync_and_activity_filters(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+):
+    captured: dict = {}
+
+    class _FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        def __init__(self, *, base_url: str, timeout: float):
+            captured["base_url"] = base_url
+            captured["timeout"] = timeout
+
+        async def post(self, path: str, params=None, headers=None):
+            captured["path"] = path
+            captured["params"] = params
+            captured["headers"] = headers
+            return _FakeSyncResponse(
+                202,
+                {
+                    "status": "accepted",
+                    "message": "Sync started",
+                    "triggered_at": "2026-03-12T01:00:00Z",
+                    "resync_existing": True,
+                    "activity_ids": ["23157610603", "23157610604"],
+                },
+            )
+
+    monkeypatch.setattr("app.routers.garmin.httpx.AsyncClient", _FakeClient)
+
+    response = await client.post(
+        "/api/v1/garmin/sync?resync_existing=true&activity_id=23157610603&activity_ids=23157610604"
+    )
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "accepted"
+    assert captured["path"] == "/api/v1/sync"
+    assert captured["params"] == {
+        "resync_existing": "true",
+        "activity_id": ["23157610603"],
+        "activity_ids": ["23157610604"],
+    }
     assert "X-Garmin-Sync-Id" in captured["headers"]
 
 

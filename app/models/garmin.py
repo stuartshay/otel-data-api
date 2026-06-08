@@ -125,8 +125,12 @@ class GarminTrackPoint(BaseModel):
     )
     speed_kmh: float | None = Field(default=None, description="Instantaneous speed in km/h")
     heart_rate: int | None = Field(default=None, description="Heart rate in beats per minute")
+    hr_zone: int | None = Field(default=None, description="Heart-rate zone index (1-5)")
+    respiration_rate: int | None = Field(default=None, description="Respiration rate in breaths per minute")
     cadence: int | None = Field(default=None, description="Pedal/step cadence in RPM")
     temperature_c: int | None = Field(default=None, description="Ambient temperature in degrees C")
+    surface_type: str | None = Field(default=None, description="Road or terrain type")
+    effort_level: str | None = Field(default=None, description="Effort classification label")
     created_at: datetime | None = Field(default=None, description="UTC timestamp when the record was inserted")
     address: GeocodedAddressSummary | None = Field(
         default=None,
@@ -147,8 +151,12 @@ class GarminTrackPoint(BaseModel):
                     "distance_from_start_km": 0.0,
                     "speed_kmh": 24.5,
                     "heart_rate": 135,
+                    "hr_zone": 3,
+                    "respiration_rate": 22,
                     "cadence": 80,
                     "temperature_c": 18,
+                    "surface_type": "paved",
+                    "effort_level": "steady",
                     "created_at": "2026-02-09T23:56:37Z",
                     "address": None,
                 }
@@ -167,8 +175,12 @@ class GarminChartPoint(BaseModel):
     )
     speed_kmh: float | None = Field(default=None, description="Instantaneous speed in km/h")
     heart_rate: int | None = Field(default=None, description="Heart rate in beats per minute")
+    hr_zone: int | None = Field(default=None, description="Heart-rate zone index (1-5)")
+    respiration_rate: int | None = Field(default=None, description="Respiration rate in breaths per minute")
     cadence: int | None = Field(default=None, description="Pedal/step cadence in RPM")
     temperature_c: int | None = Field(default=None, description="Ambient temperature in degrees C")
+    surface_type: str | None = Field(default=None, description="Road or terrain type")
+    effort_level: str | None = Field(default=None, description="Effort classification label")
     latitude: float = Field(description="GPS latitude in decimal degrees (WGS 84)")
     longitude: float = Field(description="GPS longitude in decimal degrees (WGS 84)")
 
@@ -181,8 +193,12 @@ class GarminChartPoint(BaseModel):
                     "distance_from_start_km": 0.0,
                     "speed_kmh": 24.5,
                     "heart_rate": 135,
+                    "hr_zone": 3,
+                    "respiration_rate": 22,
                     "cadence": 80,
                     "temperature_c": 18,
+                    "surface_type": "paved",
+                    "effort_level": "steady",
                     "latitude": 40.71501586586237,
                     "longitude": -74.01768794283271,
                 }
@@ -275,4 +291,64 @@ class GarminActivityTotal(BaseModel):
                 }
             ]
         }
+    }
+
+
+class GarminActivityManualUpdate(BaseModel):
+    """Partial manual update payload for Garmin activity records."""
+
+    sport: str | None = Field(default=None, description="Primary sport type (e.g. cycling, running)")
+    sub_sport: str | None = Field(default=None, description="Sub-sport classification (e.g. road, trail)")
+    start_time: datetime | None = Field(default=None, description="Activity start time in UTC")
+    end_time: datetime | None = Field(default=None, description="Activity end time in UTC")
+    distance_km: float | None = Field(default=None, description="Total distance in kilometres")
+    duration_seconds: int | None = Field(default=None, description="Active duration in seconds (excludes pauses)")
+    avg_heart_rate: int | None = Field(default=None, description="Average heart rate in beats per minute")
+    max_heart_rate: int | None = Field(default=None, description="Maximum heart rate in beats per minute")
+    min_heart_rate: int | None = Field(default=None, description="Minimum heart rate in beats per minute")
+    aerobic_training_effect: float | None = Field(default=None, description="Aerobic training effect score")
+    anaerobic_training_effect: float | None = Field(default=None, description="Anaerobic training effect score")
+    exercise_load: int | None = Field(default=None, description="Exercise load score")
+    avg_respiration_rate: int | None = Field(default=None, description="Average respiration rate in breaths per minute")
+    min_respiration_rate: int | None = Field(default=None, description="Minimum respiration rate in breaths per minute")
+    max_respiration_rate: int | None = Field(default=None, description="Maximum respiration rate in breaths per minute")
+    sweat_loss_ml: int | None = Field(default=None, description="Estimated sweat loss in millilitres")
+    moderate_intensity_minutes: int | None = Field(default=None, description="Moderate intensity minutes")
+    vigorous_intensity_minutes: int | None = Field(default=None, description="Vigorous intensity minutes")
+    total_intensity_minutes: int | None = Field(default=None, description="Total intensity minutes")
+    paved_distance_km: float | None = Field(default=None, description="Distance over paved surfaces in kilometres")
+    unpaved_distance_km: float | None = Field(default=None, description="Distance over unpaved surfaces in kilometres")
+    avg_cadence: int | None = Field(default=None, description="Average cadence in RPM")
+    max_cadence: int | None = Field(default=None, description="Maximum cadence in RPM")
+    calories: int | None = Field(default=None, description="Total calories burned")
+    avg_speed_kmh: float | None = Field(default=None, description="Average speed in km/h")
+    max_speed_kmh: float | None = Field(default=None, description="Maximum speed in km/h")
+    total_ascent_m: int | None = Field(default=None, description="Total elevation gain in meters")
+    total_descent_m: int | None = Field(default=None, description="Total elevation loss in meters")
+    total_distance: float | None = Field(default=None, description="Raw total distance in meters from FIT file")
+    avg_pace: float | None = Field(default=None, description="Average pace in minutes per kilometre")
+    device_manufacturer: str | None = Field(default=None, description="Device manufacturer (e.g. garmin)")
+    avg_temperature_c: int | None = Field(default=None, description="Average ambient temperature in degrees C")
+    min_temperature_c: int | None = Field(default=None, description="Minimum ambient temperature in degrees C")
+    max_temperature_c: int | None = Field(default=None, description="Maximum ambient temperature in degrees C")
+    total_elapsed_time: float | None = Field(
+        default=None,
+        description="Total elapsed time in seconds (includes pauses)",
+    )
+    total_timer_time: float | None = Field(default=None, description="Total timer time in seconds (active recording)")
+    uploaded_at: datetime | None = Field(default=None, description="UTC timestamp when the FIT file was uploaded")
+
+    model_config = {
+        "extra": "forbid",
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "avg_heart_rate": 141,
+                    "max_heart_rate": 172,
+                    "avg_cadence": 82,
+                    "aerobic_training_effect": 3.2,
+                    "device_manufacturer": "polar_electro",
+                }
+            ]
+        },
     }

@@ -48,6 +48,7 @@ class TestConfigureLogging:
         data = json.loads(line)
 
         assert data["event"] == "hello"
+        assert data["message"] == "hello"
         assert data["key"] == "value"
         assert data["level"] == "info"
         assert "timestamp" in data

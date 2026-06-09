@@ -77,6 +77,17 @@ def _add_trace_context(
     return event_dict
 
 
+def _ensure_message_field(
+    logger: Any,
+    method_name: str,
+    event_dict: structlog.types.EventDict,
+) -> structlog.types.EventDict:
+    """Populate ``message`` from structlog ``event`` for log UIs expecting it."""
+    if "message" not in event_dict and "event" in event_dict:
+        event_dict["message"] = event_dict["event"]
+    return event_dict
+
+
 def _build_otel_resource(config: Config) -> Resource:
     return Resource.create(
         {
@@ -120,6 +131,7 @@ def configure_logging(config: Config) -> LoggerProvider | None:
         structlog.processors.format_exc_info,
         _add_service_context(config),
         _add_trace_context,
+        _ensure_message_field,
     ]
 
     if config.log_format == "console":

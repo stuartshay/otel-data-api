@@ -44,7 +44,7 @@ def _add_trace_context(
     method_name: str,
     event_dict: structlog.types.EventDict,
 ) -> structlog.types.EventDict:
-    """Inject trace.id and span.id from OTel SDK."""
+    """Inject trace.id and span.id from OTel SDK with optional NR fallback."""
     trace_id: str | None = None
     span_id: str | None = None
 
@@ -59,6 +59,16 @@ def _add_trace_context(
             span_id = format(ctx.span_id, "016x")
     except Exception:  # noqa: BLE001
         pass
+
+    # Optional fallback for environments that still provide New Relic context.
+    if not trace_id:
+        try:
+            import newrelic.agent  # pyright: ignore[reportMissingImports]
+
+            trace_id = newrelic.agent.current_trace_id()
+            span_id = newrelic.agent.current_span_id()
+        except Exception:  # noqa: BLE001
+            pass
 
     if trace_id:
         event_dict["trace.id"] = trace_id

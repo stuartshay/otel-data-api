@@ -22,6 +22,8 @@ def _make_config(**overrides: str | int | bool) -> Config:
         service_name=str(overrides.get("service_name", "test-service")),
         service_namespace=str(overrides.get("service_namespace", "test-ns")),
         environment=str(overrides.get("environment", "test")),
+        otel_logs_enabled=bool(overrides.get("otel_logs_enabled", False)),
+        otel_endpoint=str(overrides.get("otel_endpoint", "localhost:4317")),
         log_level=str(overrides.get("log_level", "DEBUG")),
         log_format=str(overrides.get("log_format", "json")),
         log_sql=bool(overrides.get("log_sql", True)),
@@ -157,3 +159,22 @@ class TestConfigureLogging:
 
         assert data.get("trace.id") == "0af7651916cd43dd8448eb211c80319c"
         assert data.get("span.id") == "b7ad6b7169203331"
+
+    def test_otel_log_export_disabled_returns_none(self):
+        """When OTEL log export is disabled, configure_logging should skip provider setup."""
+        config = _make_config(log_format="json", otel_logs_enabled=False)
+
+        with patch("app.logging._configure_otel_log_export") as mock_export:
+            provider = configure_logging(config)
+
+        assert provider is None
+        mock_export.assert_not_called()
+
+    def test_otel_log_export_failure_falls_back_to_stdout(self):
+        """If OTEL log exporter setup fails, logging should continue without raising."""
+        config = _make_config(log_format="json", otel_logs_enabled=True)
+
+        with patch("app.logging._configure_otel_log_export", side_effect=RuntimeError("boom")):
+            provider = configure_logging(config)
+
+        assert provider is None

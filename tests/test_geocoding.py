@@ -14,30 +14,35 @@ from app.config import Config
 
 @pytest.mark.asyncio
 async def test_geocoding_status(client: AsyncClient, mock_db: AsyncMock):
-    # Order: total, geocoded, ot_success, ot_pending, ot_no_coverage, ot_errors,
-    # g_success, g_pending, g_no_coverage, g_errors, activities_total, activities_geocoded,
-    # dense_total_cells, dense_success, dense_pending, dense_no_coverage, dense_errors,
-    # total_track_points, covered_track_points
+    # geocoded_addresses and geocoded_point_cells status counts now come from
+    # two GROUP BY queries (db.fetch); the remaining six scalars come from
+    # db.fetchval in this order: total_locations, activities_total,
+    # activities_geocoded, dense_total_cells, total_track_points,
+    # covered_track_points.
+    addr_rows = [
+        {"source": "owntracks", "status": "success", "n": 550},
+        {"source": "owntracks", "status": "pending", "n": 30},
+        {"source": "owntracks", "status": "no_coverage", "n": 10},
+        {"source": "owntracks", "status": "error", "n": 10},
+        {"source": "garmin", "status": "success", "n": 80},
+        {"source": "garmin", "status": "pending", "n": 5},
+        {"source": "garmin", "status": "no_coverage", "n": 4},
+        {"source": "garmin", "status": "error", "n": 1},
+    ]
+    cell_rows = [
+        {"status": "success", "n": 3000},
+        {"status": "pending", "n": 100},
+        {"status": "no_coverage", "n": 50},
+        {"status": "error", "n": 20},
+    ]
+    mock_db.fetch.side_effect = [addr_rows, cell_rows]
     mock_db.fetchval.side_effect = [
-        1000,
-        600,
-        550,
-        30,
-        10,
-        10,
-        80,
-        5,
-        4,
-        1,
-        25,
-        12,
-        4500,
-        3000,
-        100,
-        50,
-        20,
-        50000,
-        35000,
+        1000,  # total locations
+        25,  # garmin activities total
+        12,  # garmin activities geocoded
+        4500,  # dense_total_cells (mv)
+        50000,  # total_track_points
+        35000,  # covered_track_points
     ]
 
     response = await client.get("/api/v1/geocoding/status")
@@ -74,7 +79,9 @@ async def test_geocoding_status(client: AsyncClient, mock_db: AsyncMock):
 
 @pytest.mark.asyncio
 async def test_geocoding_status_empty_database(client: AsyncClient, mock_db: AsyncMock):
-    mock_db.fetchval.side_effect = [0] * 19
+    # Both GROUP BY queries return no rows; the six scalar counts are zero.
+    mock_db.fetch.side_effect = [[], []]
+    mock_db.fetchval.side_effect = [0] * 6
 
     response = await client.get("/api/v1/geocoding/status")
 
@@ -86,6 +93,50 @@ async def test_geocoding_status_empty_database(client: AsyncClient, mock_db: Asy
     assert body["dense_cells_total"] == 0
     assert body["dense_cells_geocoded"] == 0
     assert body["dense_point_coverage_percent"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_geocoding_status_cached_within_ttl(client: AsyncClient, mock_db: AsyncMock):
+    """A second /status call within the TTL is served from cache without re-querying."""
+    addr_rows = [
+        {"source": "owntracks", "status": "success", "n": 100},
+        {"source": "garmin", "status": "success", "n": 50},
+    ]
+    cell_rows = [{"status": "success", "n": 200}]
+    # Only enough side-effects for ONE computation — if caching is bypassed the
+    # second request exhausts these and raises StopAsyncIteration.
+    mock_db.fetch.side_effect = [addr_rows, cell_rows]
+    mock_db.fetchval.side_effect = [1000, 10, 5, 300, 50000, 35000]
+
+    first = await client.get("/api/v1/geocoding/status")
+    second = await client.get("/api/v1/geocoding/status")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json() == second.json()
+    # Underlying queries ran exactly once: 2 GROUP BY fetches + 6 scalars.
+    assert mock_db.fetch.await_count == 2
+    assert mock_db.fetchval.await_count == 6
+
+
+@pytest.mark.asyncio
+async def test_geocoding_status_cache_expires(client: AsyncClient, mock_db: AsyncMock):
+    """After the TTL elapses the /status response is recomputed."""
+    addr_rows = [{"source": "owntracks", "status": "success", "n": 100}]
+    cell_rows = [{"status": "success", "n": 200}]
+    mock_db.fetch.side_effect = [addr_rows, cell_rows, addr_rows, cell_rows]
+    mock_db.fetchval.side_effect = [1000, 10, 5, 300, 50000, 35000] * 2
+
+    now = [0.0]
+    with patch("app.routers.geocoding.time.monotonic", side_effect=lambda: now[0]):
+        await client.get("/api/v1/geocoding/status")
+        assert mock_db.fetch.await_count == 2  # first computation
+        now[0] = 1000.0  # advance well beyond the 60s TTL
+        await client.get("/api/v1/geocoding/status")
+
+    # Cache was stale, so the queries ran a second time.
+    assert mock_db.fetch.await_count == 4
+    assert mock_db.fetchval.await_count == 12
 
 
 @pytest.mark.asyncio

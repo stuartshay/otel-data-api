@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -55,6 +56,20 @@ RETRY_STATUSES = ("no_coverage", "error", "pending")
 _OT_CONFLICT = "ON CONFLICT (location_id) WHERE source = 'owntracks'"
 _GARMIN_CONFLICT = "ON CONFLICT (garmin_track_point_id) WHERE source = 'garmin'"
 
+# Cache TTL for the /status response. The aggregates scan large tables and change
+# slowly, so caching per-process avoids re-running the heavy COUNT queries on
+# every dashboard poll.
+_STATUS_CACHE_TTL_SECONDS = 60.0
+
+
+@dataclass
+class _StatusCache:
+    """Per-process cache holder for the geocoding /status response."""
+
+    value: GeocodingStatus | None = None
+    expires_at: float = 0.0
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
 
 class PeliasTransientError(Exception):
     """Raised by ``_call_pelias`` after all retry attempts have failed transiently."""
@@ -62,58 +77,75 @@ class PeliasTransientError(Exception):
 
 @router.get("/status", response_model=GeocodingStatus)
 async def geocoding_status(request: Request) -> GeocodingStatus:
-    """Get geocoding coverage statistics for both OwnTracks and Garmin sources."""
-    db = request.app.state.db
+    """Get geocoding coverage statistics for both OwnTracks and Garmin sources.
+
+    The underlying aggregates scan large tables (millions of garmin_track_points)
+    and change slowly, so the response is cached per-process for
+    ``_STATUS_CACHE_TTL_SECONDS`` to avoid repeatedly running the heavy COUNT
+    queries on every dashboard poll.
+    """
+    cache: _StatusCache | None = getattr(request.app.state, "_geocoding_status_cache", None)
+    if cache is None:
+        cache = _StatusCache()
+        request.app.state._geocoding_status_cache = cache
+
+    if cache.value is not None and time.monotonic() < cache.expires_at:
+        return cache.value
+
+    async with cache.lock:
+        # Re-check after acquiring the lock so only one request recomputes.
+        if cache.value is not None and time.monotonic() < cache.expires_at:
+            return cache.value
+        status = await _compute_geocoding_status(request.app.state.db)
+        cache.value = status
+        cache.expires_at = time.monotonic() + _STATUS_CACHE_TTL_SECONDS
+        return status
+
+
+async def _compute_geocoding_status(db: Any) -> GeocodingStatus:
+    """Compute geocoding coverage statistics (uncached)."""
+    # Per-(source, status) counts for geocoded_addresses in a single GROUP BY
+    # instead of eight separate COUNT(*) round-trips.
+    addr_rows = await db.fetch(
+        "SELECT source, status, COUNT(*) AS n FROM public.geocoded_addresses "
+        "WHERE source IN ('owntracks', 'garmin') GROUP BY source, status"
+    )
+    addr: dict[tuple[str, str], int] = {(r["source"], r["status"]): r["n"] for r in addr_rows}
+    ot_success = addr.get(("owntracks", "success"), 0)
+    ot_pending = addr.get(("owntracks", "pending"), 0)
+    ot_no_coverage = addr.get(("owntracks", "no_coverage"), 0)
+    ot_errors = addr.get(("owntracks", "error"), 0)
+    geocoded = sum(n for (src, _status), n in addr.items() if src == "owntracks")
+    g_success = addr.get(("garmin", "success"), 0)
+    g_pending = addr.get(("garmin", "pending"), 0)
+    g_no_coverage = addr.get(("garmin", "no_coverage"), 0)
+    g_errors = addr.get(("garmin", "error"), 0)
+    g_total_rows = g_success + g_pending + g_no_coverage + g_errors
 
     total = await db.fetchval("SELECT COUNT(*) FROM public.locations")
-    geocoded = await db.fetchval("SELECT COUNT(*) FROM public.geocoded_addresses WHERE source = 'owntracks'")
-    ot_success = await db.fetchval(
-        "SELECT COUNT(*) FROM public.geocoded_addresses WHERE source = 'owntracks' AND status = 'success'"
-    )
-    ot_pending = await db.fetchval(
-        "SELECT COUNT(*) FROM public.geocoded_addresses WHERE source = 'owntracks' AND status = 'pending'"
-    )
-    ot_no_coverage = await db.fetchval(
-        "SELECT COUNT(*) FROM public.geocoded_addresses WHERE source = 'owntracks' AND status = 'no_coverage'"
-    )
-    ot_errors = await db.fetchval(
-        "SELECT COUNT(*) FROM public.geocoded_addresses WHERE source = 'owntracks' AND status = 'error'"
-    )
-    coverage_percent = round((geocoded / total * 100), 2) if total > 0 else 0.0
-
-    g_success = await db.fetchval(
-        "SELECT COUNT(*) FROM public.geocoded_addresses WHERE source = 'garmin' AND status = 'success'"
-    )
-    g_pending = await db.fetchval(
-        "SELECT COUNT(*) FROM public.geocoded_addresses WHERE source = 'garmin' AND status = 'pending'"
-    )
-    g_no_coverage = await db.fetchval(
-        "SELECT COUNT(*) FROM public.geocoded_addresses WHERE source = 'garmin' AND status = 'no_coverage'"
-    )
-    g_errors = await db.fetchval(
-        "SELECT COUNT(*) FROM public.geocoded_addresses WHERE source = 'garmin' AND status = 'error'"
-    )
-    g_total_rows = (g_success or 0) + (g_pending or 0) + (g_no_coverage or 0) + (g_errors or 0)
+    coverage_percent = round((geocoded / total * 100), 2) if total else 0.0
 
     activities_total = await db.fetchval("SELECT COUNT(*) FROM public.garmin_activities")
     activities_geocoded = await db.fetchval(
         "SELECT COUNT(DISTINCT garmin_activity_id) FROM public.geocoded_addresses WHERE source = 'garmin'"
     )
     garmin_coverage_percent = round((activities_geocoded / activities_total * 100), 2) if activities_total else 0.0
-    garmin_waypoint_success_percent = round(((g_success or 0) / g_total_rows * 100), 2) if g_total_rows else 0.0
+    garmin_waypoint_success_percent = round((g_success / g_total_rows * 100), 2) if g_total_rows else 0.0
 
     # Dense per-point cell coverage (geocoded_point_cells, 4dp ~ 11 m resolution).
+    # Per-status counts in a single GROUP BY instead of four separate COUNT(*) calls.
+    cell_rows = await db.fetch("SELECT status, COUNT(*) AS n FROM public.geocoded_point_cells GROUP BY status")
+    cell: dict[str, int] = {r["status"]: r["n"] for r in cell_rows}
+    dense_success = cell.get("success", 0)
+    dense_pending = cell.get("pending", 0)
+    dense_no_coverage = cell.get("no_coverage", 0)
+    dense_errors = cell.get("error", 0)
+    dense_geocoded = dense_success + dense_pending + dense_no_coverage + dense_errors
+
     # Read distinct-cell totals from the mv_garmin_track_point_cells materialized view
     # (migration 18) — a direct COUNT(DISTINCT ...) over garmin_track_points takes ~18s on
     # prod and exceeds the API's database command timeout.
     dense_total_cells = await db.fetchval("SELECT COUNT(*) FROM public.mv_garmin_track_point_cells")
-    dense_success = await db.fetchval("SELECT COUNT(*) FROM public.geocoded_point_cells WHERE status = 'success'")
-    dense_pending = await db.fetchval("SELECT COUNT(*) FROM public.geocoded_point_cells WHERE status = 'pending'")
-    dense_no_coverage = await db.fetchval(
-        "SELECT COUNT(*) FROM public.geocoded_point_cells WHERE status = 'no_coverage'"
-    )
-    dense_errors = await db.fetchval("SELECT COUNT(*) FROM public.geocoded_point_cells WHERE status = 'error'")
-    dense_geocoded = (dense_success or 0) + (dense_pending or 0) + (dense_no_coverage or 0) + (dense_errors or 0)
     total_track_points = await db.fetchval("SELECT COUNT(*) FROM public.garmin_track_points")
     covered_track_points = await db.fetchval(
         "SELECT COUNT(*) FROM public.garmin_track_points gtp "
@@ -272,9 +304,10 @@ async def _trigger_geocoding_impl(
         rows = await db.fetch(
             "SELECT l.id, l.latitude, l.longitude "
             "FROM public.locations l "
-            "LEFT JOIN public.geocoded_addresses ga "
-            "  ON ga.location_id = l.id AND ga.source = 'owntracks' "
-            "WHERE ga.id IS NULL "
+            "WHERE NOT EXISTS ("
+            "  SELECT 1 FROM public.geocoded_addresses ga "
+            "  WHERE ga.location_id = l.id AND ga.source = 'owntracks'"
+            ") "
             "ORDER BY l.id LIMIT $1",
             batch_size,
         )
@@ -295,9 +328,10 @@ async def _trigger_geocoding_impl(
 
     remaining = await db.fetchval(
         "SELECT COUNT(*) FROM public.locations l "
-        "LEFT JOIN public.geocoded_addresses ga "
-        "  ON ga.location_id = l.id AND ga.source = 'owntracks' "
-        "WHERE ga.id IS NULL"
+        "WHERE NOT EXISTS ("
+        "  SELECT 1 FROM public.geocoded_addresses ga "
+        "  WHERE ga.location_id = l.id AND ga.source = 'owntracks'"
+        ")"
     )
 
     return GeocodingTriggerResponse(processed=processed, remaining=remaining, skipped_dedup=skipped_dedup)

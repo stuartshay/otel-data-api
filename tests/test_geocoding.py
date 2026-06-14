@@ -96,6 +96,50 @@ async def test_geocoding_status_empty_database(client: AsyncClient, mock_db: Asy
 
 
 @pytest.mark.asyncio
+async def test_geocoding_status_cached_within_ttl(client: AsyncClient, mock_db: AsyncMock):
+    """A second /status call within the TTL is served from cache without re-querying."""
+    addr_rows = [
+        {"source": "owntracks", "status": "success", "n": 100},
+        {"source": "garmin", "status": "success", "n": 50},
+    ]
+    cell_rows = [{"status": "success", "n": 200}]
+    # Only enough side-effects for ONE computation — if caching is bypassed the
+    # second request exhausts these and raises StopAsyncIteration.
+    mock_db.fetch.side_effect = [addr_rows, cell_rows]
+    mock_db.fetchval.side_effect = [1000, 10, 5, 300, 50000, 35000]
+
+    first = await client.get("/api/v1/geocoding/status")
+    second = await client.get("/api/v1/geocoding/status")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json() == second.json()
+    # Underlying queries ran exactly once: 2 GROUP BY fetches + 6 scalars.
+    assert mock_db.fetch.await_count == 2
+    assert mock_db.fetchval.await_count == 6
+
+
+@pytest.mark.asyncio
+async def test_geocoding_status_cache_expires(client: AsyncClient, mock_db: AsyncMock):
+    """After the TTL elapses the /status response is recomputed."""
+    addr_rows = [{"source": "owntracks", "status": "success", "n": 100}]
+    cell_rows = [{"status": "success", "n": 200}]
+    mock_db.fetch.side_effect = [addr_rows, cell_rows, addr_rows, cell_rows]
+    mock_db.fetchval.side_effect = [1000, 10, 5, 300, 50000, 35000] * 2
+
+    now = [0.0]
+    with patch("app.routers.geocoding.time.monotonic", side_effect=lambda: now[0]):
+        await client.get("/api/v1/geocoding/status")
+        assert mock_db.fetch.await_count == 2  # first computation
+        now[0] = 1000.0  # advance well beyond the 60s TTL
+        await client.get("/api/v1/geocoding/status")
+
+    # Cache was stale, so the queries ran a second time.
+    assert mock_db.fetch.await_count == 4
+    assert mock_db.fetchval.await_count == 12
+
+
+@pytest.mark.asyncio
 async def test_trigger_geocoding_no_pending(client: AsyncClient, mock_db: AsyncMock):
     mock_db.fetch.return_value = []
     mock_db.fetchval.return_value = 0

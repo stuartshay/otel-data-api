@@ -351,7 +351,13 @@ async def get_activity(
     row = await db.fetchrow(ACTIVITY_BY_ID_SELECT, activity_id)
     if not row:
         raise HTTPException(status_code=404, detail="Activity not found")
-    return GarminActivity(**dict(row))
+    activity = GarminActivity(**dict(row))
+    logger.info(
+        "garmin.activity.detail",
+        garmin_activity_id=activity_id,
+        response=activity.model_dump(mode="json"),
+    )
+    return activity
 
 
 @router.patch(

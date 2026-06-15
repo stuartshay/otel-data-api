@@ -5,6 +5,7 @@ from datetime import date
 import fastapi
 import httpx
 import pytest
+import structlog
 from httpx import AsyncClient
 
 from app.auth import require_auth
@@ -222,7 +223,23 @@ async def test_get_activity_success(client: AsyncClient, mock_db):
 
 
 @pytest.mark.asyncio
-async def test_get_activity_hr_availability_defaults_false(client: AsyncClient, mock_db):
+async def test_get_activity_logs_full_response(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = _activity_row()
+
+    with structlog.testing.capture_logs() as logs:
+        response = await client.get("/api/v1/garmin/activities/20932993811")
+
+    assert response.status_code == 200
+    detail_logs = [entry for entry in logs if entry.get("event") == "garmin.activity.detail"]
+    assert len(detail_logs) == 1
+    entry = detail_logs[0]
+    assert entry["garmin_activity_id"] == "20932993811"
+    assert entry["response"]["activity_id"] == "20932993811"
+    # Full payload is logged, including respiration fields (None when absent from the row)
+    assert "avg_respiration_rate" in entry["response"]
+    assert "min_respiration_rate" in entry["response"]
+    assert "max_respiration_rate" in entry["response"]
+
     row = _activity_row()
     row["avg_heart_rate"] = None
     row["max_heart_rate"] = None

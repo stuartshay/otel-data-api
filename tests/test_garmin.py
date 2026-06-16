@@ -1,12 +1,15 @@
 """Tests for Garmin endpoints."""
 
+import dataclasses
 from datetime import date
 
 import fastapi
 import httpx
 import pytest
-from httpx import AsyncClient
+import structlog
+from httpx import ASGITransport, AsyncClient
 
+from app import create_app
 from app.auth import require_auth
 from app.config import Config
 
@@ -219,6 +222,38 @@ async def test_get_activity_success(client: AsyncClient, mock_db):
     assert data["activity_id"] == "20932993811"
     assert data["sport"] == "cycling"
     assert data["hr_available"] is True
+
+
+@pytest.mark.asyncio
+async def test_get_activity_logs_full_response_when_enabled(config: Config, mock_db):
+    enabled_config = dataclasses.replace(config, log_garmin_activity_detail=True)
+    app = create_app(enabled_config)
+    app.state.db = mock_db
+    mock_db.fetchrow.return_value = _activity_row()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        with structlog.testing.capture_logs() as logs:
+            response = await client.get("/api/v1/garmin/activities/20932993811")
+
+    assert response.status_code == 200
+    detail_logs = [entry for entry in logs if entry.get("event") == "garmin.activity.detail"]
+    assert len(detail_logs) == 1
+    entry = detail_logs[0]
+    assert entry["garmin_activity_id"] == "20932993811"
+    # The logged payload must match the full HTTP response body exactly.
+    assert entry["response"] == response.json()
+
+
+@pytest.mark.asyncio
+async def test_get_activity_detail_logging_disabled_by_default(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = _activity_row()
+
+    with structlog.testing.capture_logs() as logs:
+        response = await client.get("/api/v1/garmin/activities/20932993811")
+
+    assert response.status_code == 200
+    assert not [entry for entry in logs if entry.get("event") == "garmin.activity.detail"]
 
 
 @pytest.mark.asyncio

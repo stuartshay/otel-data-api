@@ -51,6 +51,9 @@ class Config:
     log_sql: bool = True
     log_sql_params: bool = False
     log_http_query_params: bool = True
+    # Diagnostic: log the full Garmin activity detail response payload (off by default;
+    # enable temporarily to verify responses, e.g. in New Relic Logs).
+    log_garmin_activity_detail: bool = False
 
     # CORS
     cors_origins: tuple[str, ...] = ()
@@ -105,6 +108,7 @@ class Config:
             log_sql=os.getenv("LOG_SQL", "true").lower() == "true",
             log_sql_params=os.getenv("LOG_SQL_PARAMS", "false").lower() == "true",
             log_http_query_params=os.getenv("LOG_HTTP_QUERY_PARAMS", "true").lower() == "true",
+            log_garmin_activity_detail=os.getenv("LOG_GARMIN_ACTIVITY_DETAIL", "false").lower() == "true",
             # CORS
             cors_origins=cors_origins,
             # Garmin sync proxy

@@ -31,6 +31,14 @@ YELLOW='\033[0;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+# Ensure required dependencies are available before doing anything.
+for cmd in curl python3; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo -e "${RED}✗ Required command not found: ${cmd}${NC}" >&2
+    exit 1
+  fi
+done
+
 echo -e "${BLUE}=== Garmin Respiration Verification ===${NC}"
 echo "Activity ID : ${ACTIVITY_ID}"
 echo "API base    : ${API_BASE}"
@@ -42,23 +50,28 @@ echo ""
 echo -e "${BLUE}Step 1: REST API response${NC}"
 ENDPOINT="${API_BASE}/api/v1/garmin/activities/${ACTIVITY_ID}"
 
-http_code=$(curl -s -o /tmp/garmin_activity_resp.json -w "%{http_code}" "${ENDPOINT}" || true)
+# Use a unique temp file (cleaned up on exit) to avoid collisions / leaking
+# response data to a predictable path on shared machines.
+resp_file="$(mktemp "${TMPDIR:-/tmp}/garmin_activity_resp.XXXXXX.json")"
+trap 'rm -f "$resp_file"' EXIT
+
+http_code=$(curl -sS -o "$resp_file" -w "%{http_code}" "${ENDPOINT}" || true)
 
 if [[ "${http_code}" != "200" ]]; then
   echo -e "${RED}✗ API returned HTTP ${http_code} for ${ENDPOINT}${NC}"
-  cat /tmp/garmin_activity_resp.json 2>/dev/null || true
+  cat "$resp_file" 2>/dev/null || true
   exit 1
 fi
 
 echo -e "${GREEN}✓ HTTP 200${NC} ${ENDPOINT}"
 echo ""
 
-python3 - "$ACTIVITY_ID" <<'PY'
+python3 - "$ACTIVITY_ID" "$resp_file" <<'PY'
 import json
 import sys
 
 activity_id = sys.argv[1]
-with open("/tmp/garmin_activity_resp.json", encoding="utf-8") as fh:
+with open(sys.argv[2], encoding="utf-8") as fh:
     data = json.load(fh)
 
 resp_fields = [
@@ -128,18 +141,16 @@ PY
 )
 
 echo "Querying New Relic NerdGraph..."
-NR_RESP=$(curl -s -X POST https://api.newrelic.com/graphql \
+NR_RESP=$(curl -sS -X POST https://api.newrelic.com/graphql \
   -H "Content-Type: application/json" \
   -H "API-Key: ${NEW_RELIC_API_KEY}" \
   -d "${GQL_PAYLOAD}" || true)
 
-printf '%s' "${NR_RESP}" > /tmp/nr_garmin_resp.json
-python3 - /tmp/nr_garmin_resp.json <<'PY'
+python3 - "${NR_RESP}" <<'PY'
 import json
 import sys
 
-with open(sys.argv[1], encoding="utf-8") as fh:
-    raw = fh.read()
+raw = sys.argv[1]
 try:
     payload = json.loads(raw)
 except json.JSONDecodeError:

@@ -352,11 +352,12 @@ async def get_activity(
     if not row:
         raise HTTPException(status_code=404, detail="Activity not found")
     activity = GarminActivity(**dict(row))
-    logger.info(
-        "garmin.activity.detail",
-        garmin_activity_id=activity_id,
-        response=activity.model_dump(mode="json"),
-    )
+    if request.app.state.config.log_garmin_activity_detail:
+        logger.info(
+            "garmin.activity.detail",
+            garmin_activity_id=activity_id,
+            response=activity.model_dump(mode="json"),
+        )
     return activity
 
 

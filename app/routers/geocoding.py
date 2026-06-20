@@ -142,19 +142,25 @@ async def _compute_geocoding_status(db: Any) -> GeocodingStatus:
     dense_errors = cell.get("error", 0)
     dense_geocoded = dense_success + dense_pending + dense_no_coverage + dense_errors
 
-    # Read distinct-cell totals from the mv_garmin_track_point_cells materialized view
-    # (migration 18) — a direct COUNT(DISTINCT ...) over garmin_track_points takes ~18s on
-    # prod and exceeds the API's database command timeout.
-    dense_total_cells = await db.fetchval("SELECT COUNT(*) FROM public.mv_garmin_track_point_cells")
-    total_track_points = await db.fetchval("SELECT COUNT(*) FROM public.garmin_track_points")
-    covered_track_points = await db.fetchval(
-        "SELECT COUNT(*) FROM public.garmin_track_points gtp "
-        "WHERE EXISTS ("
-        "  SELECT 1 FROM public.geocoded_point_cells gpc "
-        "  WHERE gpc.lat_4dp = ROUND(gtp.latitude * 10000)::INTEGER "
-        "    AND gpc.lon_4dp = ROUND(gtp.longitude * 10000)::INTEGER"
-        ")"
+    # Derive all materialized-view metrics in a SINGLE query so dense_total_cells,
+    # total and covered come from one MV snapshot. The MV (migrations 18 + 21) is
+    # refreshed out-of-band, so computing these as separate statements could span a
+    # refresh and briefly skew the coverage percentage. The MV carries a per-cell
+    # point_count; a LEFT JOIN to geocoded_point_cells on the indexed (lat_4dp, lon_4dp)
+    # key yields covered points via FILTER — replacing the old ~5.2s COUNT(*) ...
+    # WHERE EXISTS(ROUND ...) Parallel Seq Scan over ~4.5M garmin_track_points rows
+    # (~0.9s now). Staleness of hours is acceptable (see migration 21).
+    mv_metrics = await db.fetchrow(
+        "SELECT COUNT(*)::BIGINT AS dense_total_cells, "
+        "COALESCE(SUM(m.point_count), 0)::BIGINT AS total_track_points, "
+        "COALESCE(SUM(m.point_count) FILTER (WHERE g.lat_4dp IS NOT NULL), 0)::BIGINT "
+        "AS covered_track_points "
+        "FROM public.mv_garmin_track_point_cells m "
+        "LEFT JOIN public.geocoded_point_cells g USING (lat_4dp, lon_4dp)"
     )
+    dense_total_cells = mv_metrics["dense_total_cells"] if mv_metrics else 0
+    total_track_points = mv_metrics["total_track_points"] if mv_metrics else 0
+    covered_track_points = mv_metrics["covered_track_points"] if mv_metrics else 0
     dense_point_coverage_percent = (
         round((covered_track_points / total_track_points * 100), 2) if total_track_points else 0.0
     )

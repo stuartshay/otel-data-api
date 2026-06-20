@@ -143,17 +143,20 @@ async def _compute_geocoding_status(db: Any) -> GeocodingStatus:
     dense_geocoded = dense_success + dense_pending + dense_no_coverage + dense_errors
 
     # Read distinct-cell totals from the mv_garmin_track_point_cells materialized view
-    # (migration 18) — a direct COUNT(DISTINCT ...) over garmin_track_points takes ~18s on
-    # prod and exceeds the API's database command timeout.
+    # (migrations 18 + 21). A direct COUNT(DISTINCT ...) over garmin_track_points takes
+    # ~18s on prod, and the dense per-point coverage COUNT(*) ... WHERE EXISTS(ROUND ...)
+    # was a ~5.2s Parallel Seq Scan over ~4.5M rows. Both totals are now derived from the
+    # MV (which carries a per-cell point_count) by joining to geocoded_point_cells on the
+    # indexed (lat_4dp, lon_4dp) cell key (~0.9s). Counts are MV-snapshot-consistent;
+    # staleness of hours is acceptable (see migration 21).
     dense_total_cells = await db.fetchval("SELECT COUNT(*) FROM public.mv_garmin_track_point_cells")
-    total_track_points = await db.fetchval("SELECT COUNT(*) FROM public.garmin_track_points")
+    total_track_points = await db.fetchval(
+        "SELECT COALESCE(SUM(point_count), 0)::BIGINT FROM public.mv_garmin_track_point_cells"
+    )
     covered_track_points = await db.fetchval(
-        "SELECT COUNT(*) FROM public.garmin_track_points gtp "
-        "WHERE EXISTS ("
-        "  SELECT 1 FROM public.geocoded_point_cells gpc "
-        "  WHERE gpc.lat_4dp = ROUND(gtp.latitude * 10000)::INTEGER "
-        "    AND gpc.lon_4dp = ROUND(gtp.longitude * 10000)::INTEGER"
-        ")"
+        "SELECT COALESCE(SUM(m.point_count), 0)::BIGINT "
+        "FROM public.mv_garmin_track_point_cells m "
+        "JOIN public.geocoded_point_cells g USING (lat_4dp, lon_4dp)"
     )
     dense_point_coverage_percent = (
         round((covered_track_points / total_track_points * 100), 2) if total_track_points else 0.0

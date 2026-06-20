@@ -75,6 +75,11 @@ async def test_geocoding_status(client: AsyncClient, mock_db: AsyncMock):
     fetchval_queries = [call.args[0] for call in mock_db.fetchval.await_args_list]
     assert any("mv_garmin_track_point_cells" in sql for sql in fetchval_queries)
     assert not any("COUNT(DISTINCT" in sql and "garmin_track_points" in sql for sql in fetchval_queries)
+    # Guard against regressing covered/total back to the ~5.2s seq scans:
+    # both are now derived from the MV point_count (migration 21), never via a
+    # COUNT(*) ... WHERE EXISTS(ROUND ...) over garmin_track_points.
+    assert not any("WHERE EXISTS" in sql and "ROUND(gtp" in sql for sql in fetchval_queries)
+    assert any("SUM(m.point_count)" in sql for sql in fetchval_queries)
 
 
 @pytest.mark.asyncio

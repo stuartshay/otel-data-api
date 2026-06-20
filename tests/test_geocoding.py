@@ -14,11 +14,11 @@ from app.config import Config
 
 @pytest.mark.asyncio
 async def test_geocoding_status(client: AsyncClient, mock_db: AsyncMock):
-    # geocoded_addresses and geocoded_point_cells status counts now come from
-    # two GROUP BY queries (db.fetch); the remaining six scalars come from
-    # db.fetchval in this order: total_locations, activities_total,
-    # activities_geocoded, dense_total_cells, total_track_points,
-    # covered_track_points.
+    # geocoded_addresses and geocoded_point_cells status counts come from two
+    # GROUP BY queries (db.fetch); three scalars come from db.fetchval in this
+    # order (total_locations, activities_total, activities_geocoded); and the
+    # MV-derived metrics (dense_total_cells, total_track_points,
+    # covered_track_points) come from a single db.fetchrow.
     addr_rows = [
         {"source": "owntracks", "status": "success", "n": 550},
         {"source": "owntracks", "status": "pending", "n": 30},
@@ -40,10 +40,12 @@ async def test_geocoding_status(client: AsyncClient, mock_db: AsyncMock):
         1000,  # total locations
         25,  # garmin activities total
         12,  # garmin activities geocoded
-        4500,  # dense_total_cells (mv)
-        50000,  # total_track_points
-        35000,  # covered_track_points
     ]
+    mock_db.fetchrow.return_value = {
+        "dense_total_cells": 4500,
+        "total_track_points": 50000,
+        "covered_track_points": 35000,
+    }
 
     response = await client.get("/api/v1/geocoding/status")
 
@@ -70,23 +72,29 @@ async def test_geocoding_status(client: AsyncClient, mock_db: AsyncMock):
     assert body["dense_cells_errors"] == 20
     assert body["dense_cells_geocoded"] == 3170
     assert body["dense_point_coverage_percent"] == 70.0
-    # Guard against regressing dense_cells_total back to the slow
-    # COUNT(DISTINCT ...) over garmin_track_points (migration 18 MV).
-    fetchval_queries = [call.args[0] for call in mock_db.fetchval.await_args_list]
-    assert any("mv_garmin_track_point_cells" in sql for sql in fetchval_queries)
-    assert not any("COUNT(DISTINCT" in sql and "garmin_track_points" in sql for sql in fetchval_queries)
-    # Guard against regressing covered/total back to the ~5.2s seq scans:
-    # both are now derived from the MV point_count (migration 21), never via a
-    # COUNT(*) ... WHERE EXISTS(ROUND ...) over garmin_track_points.
-    assert not any("WHERE EXISTS" in sql and "ROUND(gtp" in sql for sql in fetchval_queries)
-    assert any("SUM(m.point_count)" in sql for sql in fetchval_queries)
+    # Guard against regressing the MV-derived metrics back to slow scans over
+    # garmin_track_points. The metrics now come from a single db.fetchrow.
+    mv_queries = [call.args[0] for call in mock_db.fetchrow.await_args_list]
+    all_queries = [c.args[0] for c in mock_db.fetchval.await_args_list] + mv_queries
+    assert any("mv_garmin_track_point_cells" in sql for sql in mv_queries)
+    assert any("SUM(m.point_count)" in sql for sql in mv_queries)
+    # Never via COUNT(DISTINCT ...) or COUNT(*) ... WHERE EXISTS(ROUND ...) over
+    # garmin_track_points (the old ~18s / ~5.2s seq scans).
+    assert not any("COUNT(DISTINCT" in sql and "garmin_track_points" in sql for sql in all_queries)
+    assert not any("WHERE EXISTS" in sql and "garmin_track_points" in sql for sql in all_queries)
 
 
 @pytest.mark.asyncio
 async def test_geocoding_status_empty_database(client: AsyncClient, mock_db: AsyncMock):
-    # Both GROUP BY queries return no rows; the six scalar counts are zero.
+    # Both GROUP BY queries return no rows; the three scalar counts and the MV
+    # metrics row are all zero.
     mock_db.fetch.side_effect = [[], []]
-    mock_db.fetchval.side_effect = [0] * 6
+    mock_db.fetchval.side_effect = [0] * 3
+    mock_db.fetchrow.return_value = {
+        "dense_total_cells": 0,
+        "total_track_points": 0,
+        "covered_track_points": 0,
+    }
 
     response = await client.get("/api/v1/geocoding/status")
 
@@ -111,7 +119,12 @@ async def test_geocoding_status_cached_within_ttl(client: AsyncClient, mock_db: 
     # Only enough side-effects for ONE computation — if caching is bypassed the
     # second request exhausts these and raises StopAsyncIteration.
     mock_db.fetch.side_effect = [addr_rows, cell_rows]
-    mock_db.fetchval.side_effect = [1000, 10, 5, 300, 50000, 35000]
+    mock_db.fetchval.side_effect = [1000, 10, 5]
+    mock_db.fetchrow.return_value = {
+        "dense_total_cells": 300,
+        "total_track_points": 50000,
+        "covered_track_points": 35000,
+    }
 
     first = await client.get("/api/v1/geocoding/status")
     second = await client.get("/api/v1/geocoding/status")
@@ -119,9 +132,10 @@ async def test_geocoding_status_cached_within_ttl(client: AsyncClient, mock_db: 
     assert first.status_code == 200
     assert second.status_code == 200
     assert first.json() == second.json()
-    # Underlying queries ran exactly once: 2 GROUP BY fetches + 6 scalars.
+    # Underlying queries ran exactly once: 2 GROUP BY fetches + 3 scalars + 1 MV row.
     assert mock_db.fetch.await_count == 2
-    assert mock_db.fetchval.await_count == 6
+    assert mock_db.fetchval.await_count == 3
+    assert mock_db.fetchrow.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -130,7 +144,11 @@ async def test_geocoding_status_cache_expires(client: AsyncClient, mock_db: Asyn
     addr_rows = [{"source": "owntracks", "status": "success", "n": 100}]
     cell_rows = [{"status": "success", "n": 200}]
     mock_db.fetch.side_effect = [addr_rows, cell_rows, addr_rows, cell_rows]
-    mock_db.fetchval.side_effect = [1000, 10, 5, 300, 50000, 35000] * 2
+    mock_db.fetchval.side_effect = [1000, 10, 5] * 2
+    mock_db.fetchrow.side_effect = [
+        {"dense_total_cells": 300, "total_track_points": 50000, "covered_track_points": 35000},
+        {"dense_total_cells": 300, "total_track_points": 50000, "covered_track_points": 35000},
+    ]
 
     now = [0.0]
     with patch("app.routers.geocoding.time.monotonic", side_effect=lambda: now[0]):
@@ -141,7 +159,8 @@ async def test_geocoding_status_cache_expires(client: AsyncClient, mock_db: Asyn
 
     # Cache was stale, so the queries ran a second time.
     assert mock_db.fetch.await_count == 4
-    assert mock_db.fetchval.await_count == 12
+    assert mock_db.fetchval.await_count == 6
+    assert mock_db.fetchrow.await_count == 2
 
 
 @pytest.mark.asyncio

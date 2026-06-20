@@ -740,9 +740,10 @@ async def _find_nearby_address(db: Any, lat: float, lon: float) -> dict[str, Any
     """Return the nearest successfully geocoded address within 50 m, or None.
 
     Implemented as two GIST-indexed candidate lookups (locations + garmin
-    track points) followed by a single lookup in ``geocoded_addresses`` via
-    the existing unique partial btree indexes. A combined ``COALESCE``-based
-    query would force a sequential scan over all success rows; see #132.
+    track points; #132) followed by a per-source lookup in
+    ``geocoded_addresses`` via the existing unique partial btree indexes. A
+    combined ``COALESCE``/OR query forced a sequential scan over all success
+    rows, so each source is now queried independently; see #165.
     """
     ow_candidates = await db.fetch(
         "SELECT id "
@@ -778,7 +779,7 @@ async def _find_nearby_address(db: Any, lat: float, lon: float) -> dict[str, Any
     # ~13 s). Splitting by source lets the planner use the partial unique
     # indexes (location_id WHERE source='owntracks' / garmin_track_point_id
     # WHERE source='garmin'); each side then sorts the bounded candidate set
-    # by true distance and returns its nearest neighbour. See #132.
+    # by true distance and returns its nearest neighbour. See #165.
     _ADDRESS_COLS = (
         "ga.display_address, ga.street, ga.housenumber, ga.neighbourhood, "
         "ga.locality, ga.region, ga.country, ga.postalcode, ga.confidence, "

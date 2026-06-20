@@ -772,34 +772,59 @@ async def _find_nearby_address(db: Any, lat: float, lon: float) -> dict[str, Any
     if not ow_ids and not gt_ids:
         return None
 
-    # Order by true distance against the candidate's geog so dedup picks the
-    # *nearest* neighbour deterministically. Candidate set is bounded by
-    # 2 * _NEARBY_CANDIDATE_LIMIT rows, so the join + sort is cheap.
-    neighbour = await db.fetchrow(
-        "SELECT ga.display_address, ga.street, ga.housenumber, ga.neighbourhood, "
+    # Look up the geocoded address for each source independently. A single
+    # OR-across-columns LEFT JOIN forced a sequential scan over all 'success'
+    # rows in geocoded_addresses (NR slow-query analysis: avg ~1.8 s, max
+    # ~13 s). Splitting by source lets the planner use the partial unique
+    # indexes (location_id WHERE source='owntracks' / garmin_track_point_id
+    # WHERE source='garmin'); each side then sorts the bounded candidate set
+    # by true distance and returns its nearest neighbour. See #132.
+    _ADDRESS_COLS = (
+        "ga.display_address, ga.street, ga.housenumber, ga.neighbourhood, "
         "ga.locality, ga.region, ga.country, ga.postalcode, ga.confidence, "
-        "ga.raw_response "
-        "FROM public.geocoded_addresses ga "
-        "LEFT JOIN public.locations l "
-        "  ON ga.source = 'owntracks' AND ga.location_id = l.id "
-        "LEFT JOIN public.garmin_track_points gtp "
-        "  ON ga.source = 'garmin' AND ga.garmin_track_point_id = gtp.id "
-        "WHERE ga.status = 'success' "
-        "AND ("
-        "  (ga.source = 'owntracks' AND ga.location_id = ANY($1::bigint[])) "
-        "  OR (ga.source = 'garmin' AND ga.garmin_track_point_id = ANY($2::bigint[]))"
-        ") "
-        "ORDER BY ST_Distance("
-        "  COALESCE(l.geog, gtp.geog), "
-        "  ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography"
-        ") ASC "
-        "LIMIT 1",
-        ow_ids,
-        gt_ids,
-        lon,
-        lat,
+        "ga.raw_response"
     )
-    return dict(neighbour) if neighbour else None
+    _POINT = "ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography"
+    candidates: list[Any] = []
+
+    if ow_ids:
+        ow_match = await db.fetchrow(
+            f"SELECT {_ADDRESS_COLS}, ST_Distance(l.geog, {_POINT}) AS _dist "
+            "FROM public.geocoded_addresses ga "
+            "JOIN public.locations l ON l.id = ga.location_id "
+            "WHERE ga.source = 'owntracks' AND ga.status = 'success' "
+            "AND ga.location_id = ANY($3::bigint[]) "
+            "ORDER BY _dist ASC LIMIT 1",
+            lon,
+            lat,
+            ow_ids,
+        )
+        if ow_match:
+            candidates.append(ow_match)
+
+    if gt_ids:
+        gt_match = await db.fetchrow(
+            f"SELECT {_ADDRESS_COLS}, ST_Distance(gtp.geog, {_POINT}) AS _dist "
+            "FROM public.geocoded_addresses ga "
+            "JOIN public.garmin_track_points gtp ON gtp.id = ga.garmin_track_point_id "
+            "WHERE ga.source = 'garmin' AND ga.status = 'success' "
+            "AND ga.garmin_track_point_id = ANY($3::bigint[]) "
+            "ORDER BY _dist ASC LIMIT 1",
+            lon,
+            lat,
+            gt_ids,
+        )
+        if gt_match:
+            candidates.append(gt_match)
+
+    if not candidates:
+        return None
+
+    nearest = min(
+        candidates,
+        key=lambda r: r["_dist"] if r["_dist"] is not None else float("inf"),
+    )
+    return {key: value for key, value in dict(nearest).items() if key != "_dist"}
 
 
 async def _call_pelias(

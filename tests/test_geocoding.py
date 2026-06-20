@@ -255,6 +255,7 @@ async def test_trigger_geocoding_dedup_from_neighbour(client: AsyncClient, mock_
         "postalcode": "10001",
         "confidence": 0.9,
         "raw_response": {},
+        "_dist": 5.0,
     }
 
     response = await client.post("/api/v1/geocoding/trigger?batch_size=1")
@@ -424,7 +425,18 @@ async def test_trigger_geocoding_db_timeout_handled(client: AsyncClient, mock_db
         {"id": 100, "latitude": 40.7128, "longitude": -74.006},
         {"id": 101, "latitude": 40.7130, "longitude": -74.007},
     ]
-    mock_db.fetchrow.side_effect = [TimeoutError("query timed out"), None]
+    # The nearest-address lookup now issues up to two fetchrow calls (one per
+    # source). Raise the timeout on the first neighbour lookup only, then return
+    # None — robust to concurrent processing order and the new call count.
+    _timeout_calls = {"n": 0}
+
+    def _fetchrow_timeout(*_args: object, **_kwargs: object) -> None:
+        _timeout_calls["n"] += 1
+        if _timeout_calls["n"] == 1:
+            raise TimeoutError("query timed out")
+        return None
+
+    mock_db.fetchrow.side_effect = _fetchrow_timeout
     mock_db.fetchval.return_value = 10  # remaining
 
     pelias_response = {
@@ -473,8 +485,18 @@ async def test_trigger_geocoding_unexpected_error_upserts_error_status(client: A
         {"id": 200, "latitude": 40.7128, "longitude": -74.006},
         {"id": 201, "latitude": 40.7130, "longitude": -74.007},
     ]
-    # First location raises unexpected error; second returns no neighbour
-    mock_db.fetchrow.side_effect = [RuntimeError("unexpected"), None]
+    # First neighbour lookup raises an unexpected error; subsequent per-source
+    # lookups return None. Call-counter form is robust to the two-query split
+    # and concurrent location processing.
+    _err_calls = {"n": 0}
+
+    def _fetchrow_error(*_args: object, **_kwargs: object) -> None:
+        _err_calls["n"] += 1
+        if _err_calls["n"] == 1:
+            raise RuntimeError("unexpected")
+        return None
+
+    mock_db.fetchrow.side_effect = _fetchrow_error
     mock_db.fetchval.return_value = 8  # remaining
 
     pelias_response = {
@@ -1044,7 +1066,7 @@ async def test_find_nearby_address_no_candidates_short_circuits(mock_db: AsyncMo
 
 @pytest.mark.asyncio
 async def test_find_nearby_address_owntracks_only_hit(mock_db: AsyncMock):
-    """Owntracks candidates only → final lookup runs with empty gt_ids."""
+    """Owntracks candidates only → only the owntracks lookup runs."""
     from app.routers.geocoding import _find_nearby_address
 
     address: dict = {
@@ -1060,24 +1082,27 @@ async def test_find_nearby_address_owntracks_only_hit(mock_db: AsyncMock):
         "raw_response": {},
     }
     mock_db.fetch.side_effect = [[{"id": 42}], []]
-    mock_db.fetchrow.return_value = address
+    mock_db.fetchrow.return_value = {**address, "_dist": 12.5}
 
     result = await _find_nearby_address(mock_db, lat=40.0, lon=-74.0)
 
+    # The internal _dist ranking column must be stripped from the result.
     assert result == address
+    # gt_ids is empty, so only the owntracks lookup runs.
     assert mock_db.fetchrow.call_count == 1
     final_call = mock_db.fetchrow.call_args
     sql = final_call[0][0]
+    assert "ga.source = 'owntracks'" in sql
     assert "ga.location_id = ANY" in sql
-    assert "ga.garmin_track_point_id = ANY" in sql
-    # Positional args: ow_ids, gt_ids
-    assert final_call[0][1] == [42]
-    assert final_call[0][2] == []
+    # Positional args: lon, lat, ow_ids
+    assert final_call[0][1] == -74.0
+    assert final_call[0][2] == 40.0
+    assert final_call[0][3] == [42]
 
 
 @pytest.mark.asyncio
 async def test_find_nearby_address_garmin_only_hit(mock_db: AsyncMock):
-    """Garmin candidates only → final lookup runs with empty ow_ids."""
+    """Garmin candidates only → only the garmin lookup runs."""
     from app.routers.geocoding import _find_nearby_address
 
     address: dict = {
@@ -1093,19 +1118,51 @@ async def test_find_nearby_address_garmin_only_hit(mock_db: AsyncMock):
         "raw_response": {},
     }
     mock_db.fetch.side_effect = [[], [{"id": 99}, {"id": 100}]]
-    mock_db.fetchrow.return_value = address
+    mock_db.fetchrow.return_value = {**address, "_dist": 7.0}
 
     result = await _find_nearby_address(mock_db, lat=40.0, lon=-74.0)
 
     assert result == address
+    assert mock_db.fetchrow.call_count == 1
     final_call = mock_db.fetchrow.call_args
-    assert final_call[0][1] == []
-    assert final_call[0][2] == [99, 100]
+    sql = final_call[0][0]
+    assert "ga.source = 'garmin'" in sql
+    assert "ga.garmin_track_point_id = ANY" in sql
+    # Positional args: lon, lat, gt_ids
+    assert final_call[0][3] == [99, 100]
+
+
+@pytest.mark.asyncio
+async def test_find_nearby_address_both_sources_picks_nearest(mock_db: AsyncMock):
+    """Both sources hit → the smaller _dist wins and two lookups run."""
+    from app.routers.geocoding import _find_nearby_address
+
+    base: dict = {
+        "street": None,
+        "housenumber": None,
+        "neighbourhood": None,
+        "locality": None,
+        "region": None,
+        "country": None,
+        "postalcode": None,
+        "raw_response": {},
+    }
+    ow = {**base, "display_address": "OW", "confidence": 0.9, "_dist": 30.0}
+    gt = {**base, "display_address": "GT", "confidence": 0.8, "_dist": 5.0}
+    mock_db.fetch.side_effect = [[{"id": 1}], [{"id": 2}]]
+    mock_db.fetchrow.side_effect = [ow, gt]
+
+    result = await _find_nearby_address(mock_db, lat=40.0, lon=-74.0)
+
+    assert mock_db.fetchrow.call_count == 2
+    assert result is not None
+    assert result["display_address"] == "GT"  # nearer (smaller _dist)
+    assert "_dist" not in result
 
 
 @pytest.mark.asyncio
 async def test_find_nearby_address_does_not_use_coalesce_query(mock_db: AsyncMock):
-    """Guard against regression to the slow COALESCE Seq Scan plan."""
+    """Guard against regression to the slow COALESCE/OR Seq Scan plan."""
     from app.routers.geocoding import _find_nearby_address
 
     mock_db.fetch.side_effect = [[{"id": 1}], [{"id": 2}]]
@@ -1117,13 +1174,14 @@ async def test_find_nearby_address_does_not_use_coalesce_query(mock_db: AsyncMoc
         sql = call[0][0]
         assert "COALESCE" not in sql, "Candidate lookup must hit GIST indexes directly — no COALESCE allowed."
         assert "ST_DWithin(geog" in sql
-    final_sql = mock_db.fetchrow.call_args[0][0]
-    # Final lookup must filter via the indexed id columns, NOT via geog over the
-    # whole geocoded_addresses table. COALESCE/LEFT JOIN are now permitted in
-    # ORDER BY over the small candidate set, but the WHERE clause must use ANY.
-    assert "ga.location_id = ANY" in final_sql
-    assert "ga.garmin_track_point_id = ANY" in final_sql
-    assert "ST_DWithin" not in final_sql, "Final lookup must not re-filter by distance."
+    # Each per-source final lookup filters via its indexed id column with ANY,
+    # never via a COALESCE/OR across both columns (the old Seq Scan plan).
+    assert mock_db.fetchrow.call_count == 2
+    for call in mock_db.fetchrow.call_args_list:
+        final_sql = call[0][0]
+        assert "COALESCE" not in final_sql, "Final lookup must not seq-scan via COALESCE."
+        assert "ANY" in final_sql
+        assert "ST_DWithin" not in final_sql, "Final lookup must not re-filter by distance."
 
 
 # ---------------------------------------------------------------------------

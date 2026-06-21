@@ -28,6 +28,7 @@ def _activity_row(activity_id: str = "20932993811") -> dict:
         "hr_available": True,
         "avg_cadence": 78,
         "max_cadence": 112,
+        "total_strokes": 4250,
         "calories": 1689,
         "avg_speed_kmh": 26.3,
         "max_speed_kmh": 48.7,

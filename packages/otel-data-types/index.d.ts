@@ -429,6 +429,8 @@ export type components = {
             avg_cadence?: number | null;
             /** Max Cadence */
             max_cadence?: number | null;
+            /** Total Strokes */
+            total_strokes?: number | null;
             /** Calories */
             calories?: number | null;
             /** Avg Speed Kmh */

@@ -2196,6 +2196,18 @@
             "title": "Max Cadence",
             "description": "Maximum cadence in RPM"
           },
+          "total_strokes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Strokes",
+            "description": "Total activity strokes"
+          },
           "calories": {
             "anyOf": [
               {
@@ -2413,6 +2425,7 @@
             "duration_seconds": 6932,
             "end_time": "2025-11-08T20:16:45+00:00",
             "max_cadence": 112,
+            "total_strokes": 4250,
             "max_heart_rate": 178,
             "max_speed_kmh": 48.7,
             "max_temperature_c": 22,

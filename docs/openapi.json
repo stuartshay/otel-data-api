@@ -417,6 +417,66 @@
               "title": "Window Hours"
             },
             "description": "Optional sync window in hours. Positive integer."
+          },
+          {
+            "name": "resync_existing",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Whether to re-sync activities that already exist in the database.",
+              "title": "Resync Existing"
+            },
+            "description": "Whether to re-sync activities that already exist in the database."
+          },
+          {
+            "name": "activity_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional Garmin activity_id filter (repeatable).",
+              "title": "Activity Id"
+            },
+            "description": "Optional Garmin activity_id filter (repeatable)."
+          },
+          {
+            "name": "activity_ids",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional Garmin activity_ids filter (repeatable).",
+              "title": "Activity Ids"
+            },
+            "description": "Optional Garmin activity_ids filter (repeatable)."
           }
         ],
         "responses": {
@@ -693,6 +753,107 @@
         }
       }
     },
+    "/api/v1/garmin/activity-totals": {
+      "get": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "List Activity Totals",
+        "description": "Aggregate Garmin activities into period totals (week / month / year).\n\nBuckets are computed via ``DATE_TRUNC(period, start_time)`` and ordered by\n``period_start`` ascending. Each row contains activity count plus sum of\ndistance, duration, ascent, and calories. Empty result returns ``[]``.",
+        "operationId": "list_activity_totals_api_v1_garmin_activity_totals_get",
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "week",
+                "month",
+                "year"
+              ],
+              "type": "string",
+              "description": "Time bucket for aggregation: week, month, or year",
+              "title": "Period"
+            },
+            "description": "Time bucket for aggregation: week, month, or year"
+          },
+          {
+            "name": "sport",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to a single sport (e.g. cycling)",
+              "title": "Sport"
+            },
+            "description": "Filter to a single sport (e.g. cycling)"
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive lower bound on start_time (YYYY-MM-DD, UTC)",
+              "title": "Date From"
+            },
+            "description": "Inclusive lower bound on start_time (YYYY-MM-DD, UTC)"
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive upper bound on start_time (YYYY-MM-DD, UTC)",
+              "title": "Date To"
+            },
+            "description": "Inclusive upper bound on start_time (YYYY-MM-DD, UTC)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GarminActivityTotal"
+                  },
+                  "title": "Response List Activity Totals Api V1 Garmin Activity Totals Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid query parameter"
+          }
+        }
+      }
+    },
     "/api/v1/garmin/activities/{activity_id}": {
       "get": {
         "tags": [
@@ -727,6 +888,76 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Activity not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "Patch Activity",
+        "description": "Manually patch Garmin activity fields (auth required when OAuth2 is enabled).",
+        "operationId": "patch_activity_api_v1_garmin_activities__activity_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "activity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Garmin activity ID",
+              "examples": [
+                "20932993811"
+              ],
+              "title": "Activity Id"
+            },
+            "description": "Garmin activity ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GarminActivityManualUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GarminActivity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No fields to update"
+          },
+          "401": {
+            "description": "Authentication required"
           },
           "404": {
             "description": "Activity not found"
@@ -905,6 +1136,61 @@
                     "$ref": "#/components/schemas/GarminChartPoint"
                   },
                   "title": "Response Get Chart Data Api V1 Garmin Activities  Activity Id  Chart Data Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Activity not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garmin/activities/{activity_id}/addresses": {
+      "get": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "List Activity Addresses",
+        "description": "Return all reverse-geocoded addresses for a Garmin activity, in timestamp order.\n\nIncludes start, end, and mid-route waypoints as persisted by the Garmin\ngeocoding pipeline.",
+        "operationId": "list_activity_addresses_api_v1_garmin_activities__activity_id__addresses_get",
+        "parameters": [
+          {
+            "name": "activity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Garmin activity ID",
+              "examples": [
+                "20932993811"
+              ],
+              "title": "Activity Id"
+            },
+            "description": "Garmin activity ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GarminActivityAddress"
+                  },
+                  "title": "Response List Activity Addresses Api V1 Garmin Activities  Activity Id  Addresses Get"
                 }
               }
             }
@@ -1726,7 +2012,7 @@
           "Geocoding"
         ],
         "summary": "Geocoding Status",
-        "description": "Get geocoding coverage statistics.",
+        "description": "Get geocoding coverage statistics for both OwnTracks and Garmin sources.\n\nThe underlying aggregates scan large tables (millions of garmin_track_points)\nand change slowly, so the response is cached per-process for\n``_STATUS_CACHE_TTL_SECONDS`` to avoid repeatedly running the heavy COUNT\nqueries on every dashboard poll.",
         "operationId": "geocoding_status_api_v1_geocoding_status_get",
         "responses": {
           "200": {
@@ -1742,13 +2028,35 @@
         }
       }
     },
+    "/api/v1/geocoding/pelias-health": {
+      "get": {
+        "tags": [
+          "Geocoding"
+        ],
+        "summary": "Pelias Health",
+        "description": "Probe the upstream Pelias reverse-geocoder with a known-good coordinate.\n\nReturns 200 with ``healthy=false`` rather than failing so that callers\n(Airflow sensors, dashboards) can branch on the boolean. Used as a\npre-flight gate before batched trigger runs to avoid recording large\nnumbers of false-positive errors during a Pelias outage.",
+        "operationId": "pelias_health_api_v1_geocoding_pelias_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeliasHealth"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/geocoding/trigger": {
       "post": {
         "tags": [
           "Geocoding"
         ],
         "summary": "Trigger Geocoding",
-        "description": "Trigger batch reverse-geocoding of un-geocoded location records (auth required).\n\nFetches the next batch of locations without a geocoded address and calls\nthe Pelias reverse-geocoder for each one.  Duplicate nearby coordinates\n(within 50 m) that already have a geocoded address are skipped.",
+        "description": "Trigger batch reverse-geocoding of OwnTracks location records (auth required).",
         "operationId": "trigger_geocoding_api_v1_geocoding_trigger_post",
         "security": [
           {
@@ -1776,11 +2084,155 @@
             "required": false,
             "schema": {
               "type": "boolean",
-              "description": "Re-process records with status no_coverage",
+              "description": "Re-process records with statuses no_coverage or error",
               "default": false,
               "title": "Retry Failed"
             },
-            "description": "Re-process records with status no_coverage"
+            "description": "Re-process records with statuses no_coverage or error"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeocodingTriggerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/geocoding/trigger/garmin": {
+      "post": {
+        "tags": [
+          "Geocoding"
+        ],
+        "summary": "Trigger Garmin Geocoding",
+        "description": "Trigger batch reverse-geocoding of Garmin activity waypoints (auth required).",
+        "operationId": "trigger_garmin_geocoding_api_v1_geocoding_trigger_garmin_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "batch_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Number of Garmin activities to process in this batch",
+              "default": 10,
+              "title": "Batch Size"
+            },
+            "description": "Number of Garmin activities to process in this batch"
+          },
+          {
+            "name": "waypoint_spacing_km",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 50.0,
+              "minimum": 0.1,
+              "description": "Approximate spacing between mid-route waypoints in kilometres",
+              "default": 1.0,
+              "title": "Waypoint Spacing Km"
+            },
+            "description": "Approximate spacing between mid-route waypoints in kilometres"
+          },
+          {
+            "name": "retry_failed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Re-process activities with at least one waypoint in statuses no_coverage or error",
+              "default": false,
+              "title": "Retry Failed"
+            },
+            "description": "Re-process activities with at least one waypoint in statuses no_coverage or error"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeocodingTriggerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/geocoding/trigger/garmin-dense": {
+      "post": {
+        "tags": [
+          "Geocoding"
+        ],
+        "summary": "Trigger Garmin Dense",
+        "description": "Trigger batch reverse-geocoding of distinct 4dp GPS cells (auth required).",
+        "operationId": "trigger_garmin_dense_api_v1_geocoding_trigger_garmin_dense_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "batch_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "Number of dense cells to process in this batch",
+              "default": 100,
+              "title": "Batch Size"
+            },
+            "description": "Number of dense cells to process in this batch"
+          },
+          {
+            "name": "retry_failed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Re-process cells whose status is no_coverage, error, or pending",
+              "default": false,
+              "title": "Retry Failed"
+            },
+            "description": "Re-process cells whose status is no_coverage, error, or pending"
           }
         ],
         "responses": {
@@ -2172,6 +2624,168 @@
             "title": "Max Heart Rate",
             "description": "Maximum heart rate in beats per minute"
           },
+          "hr_available": {
+            "type": "boolean",
+            "title": "Hr Available",
+            "description": "Whether this activity has usable heart-rate data in summary or track points",
+            "default": false
+          },
+          "min_heart_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Heart Rate",
+            "description": "Minimum heart rate in beats per minute"
+          },
+          "aerobic_training_effect": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aerobic Training Effect",
+            "description": "Aerobic training effect score"
+          },
+          "anaerobic_training_effect": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anaerobic Training Effect",
+            "description": "Anaerobic training effect score"
+          },
+          "exercise_load": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exercise Load",
+            "description": "Exercise load score"
+          },
+          "avg_respiration_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Respiration Rate",
+            "description": "Average respiration rate in breaths per minute"
+          },
+          "min_respiration_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Respiration Rate",
+            "description": "Minimum respiration rate in breaths per minute"
+          },
+          "max_respiration_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Respiration Rate",
+            "description": "Maximum respiration rate in breaths per minute"
+          },
+          "sweat_loss_ml": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sweat Loss Ml",
+            "description": "Estimated sweat loss in millilitres"
+          },
+          "moderate_intensity_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moderate Intensity Minutes",
+            "description": "Moderate intensity minutes"
+          },
+          "vigorous_intensity_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigorous Intensity Minutes",
+            "description": "Vigorous intensity minutes"
+          },
+          "total_intensity_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Intensity Minutes",
+            "description": "Total intensity minutes"
+          },
+          "paved_distance_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paved Distance Km",
+            "description": "Distance over paved surfaces in kilometres"
+          },
+          "unpaved_distance_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unpaved Distance Km",
+            "description": "Distance over unpaved surfaces in kilometres"
+          },
           "avg_cadence": {
             "anyOf": [
               {
@@ -2413,9 +3027,12 @@
         "examples": [
           {
             "activity_id": "20932993811",
+            "aerobic_training_effect": 2.6,
+            "anaerobic_training_effect": 0.0,
             "avg_cadence": 78,
             "avg_heart_rate": 142,
             "avg_pace": 3.513345,
+            "avg_respiration_rate": 25,
             "avg_speed_kmh": 26.3,
             "avg_temperature_c": 18,
             "calories": 1689,
@@ -2424,22 +3041,767 @@
             "distance_km": 50.6,
             "duration_seconds": 6932,
             "end_time": "2025-11-08T20:16:45+00:00",
+            "exercise_load": 48,
+            "hr_available": true,
             "max_cadence": 112,
-            "total_strokes": 4250,
             "max_heart_rate": 178,
+            "max_respiration_rate": 32,
             "max_speed_kmh": 48.7,
             "max_temperature_c": 22,
+            "min_heart_rate": 98,
+            "min_respiration_rate": 16,
             "min_temperature_c": 14,
+            "moderate_intensity_minutes": 88,
+            "paved_distance_km": 21.09,
             "sport": "cycling",
             "start_time": "2025-11-08T18:21:13+00:00",
             "sub_sport": "road",
+            "sweat_loss_ml": 1629,
             "total_ascent_m": 385,
             "total_descent_m": 380,
             "total_distance": 50598.95,
             "total_elapsed_time": 7200.5,
+            "total_intensity_minutes": 146,
+            "total_strokes": 4250,
             "total_timer_time": 6932.1,
             "track_point_count": 10707,
-            "uploaded_at": "2026-02-09T23:56:37+00:00"
+            "unpaved_distance_km": 0.65,
+            "uploaded_at": "2026-02-09T23:56:37+00:00",
+            "vigorous_intensity_minutes": 29
+          }
+        ]
+      },
+      "GarminActivityAddress": {
+        "properties": {
+          "track_point_id": {
+            "type": "integer",
+            "title": "Track Point Id",
+            "description": "garmin_track_points.id this address was geocoded from"
+          },
+          "activity_id": {
+            "type": "string",
+            "title": "Activity Id",
+            "description": "Parent Garmin activity identifier"
+          },
+          "waypoint_kind": {
+            "type": "string",
+            "enum": [
+              "start",
+              "end",
+              "waypoint"
+            ],
+            "title": "Waypoint Kind",
+            "description": "Role of this waypoint: start, end, or mid-route waypoint"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "UTC timestamp of the track point this address was derived from"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude",
+            "description": "GPS latitude in decimal degrees (WGS 84)"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude",
+            "description": "GPS longitude in decimal degrees (WGS 84)"
+          },
+          "display_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Address",
+            "description": "Full formatted address label from Pelias"
+          },
+          "street": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Street",
+            "description": "Street name"
+          },
+          "housenumber": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Housenumber",
+            "description": "House or building number"
+          },
+          "neighbourhood": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Neighbourhood",
+            "description": "Neighbourhood name"
+          },
+          "locality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locality",
+            "description": "City or town"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region",
+            "description": "State or province"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country",
+            "description": "Country name"
+          },
+          "postalcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Postalcode",
+            "description": "Postal or ZIP code"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence",
+            "description": "Pelias confidence score (0-1)"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Geocoding status: success, no_coverage, error, pending"
+          },
+          "geocoded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geocoded At",
+            "description": "UTC timestamp when geocoding was performed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "track_point_id",
+          "activity_id",
+          "waypoint_kind",
+          "timestamp",
+          "latitude",
+          "longitude",
+          "status"
+        ],
+        "title": "GarminActivityAddress",
+        "description": "Reverse-geocoded address attached to a Garmin activity waypoint."
+      },
+      "GarminActivityManualUpdate": {
+        "properties": {
+          "sport": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sport",
+            "description": "Primary sport type (e.g. cycling, running)"
+          },
+          "sub_sport": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Sport",
+            "description": "Sub-sport classification (e.g. road, trail)"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time",
+            "description": "Activity start time in UTC"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Time",
+            "description": "Activity end time in UTC"
+          },
+          "distance_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance Km",
+            "description": "Total distance in kilometres"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds",
+            "description": "Active duration in seconds (excludes pauses)"
+          },
+          "avg_heart_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Heart Rate",
+            "description": "Average heart rate in beats per minute"
+          },
+          "max_heart_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Heart Rate",
+            "description": "Maximum heart rate in beats per minute"
+          },
+          "min_heart_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Heart Rate",
+            "description": "Minimum heart rate in beats per minute"
+          },
+          "aerobic_training_effect": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aerobic Training Effect",
+            "description": "Aerobic training effect score"
+          },
+          "anaerobic_training_effect": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anaerobic Training Effect",
+            "description": "Anaerobic training effect score"
+          },
+          "exercise_load": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exercise Load",
+            "description": "Exercise load score"
+          },
+          "avg_respiration_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Respiration Rate",
+            "description": "Average respiration rate in breaths per minute"
+          },
+          "min_respiration_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Respiration Rate",
+            "description": "Minimum respiration rate in breaths per minute"
+          },
+          "max_respiration_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Respiration Rate",
+            "description": "Maximum respiration rate in breaths per minute"
+          },
+          "sweat_loss_ml": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sweat Loss Ml",
+            "description": "Estimated sweat loss in millilitres"
+          },
+          "moderate_intensity_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moderate Intensity Minutes",
+            "description": "Moderate intensity minutes"
+          },
+          "vigorous_intensity_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vigorous Intensity Minutes",
+            "description": "Vigorous intensity minutes"
+          },
+          "total_intensity_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Intensity Minutes",
+            "description": "Total intensity minutes"
+          },
+          "paved_distance_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paved Distance Km",
+            "description": "Distance over paved surfaces in kilometres"
+          },
+          "unpaved_distance_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unpaved Distance Km",
+            "description": "Distance over unpaved surfaces in kilometres"
+          },
+          "avg_cadence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Cadence",
+            "description": "Average cadence in RPM"
+          },
+          "max_cadence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Cadence",
+            "description": "Maximum cadence in RPM"
+          },
+          "total_strokes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Strokes",
+            "description": "Total activity strokes"
+          },
+          "calories": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calories",
+            "description": "Total calories burned"
+          },
+          "avg_speed_kmh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Speed Kmh",
+            "description": "Average speed in km/h"
+          },
+          "max_speed_kmh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Speed Kmh",
+            "description": "Maximum speed in km/h"
+          },
+          "total_ascent_m": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Ascent M",
+            "description": "Total elevation gain in meters"
+          },
+          "total_descent_m": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Descent M",
+            "description": "Total elevation loss in meters"
+          },
+          "total_distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Distance",
+            "description": "Raw total distance in meters from FIT file"
+          },
+          "avg_pace": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Pace",
+            "description": "Average pace in minutes per kilometre"
+          },
+          "device_manufacturer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Manufacturer",
+            "description": "Device manufacturer (e.g. garmin)"
+          },
+          "avg_temperature_c": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Temperature C",
+            "description": "Average ambient temperature in degrees C"
+          },
+          "min_temperature_c": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Temperature C",
+            "description": "Minimum ambient temperature in degrees C"
+          },
+          "max_temperature_c": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Temperature C",
+            "description": "Maximum ambient temperature in degrees C"
+          },
+          "total_elapsed_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Elapsed Time",
+            "description": "Total elapsed time in seconds (includes pauses)"
+          },
+          "total_timer_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Timer Time",
+            "description": "Total timer time in seconds (active recording)"
+          },
+          "uploaded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploaded At",
+            "description": "UTC timestamp when the FIT file was uploaded"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "GarminActivityManualUpdate",
+        "description": "Partial manual update payload for Garmin activity records.",
+        "examples": [
+          {
+            "aerobic_training_effect": 3.2,
+            "avg_cadence": 82,
+            "avg_heart_rate": 141,
+            "device_manufacturer": "polar_electro",
+            "max_heart_rate": 172
+          }
+        ]
+      },
+      "GarminActivityTotal": {
+        "properties": {
+          "period_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Period Start",
+            "description": "UTC start date of the period bucket (week/month/year)"
+          },
+          "activity_count": {
+            "type": "integer",
+            "title": "Activity Count",
+            "description": "Number of activities recorded in the period"
+          },
+          "total_distance_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Distance Km",
+            "description": "Sum of distance in kilometres"
+          },
+          "total_duration_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Duration Seconds",
+            "description": "Sum of active duration in seconds (excludes pauses)"
+          },
+          "total_ascent_m": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Ascent M",
+            "description": "Sum of elevation gain in meters"
+          },
+          "total_calories": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Calories",
+            "description": "Sum of calories burned"
+          }
+        },
+        "type": "object",
+        "required": [
+          "period_start",
+          "activity_count"
+        ],
+        "title": "GarminActivityTotal",
+        "description": "Aggregated Garmin activity totals for a single time bucket (week/month/year).",
+        "examples": [
+          {
+            "activity_count": 12,
+            "period_start": "2025-05-01",
+            "total_ascent_m": 4521,
+            "total_calories": 18234,
+            "total_distance_km": 632.4,
+            "total_duration_seconds": 90123
           }
         ]
       },
@@ -2499,6 +3861,30 @@
             "title": "Heart Rate",
             "description": "Heart rate in beats per minute"
           },
+          "hr_zone": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hr Zone",
+            "description": "Heart-rate zone index (1-5)"
+          },
+          "respiration_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Respiration Rate",
+            "description": "Respiration rate in breaths per minute"
+          },
           "cadence": {
             "anyOf": [
               {
@@ -2522,6 +3908,30 @@
             ],
             "title": "Temperature C",
             "description": "Ambient temperature in degrees C"
+          },
+          "surface_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface Type",
+            "description": "Road or terrain type"
+          },
+          "effort_level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effort Level",
+            "description": "Effort classification label"
           },
           "latitude": {
             "type": "number",
@@ -2547,10 +3957,14 @@
             "altitude": 12.4,
             "cadence": 80,
             "distance_from_start_km": 0.0,
+            "effort_level": "steady",
             "heart_rate": 135,
+            "hr_zone": 3,
             "latitude": 40.71501586586237,
             "longitude": -74.01768794283271,
+            "respiration_rate": 22,
             "speed_kmh": 24.5,
+            "surface_type": "paved",
             "temperature_c": 18,
             "timestamp": "2025-11-08T18:21:13Z"
           }
@@ -2760,6 +4174,30 @@
             "title": "Heart Rate",
             "description": "Heart rate in beats per minute"
           },
+          "hr_zone": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hr Zone",
+            "description": "Heart-rate zone index (1-5)"
+          },
+          "respiration_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Respiration Rate",
+            "description": "Respiration rate in breaths per minute"
+          },
           "cadence": {
             "anyOf": [
               {
@@ -2784,6 +4222,30 @@
             "title": "Temperature C",
             "description": "Ambient temperature in degrees C"
           },
+          "surface_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface Type",
+            "description": "Road or terrain type"
+          },
+          "effort_level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effort Level",
+            "description": "Effort classification label"
+          },
           "created_at": {
             "anyOf": [
               {
@@ -2796,6 +4258,17 @@
             ],
             "title": "Created At",
             "description": "UTC timestamp when the record was inserted"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeocodedAddressSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reverse-geocoded address for this track point (Garmin pipeline). Only populated for waypoints that have been geocoded."
           }
         },
         "type": "object",
@@ -2815,11 +4288,15 @@
             "cadence": 80,
             "created_at": "2026-02-09T23:56:37Z",
             "distance_from_start_km": 0.0,
+            "effort_level": "steady",
             "heart_rate": 135,
+            "hr_zone": 3,
             "id": 7454,
             "latitude": 40.71501586586237,
             "longitude": -74.01768794283271,
+            "respiration_rate": 22,
             "speed_kmh": 24.5,
+            "surface_type": "paved",
             "temperature_c": 18,
             "timestamp": "2025-11-08T18:21:13Z"
           }
@@ -2976,6 +4453,198 @@
           }
         ]
       },
+      "GeocodedAddressSummary": {
+        "properties": {
+          "display_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Address",
+            "description": "Full formatted address label from Pelias"
+          },
+          "street": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Street",
+            "description": "Street name"
+          },
+          "housenumber": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Housenumber",
+            "description": "House or building number"
+          },
+          "neighbourhood": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Neighbourhood",
+            "description": "Neighbourhood name"
+          },
+          "locality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locality",
+            "description": "City or town"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region",
+            "description": "State or province"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country",
+            "description": "Country name"
+          },
+          "postalcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Postalcode",
+            "description": "Postal or ZIP code"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence",
+            "description": "Pelias confidence score (0-1)"
+          },
+          "waypoint_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "start",
+                  "end",
+                  "waypoint"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waypoint Kind",
+            "description": "Role of this waypoint (Garmin only)"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Geocoding status: success, no_coverage, error, pending"
+          },
+          "geocoded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geocoded At",
+            "description": "UTC timestamp when geocoding was performed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "GeocodedAddressSummary",
+        "description": "Compact address summary embedded in track-point payloads."
+      },
+      "GeocodingSourceStatus": {
+        "properties": {
+          "success": {
+            "type": "integer",
+            "title": "Success",
+            "description": "Number of successfully geocoded records for this source"
+          },
+          "pending": {
+            "type": "integer",
+            "title": "Pending",
+            "description": "Number of records awaiting geocoding for this source",
+            "default": 0
+          },
+          "no_coverage": {
+            "type": "integer",
+            "title": "No Coverage",
+            "description": "Number of records outside Pelias coverage area"
+          },
+          "errors": {
+            "type": "integer",
+            "title": "Errors",
+            "description": "Number of records that failed geocoding"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Total number of geocoded_addresses rows for this source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "no_coverage",
+          "errors",
+          "total"
+        ],
+        "title": "GeocodingSourceStatus",
+        "description": "Coverage statistics for a single geocoding source (owntracks or garmin)."
+      },
       "GeocodingStatus": {
         "properties": {
           "total_locations": {
@@ -3012,6 +4681,52 @@
             "type": "number",
             "title": "Coverage Percent",
             "description": "Percentage of locations with a geocoded address"
+          },
+          "by_source": {
+            "$ref": "#/components/schemas/GeocodingStatusBySource",
+            "description": "Per-source breakdown of geocoding coverage (owntracks, garmin)"
+          },
+          "dense_cells_total": {
+            "type": "integer",
+            "title": "Dense Cells Total",
+            "description": "Total number of distinct 4dp (~11m) GPS cells observed in garmin_track_points",
+            "default": 0
+          },
+          "dense_cells_geocoded": {
+            "type": "integer",
+            "title": "Dense Cells Geocoded",
+            "description": "Number of dense cells with any geocoding row (any status)",
+            "default": 0
+          },
+          "dense_cells_success": {
+            "type": "integer",
+            "title": "Dense Cells Success",
+            "description": "Number of dense cells with status='success'",
+            "default": 0
+          },
+          "dense_cells_pending": {
+            "type": "integer",
+            "title": "Dense Cells Pending",
+            "description": "Number of dense cells awaiting geocoding",
+            "default": 0
+          },
+          "dense_cells_no_coverage": {
+            "type": "integer",
+            "title": "Dense Cells No Coverage",
+            "description": "Number of dense cells outside Pelias coverage",
+            "default": 0
+          },
+          "dense_cells_errors": {
+            "type": "integer",
+            "title": "Dense Cells Errors",
+            "description": "Number of dense cells that failed geocoding",
+            "default": 0
+          },
+          "dense_point_coverage_percent": {
+            "type": "number",
+            "title": "Dense Point Coverage Percent",
+            "description": "Percentage of garmin_track_points whose 4dp cell has any geocoded row",
+            "default": 0.0
           }
         },
         "type": "object",
@@ -3022,7 +4737,8 @@
           "pending",
           "no_coverage",
           "errors",
-          "coverage_percent"
+          "coverage_percent",
+          "by_source"
         ],
         "title": "GeocodingStatus",
         "description": "Coverage statistics for geocoded location records.",
@@ -3037,6 +4753,49 @@
             "total_locations": 45000
           }
         ]
+      },
+      "GeocodingStatusBySource": {
+        "properties": {
+          "owntracks": {
+            "$ref": "#/components/schemas/GeocodingSourceStatus",
+            "description": "Coverage stats for OwnTracks rows"
+          },
+          "garmin": {
+            "$ref": "#/components/schemas/GeocodingSourceStatus",
+            "description": "Coverage stats for Garmin rows"
+          },
+          "garmin_activities_total": {
+            "type": "integer",
+            "title": "Garmin Activities Total",
+            "description": "Total number of Garmin activities (denominator for activity-level coverage)"
+          },
+          "garmin_activities_geocoded": {
+            "type": "integer",
+            "title": "Garmin Activities Geocoded",
+            "description": "Number of Garmin activities that have at least one address row"
+          },
+          "garmin_coverage_percent": {
+            "type": "number",
+            "title": "Garmin Coverage Percent",
+            "description": "Percentage of Garmin activities with at least one geocoded address"
+          },
+          "garmin_waypoint_success_percent": {
+            "type": "number",
+            "title": "Garmin Waypoint Success Percent",
+            "description": "Percentage of Garmin waypoint rows with status='success' (success / (success + pending + no_coverage + error)).",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "owntracks",
+          "garmin",
+          "garmin_activities_total",
+          "garmin_activities_geocoded",
+          "garmin_coverage_percent"
+        ],
+        "title": "GeocodingStatusBySource",
+        "description": "Per-source breakdown of geocoding coverage."
       },
       "GeocodingTriggerResponse": {
         "properties": {
@@ -3778,6 +5537,45 @@
           "offset"
         ],
         "title": "PaginatedResponse[UnifiedGpsPoint]"
+      },
+      "PeliasHealth": {
+        "properties": {
+          "healthy": {
+            "type": "boolean",
+            "title": "Healthy",
+            "description": "True when Pelias returned a usable feature for the probe coordinate."
+          },
+          "latency_ms": {
+            "type": "number",
+            "title": "Latency Ms",
+            "description": "Round-trip latency for the probe request, in milliseconds."
+          },
+          "sample_features_count": {
+            "type": "integer",
+            "title": "Sample Features Count",
+            "description": "Number of features returned by the probe (0 means the probe failed).",
+            "default": 0
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail",
+            "description": "Failure detail when not healthy (timeout, transport error, non-2xx status)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "healthy",
+          "latency_ms"
+        ],
+        "title": "PeliasHealth",
+        "description": "Result of an upstream Pelias reverse-geocoder health probe."
       },
       "ReferenceLocation": {
         "properties": {

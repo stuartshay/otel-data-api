@@ -98,6 +98,7 @@ async def test_list_activities_filters_and_invalid_sort_falls_back(client: Async
     assert data["limit"] == 10
     assert data["offset"] == 3
     assert len(data["items"]) == 1
+    assert data["items"][0]["total_strokes"] == 4250
 
     data_query, *params = mock_db.fetch.await_args.args
     assert "ORDER BY a.start_time asc" in data_query
@@ -223,6 +224,7 @@ async def test_get_activity_success(client: AsyncClient, mock_db):
     assert data["activity_id"] == "20932993811"
     assert data["sport"] == "cycling"
     assert data["hr_available"] is True
+    assert data["total_strokes"] == 4250
 
 
 @pytest.mark.asyncio
@@ -286,24 +288,27 @@ async def test_patch_activity_success(client: AsyncClient, mock_db):
     updated = _activity_row()
     updated["avg_heart_rate"] = 141
     updated["aerobic_training_effect"] = 3.2
+    updated["total_strokes"] = 4300
 
     mock_db.fetchrow.side_effect = [{"activity_id": "20932993811"}, updated]
 
     response = await client.patch(
         "/api/v1/garmin/activities/20932993811",
-        json={"avg_heart_rate": 141, "aerobic_training_effect": 3.2},
+        json={"avg_heart_rate": 141, "aerobic_training_effect": 3.2, "total_strokes": 4300},
     )
 
     assert response.status_code == 200
     assert response.json()["activity_id"] == "20932993811"
     assert response.json()["avg_heart_rate"] == 141
     assert response.json()["aerobic_training_effect"] == 3.2
+    assert response.json()["total_strokes"] == 4300
 
     update_query, *update_params = mock_db.fetchrow.await_args_list[0].args
     assert "UPDATE public.garmin_activities SET" in update_query
     assert "avg_heart_rate = $1" in update_query
     assert "aerobic_training_effect = $2" in update_query
-    assert update_params == [141, 3.2, "20932993811"]
+    assert "total_strokes = $3" in update_query
+    assert update_params == [141, 3.2, 4300, "20932993811"]
 
 
 @pytest.mark.asyncio

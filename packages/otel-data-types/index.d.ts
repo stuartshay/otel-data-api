@@ -54,6 +54,9 @@ export type paths = {
         /**
          * List Locations
          * @description List OwnTracks locations with filtering and pagination.
+         *
+         *     Returns paginated GPS location data recorded by OwnTracks mobile app.
+         *     Filter by device ID and date range. Includes battery, accuracy, and connection metadata.
          */
         get: operations["list_locations_api_v1_locations_get"];
         put?: never;
@@ -76,6 +79,26 @@ export type paths = {
          * @description List all distinct device IDs.
          */
         get: operations["list_devices_api_v1_locations_devices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/date-range": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Location Date Range
+         * @description Get the earliest and latest location timestamps.
+         */
+        get: operations["location_date_range_api_v1_locations_date_range_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -124,6 +147,46 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/garmin/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger Sync
+         * @description Trigger an on-demand Garmin sync via the in-cluster garmin-sync service.
+         */
+        post: operations["trigger_sync_api_v1_garmin_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/garmin/date-range": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Garmin Date Range
+         * @description Get the earliest and latest Garmin activity timestamps.
+         */
+        get: operations["garmin_date_range_api_v1_garmin_date_range_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/garmin/activities": {
         parameters: {
             query?: never;
@@ -134,6 +197,9 @@ export type paths = {
         /**
          * List Activities
          * @description List Garmin activities with filtering and pagination.
+         *
+         *     Returns paginated Garmin cycling/running activities with track point counts.
+         *     Filter by sport type or date range. Sort by start time, distance, duration, etc.
          */
         get: operations["list_activities_api_v1_garmin_activities_get"];
         put?: never;
@@ -164,6 +230,30 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/garmin/activity-totals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Activity Totals
+         * @description Aggregate Garmin activities into period totals (week / month / year).
+         *
+         *     Buckets are computed via ``DATE_TRUNC(period, start_time)`` and ordered by
+         *     ``period_start`` ascending. Each row contains activity count plus sum of
+         *     distance, duration, ascent, and calories. Empty result returns ``[]``.
+         */
+        get: operations["list_activity_totals_api_v1_garmin_activity_totals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/garmin/activities/{activity_id}": {
         parameters: {
             query?: never;
@@ -181,7 +271,11 @@ export type paths = {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Patch Activity
+         * @description Manually patch Garmin activity fields (auth required when OAuth2 is enabled).
+         */
+        patch: operations["patch_activity_api_v1_garmin_activities__activity_id__patch"];
         trace?: never;
     };
     "/api/v1/garmin/activities/{activity_id}/tracks": {
@@ -194,8 +288,59 @@ export type paths = {
         /**
          * List Track Points
          * @description List track points for a specific activity.
+         *
+         *     Returns GPS track points with altitude, speed, heart rate, and cadence data.
+         *     Use the `simplify` parameter to apply Douglas-Peucker line simplification
+         *     for efficient map rendering of the complete route.
          */
         get: operations["list_track_points_api_v1_garmin_activities__activity_id__tracks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/garmin/activities/{activity_id}/chart-data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Chart Data
+         * @description Return all track points for chart rendering (no pagination).
+         *
+         *     Provides the complete time-series data (altitude, speed, heart rate, cadence)
+         *     for an activity, ordered by timestamp. Uniqueness is guaranteed by the
+         *     UNIQUE(activity_id, timestamp) database constraint.
+         */
+        get: operations["get_chart_data_api_v1_garmin_activities__activity_id__chart_data_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/garmin/activities/{activity_id}/addresses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Activity Addresses
+         * @description Return all reverse-geocoded addresses for a Garmin activity, in timestamp order.
+         *
+         *     Includes start, end, and mid-route waypoints as persisted by the Garmin
+         *     geocoding pipeline.
+         */
+        get: operations["list_activity_addresses_api_v1_garmin_activities__activity_id__addresses_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -214,6 +359,13 @@ export type paths = {
         /**
          * List Unified Gps
          * @description Query the unified_gps_points view combining OwnTracks + Garmin data.
+         *
+         *     Merges OwnTracks location data and Garmin track points into a single
+         *     chronological stream. Filter by data source or date range.
+         *
+         *     When no date filters are specified (both date_from and date_to omitted),
+         *     defaults to the last 90 days to avoid expensive full-table scans on the
+         *     underlying 4M+ row tables.
          */
         get: operations["list_unified_gps_api_v1_gps_unified_get"];
         put?: never;
@@ -234,8 +386,34 @@ export type paths = {
         /**
          * Daily Summary
          * @description Query the daily_activity_summary view for aggregated daily stats.
+         *
+         *     Returns per-day aggregates including OwnTracks point counts, battery stats,
+         *     and Garmin activity metrics (distance, duration, heart rate, calories).
+         *
+         *     When no date filters are specified (both date_from and date_to omitted),
+         *     defaults to the last 90 days to avoid expensive full-table aggregations.
          */
         get: operations["daily_summary_api_v1_gps_daily_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/gps/daily-summary/date-range": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Daily Summary Date Range
+         * @description Get the earliest and latest activity dates available in the daily summary view.
+         */
+        get: operations["daily_summary_date_range_api_v1_gps_daily_summary_date_range_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -306,6 +484,9 @@ export type paths = {
         /**
          * Find Nearby
          * @description Find GPS points within a radius of a given lat/lon using PostGIS ST_DWithin.
+         *
+         *     Searches both OwnTracks locations and Garmin track points within the
+         *     specified radius. Results are sorted by distance from the center point.
          */
         get: operations["find_nearby_api_v1_spatial_nearby_get"];
         put?: never;
@@ -326,6 +507,8 @@ export type paths = {
         /**
          * Calculate Distance
          * @description Calculate the distance in meters between two points using PostGIS ST_Distance.
+         *
+         *     Uses geodesic (geography) distance for accurate results on the Earth's surface.
          */
         get: operations["calculate_distance_api_v1_spatial_distance_get"];
         put?: never;
@@ -346,6 +529,9 @@ export type paths = {
         /**
          * Within Reference
          * @description Find all GPS points within a named reference location's radius.
+         *
+         *     Looks up a named reference location (e.g. 'home') and finds all GPS points
+         *     from OwnTracks and/or Garmin data within its configured radius.
          */
         get: operations["within_reference_api_v1_spatial_within_reference__name__get"];
         put?: never;
@@ -356,362 +542,2137 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/geocoding/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Geocoding Status
+         * @description Get geocoding coverage statistics for both OwnTracks and Garmin sources.
+         *
+         *     The underlying aggregates scan large tables (millions of garmin_track_points)
+         *     and change slowly, so the response is cached per-process for
+         *     ``_STATUS_CACHE_TTL_SECONDS`` to avoid repeatedly running the heavy COUNT
+         *     queries on every dashboard poll.
+         */
+        get: operations["geocoding_status_api_v1_geocoding_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geocoding/pelias-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pelias Health
+         * @description Probe the upstream Pelias reverse-geocoder with a known-good coordinate.
+         *
+         *     Returns 200 with ``healthy=false`` rather than failing so that callers
+         *     (Airflow sensors, dashboards) can branch on the boolean. Used as a
+         *     pre-flight gate before batched trigger runs to avoid recording large
+         *     numbers of false-positive errors during a Pelias outage.
+         */
+        get: operations["pelias_health_api_v1_geocoding_pelias_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geocoding/trigger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger Geocoding
+         * @description Trigger batch reverse-geocoding of OwnTracks location records (auth required).
+         */
+        post: operations["trigger_geocoding_api_v1_geocoding_trigger_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geocoding/trigger/garmin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger Garmin Geocoding
+         * @description Trigger batch reverse-geocoding of Garmin activity waypoints (auth required).
+         */
+        post: operations["trigger_garmin_geocoding_api_v1_geocoding_trigger_garmin_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geocoding/trigger/garmin-dense": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger Garmin Dense
+         * @description Trigger batch reverse-geocoding of distinct 4dp GPS cells (auth required).
+         */
+        post: operations["trigger_garmin_dense_api_v1_geocoding_trigger_garmin_dense_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 };
 export type webhooks = Record<string, never>;
 export type components = {
     schemas: {
-        /** DailyActivitySummary */
+        /**
+         * DailyActivitySummary
+         * @description Per-day aggregate combining OwnTracks location stats and Garmin activity metrics.
+         * @example {
+         *       "activity_date": "2026-02-11",
+         *       "avg_accuracy": 4.89,
+         *       "avg_heart_rate": 142,
+         *       "garmin_activities": 1,
+         *       "garmin_sport": "cycling",
+         *       "max_battery": 100,
+         *       "min_battery": 64,
+         *       "owntracks_device": "iphone_stuart",
+         *       "owntracks_points": 1429,
+         *       "total_calories": 1689,
+         *       "total_distance_km": 50.6,
+         *       "total_duration_seconds": 6932
+         *     }
+         */
         DailyActivitySummary: {
-            /** Activity Date */
+            /**
+             * Activity Date
+             * @description Calendar date in YYYY-MM-DD format
+             */
             activity_date?: string | null;
-            /** Owntracks Device */
+            /**
+             * Owntracks Device
+             * @description OwnTracks device that reported data for this day
+             */
             owntracks_device?: string | null;
-            /** Owntracks Points */
+            /**
+             * Owntracks Points
+             * @description Number of OwnTracks GPS points recorded
+             */
             owntracks_points?: number | null;
-            /** Min Battery */
+            /**
+             * Min Battery
+             * @description Lowest device battery percentage observed
+             */
             min_battery?: number | null;
-            /** Max Battery */
+            /**
+             * Max Battery
+             * @description Highest device battery percentage observed
+             */
             max_battery?: number | null;
-            /** Avg Accuracy */
+            /**
+             * Avg Accuracy
+             * @description Mean horizontal GPS accuracy in meters
+             */
             avg_accuracy?: number | null;
-            /** Garmin Sport */
+            /**
+             * Garmin Sport
+             * @description Garmin sport type for activities on this day
+             */
             garmin_sport?: string | null;
-            /** Garmin Activities */
+            /**
+             * Garmin Activities
+             * @description Number of Garmin activities recorded
+             */
             garmin_activities?: number | null;
-            /** Total Distance Km */
+            /**
+             * Total Distance Km
+             * @description Combined Garmin activity distance in km
+             */
             total_distance_km?: number | null;
-            /** Total Duration Seconds */
+            /**
+             * Total Duration Seconds
+             * @description Combined Garmin activity duration in seconds
+             */
             total_duration_seconds?: number | null;
-            /** Avg Heart Rate */
+            /**
+             * Avg Heart Rate
+             * @description Mean heart rate across Garmin activities in BPM
+             */
             avg_heart_rate?: number | null;
-            /** Total Calories */
+            /**
+             * Total Calories
+             * @description Total calories burned across Garmin activities
+             */
             total_calories?: number | null;
         };
-        /** DeviceInfo */
+        /**
+         * DailySummaryDateRange
+         * @description Earliest and latest activity dates available in the daily activity summary.
+         * @example {
+         *       "max_date": "2026-04-06",
+         *       "min_date": "2024-01-15"
+         *     }
+         */
+        DailySummaryDateRange: {
+            /**
+             * Min Date
+             * Format: date
+             * @description Earliest activity date with daily summary data
+             */
+            min_date: string;
+            /**
+             * Max Date
+             * Format: date
+             * @description Latest activity date with daily summary data
+             */
+            max_date: string;
+        };
+        /**
+         * DeviceInfo
+         * @description Distinct OwnTracks device identifier.
+         * @example {
+         *       "device_id": "iphone_stuart"
+         *     }
+         */
         DeviceInfo: {
-            /** Device Id */
+            /**
+             * Device Id
+             * @description OwnTracks device identifier
+             */
             device_id: string;
         };
-        /** DistanceResult */
+        /**
+         * DistanceResult
+         * @description Geodesic distance calculation result between two geographic points.
+         * @example {
+         *       "distance_meters": 5309.71,
+         *       "from_lat": 40.7128,
+         *       "from_lon": -74.006,
+         *       "to_lat": 40.758,
+         *       "to_lon": -73.9855
+         *     }
+         */
         DistanceResult: {
-            /** Distance Meters */
+            /**
+             * Distance Meters
+             * @description Geodesic distance between the two points in meters
+             */
             distance_meters: number;
-            /** From Lat */
+            /**
+             * From Lat
+             * @description Origin latitude in decimal degrees
+             */
             from_lat: number;
-            /** From Lon */
+            /**
+             * From Lon
+             * @description Origin longitude in decimal degrees
+             */
             from_lon: number;
-            /** To Lat */
+            /**
+             * To Lat
+             * @description Destination latitude in decimal degrees
+             */
             to_lat: number;
-            /** To Lon */
+            /**
+             * To Lon
+             * @description Destination longitude in decimal degrees
+             */
             to_lon: number;
         };
-        /** GarminActivity */
+        /**
+         * GarminActivity
+         * @description Summary of a Garmin Connect activity parsed from a FIT file.
+         * @example {
+         *       "activity_id": "20932993811",
+         *       "aerobic_training_effect": 2.6,
+         *       "anaerobic_training_effect": 0,
+         *       "avg_cadence": 78,
+         *       "avg_heart_rate": 142,
+         *       "avg_pace": 3.513345,
+         *       "avg_respiration_rate": 25,
+         *       "avg_speed_kmh": 26.3,
+         *       "avg_temperature_c": 18,
+         *       "calories": 1689,
+         *       "created_at": "2026-02-09T23:56:37+00:00",
+         *       "device_manufacturer": "garmin",
+         *       "distance_km": 50.6,
+         *       "duration_seconds": 6932,
+         *       "end_time": "2025-11-08T20:16:45+00:00",
+         *       "exercise_load": 48,
+         *       "hr_available": true,
+         *       "max_cadence": 112,
+         *       "max_heart_rate": 178,
+         *       "max_respiration_rate": 32,
+         *       "max_speed_kmh": 48.7,
+         *       "max_temperature_c": 22,
+         *       "min_heart_rate": 98,
+         *       "min_respiration_rate": 16,
+         *       "min_temperature_c": 14,
+         *       "moderate_intensity_minutes": 88,
+         *       "paved_distance_km": 21.09,
+         *       "sport": "cycling",
+         *       "start_time": "2025-11-08T18:21:13+00:00",
+         *       "sub_sport": "road",
+         *       "sweat_loss_ml": 1629,
+         *       "total_ascent_m": 385,
+         *       "total_descent_m": 380,
+         *       "total_distance": 50598.95,
+         *       "total_elapsed_time": 7200.5,
+         *       "total_intensity_minutes": 146,
+         *       "total_strokes": 4250,
+         *       "total_timer_time": 6932.1,
+         *       "track_point_count": 10707,
+         *       "unpaved_distance_km": 0.65,
+         *       "uploaded_at": "2026-02-09T23:56:37+00:00",
+         *       "vigorous_intensity_minutes": 29
+         *     }
+         */
         GarminActivity: {
-            /** Activity Id */
+            /**
+             * Activity Id
+             * @description Garmin Connect activity identifier
+             */
             activity_id: string;
-            /** Sport */
+            /**
+             * Sport
+             * @description Primary sport type (e.g. cycling, running)
+             */
             sport: string;
-            /** Sub Sport */
+            /**
+             * Sub Sport
+             * @description Sub-sport classification (e.g. road, trail)
+             */
             sub_sport?: string | null;
-            /** Start Time */
+            /**
+             * Start Time
+             * @description Activity start time in UTC
+             */
             start_time?: string | null;
-            /** End Time */
+            /**
+             * End Time
+             * @description Activity end time in UTC
+             */
             end_time?: string | null;
-            /** Distance Km */
+            /**
+             * Distance Km
+             * @description Total distance in kilometres
+             */
             distance_km?: number | null;
-            /** Duration Seconds */
+            /**
+             * Duration Seconds
+             * @description Active duration in seconds (excludes pauses)
+             */
             duration_seconds?: number | null;
-            /** Avg Heart Rate */
+            /**
+             * Avg Heart Rate
+             * @description Average heart rate in beats per minute
+             */
             avg_heart_rate?: number | null;
-            /** Max Heart Rate */
+            /**
+             * Max Heart Rate
+             * @description Maximum heart rate in beats per minute
+             */
             max_heart_rate?: number | null;
-            /** Avg Cadence */
+            /**
+             * Hr Available
+             * @description Whether this activity has usable heart-rate data in summary or track points
+             * @default false
+             */
+            hr_available: boolean;
+            /**
+             * Min Heart Rate
+             * @description Minimum heart rate in beats per minute
+             */
+            min_heart_rate?: number | null;
+            /**
+             * Aerobic Training Effect
+             * @description Aerobic training effect score
+             */
+            aerobic_training_effect?: number | null;
+            /**
+             * Anaerobic Training Effect
+             * @description Anaerobic training effect score
+             */
+            anaerobic_training_effect?: number | null;
+            /**
+             * Exercise Load
+             * @description Exercise load score
+             */
+            exercise_load?: number | null;
+            /**
+             * Avg Respiration Rate
+             * @description Average respiration rate in breaths per minute
+             */
+            avg_respiration_rate?: number | null;
+            /**
+             * Min Respiration Rate
+             * @description Minimum respiration rate in breaths per minute
+             */
+            min_respiration_rate?: number | null;
+            /**
+             * Max Respiration Rate
+             * @description Maximum respiration rate in breaths per minute
+             */
+            max_respiration_rate?: number | null;
+            /**
+             * Sweat Loss Ml
+             * @description Estimated sweat loss in millilitres
+             */
+            sweat_loss_ml?: number | null;
+            /**
+             * Moderate Intensity Minutes
+             * @description Moderate intensity minutes
+             */
+            moderate_intensity_minutes?: number | null;
+            /**
+             * Vigorous Intensity Minutes
+             * @description Vigorous intensity minutes
+             */
+            vigorous_intensity_minutes?: number | null;
+            /**
+             * Total Intensity Minutes
+             * @description Total intensity minutes
+             */
+            total_intensity_minutes?: number | null;
+            /**
+             * Paved Distance Km
+             * @description Distance over paved surfaces in kilometres
+             */
+            paved_distance_km?: number | null;
+            /**
+             * Unpaved Distance Km
+             * @description Distance over unpaved surfaces in kilometres
+             */
+            unpaved_distance_km?: number | null;
+            /**
+             * Avg Cadence
+             * @description Average cadence in RPM
+             */
             avg_cadence?: number | null;
-            /** Max Cadence */
+            /**
+             * Max Cadence
+             * @description Maximum cadence in RPM
+             */
             max_cadence?: number | null;
-            /** Total Strokes */
+            /**
+             * Total Strokes
+             * @description Total activity strokes
+             */
             total_strokes?: number | null;
-            /** Calories */
+            /**
+             * Calories
+             * @description Total calories burned
+             */
             calories?: number | null;
-            /** Avg Speed Kmh */
+            /**
+             * Avg Speed Kmh
+             * @description Average speed in km/h
+             */
             avg_speed_kmh?: number | null;
-            /** Max Speed Kmh */
+            /**
+             * Max Speed Kmh
+             * @description Maximum speed in km/h
+             */
             max_speed_kmh?: number | null;
-            /** Total Ascent M */
+            /**
+             * Total Ascent M
+             * @description Total elevation gain in meters
+             */
             total_ascent_m?: number | null;
-            /** Total Descent M */
+            /**
+             * Total Descent M
+             * @description Total elevation loss in meters
+             */
             total_descent_m?: number | null;
-            /** Total Distance */
+            /**
+             * Total Distance
+             * @description Raw total distance in meters from FIT file
+             */
             total_distance?: number | null;
-            /** Avg Pace */
+            /**
+             * Avg Pace
+             * @description Average pace in minutes per kilometre
+             */
             avg_pace?: number | null;
-            /** Device Manufacturer */
+            /**
+             * Device Manufacturer
+             * @description Device manufacturer (e.g. garmin)
+             */
             device_manufacturer?: string | null;
-            /** Created At */
+            /**
+             * Avg Temperature C
+             * @description Average ambient temperature in degrees C
+             */
+            avg_temperature_c?: number | null;
+            /**
+             * Min Temperature C
+             * @description Minimum ambient temperature in degrees C
+             */
+            min_temperature_c?: number | null;
+            /**
+             * Max Temperature C
+             * @description Maximum ambient temperature in degrees C
+             */
+            max_temperature_c?: number | null;
+            /**
+             * Total Elapsed Time
+             * @description Total elapsed time in seconds (includes pauses)
+             */
+            total_elapsed_time?: number | null;
+            /**
+             * Total Timer Time
+             * @description Total timer time in seconds (active recording)
+             */
+            total_timer_time?: number | null;
+            /**
+             * Created At
+             * @description UTC timestamp when the record was inserted
+             */
             created_at?: string | null;
-            /** Uploaded At */
+            /**
+             * Uploaded At
+             * @description UTC timestamp when the FIT file was uploaded
+             */
             uploaded_at?: string | null;
-            /** Track Point Count */
+            /**
+             * Track Point Count
+             * @description Number of GPS track points in this activity
+             */
             track_point_count?: number | null;
         };
-        /** GarminTrackPoint */
-        GarminTrackPoint: {
-            /** Id */
-            id: number;
-            /** Activity Id */
+        /**
+         * GarminActivityAddress
+         * @description Reverse-geocoded address attached to a Garmin activity waypoint.
+         */
+        GarminActivityAddress: {
+            /**
+             * Track Point Id
+             * @description garmin_track_points.id this address was geocoded from
+             */
+            track_point_id: number;
+            /**
+             * Activity Id
+             * @description Parent Garmin activity identifier
+             */
             activity_id: string;
-            /** Latitude */
+            /**
+             * Waypoint Kind
+             * @description Role of this waypoint: start, end, or mid-route waypoint
+             * @enum {string}
+             */
+            waypoint_kind: "start" | "end" | "waypoint";
+            /**
+             * Timestamp
+             * Format: date-time
+             * @description UTC timestamp of the track point this address was derived from
+             */
+            timestamp: string;
+            /**
+             * Latitude
+             * @description GPS latitude in decimal degrees (WGS 84)
+             */
             latitude: number;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description GPS longitude in decimal degrees (WGS 84)
+             */
+            longitude: number;
+            /**
+             * Display Address
+             * @description Full formatted address label from Pelias
+             */
+            display_address?: string | null;
+            /**
+             * Street
+             * @description Street name
+             */
+            street?: string | null;
+            /**
+             * Housenumber
+             * @description House or building number
+             */
+            housenumber?: string | null;
+            /**
+             * Neighbourhood
+             * @description Neighbourhood name
+             */
+            neighbourhood?: string | null;
+            /**
+             * Locality
+             * @description City or town
+             */
+            locality?: string | null;
+            /**
+             * Region
+             * @description State or province
+             */
+            region?: string | null;
+            /**
+             * Country
+             * @description Country name
+             */
+            country?: string | null;
+            /**
+             * Postalcode
+             * @description Postal or ZIP code
+             */
+            postalcode?: string | null;
+            /**
+             * Confidence
+             * @description Pelias confidence score (0-1)
+             */
+            confidence?: number | null;
+            /**
+             * Status
+             * @description Geocoding status: success, no_coverage, error, pending
+             */
+            status: string;
+            /**
+             * Geocoded At
+             * @description UTC timestamp when geocoding was performed
+             */
+            geocoded_at?: string | null;
+        };
+        /**
+         * GarminActivityManualUpdate
+         * @description Partial manual update payload for Garmin activity records.
+         * @example {
+         *       "aerobic_training_effect": 3.2,
+         *       "avg_cadence": 82,
+         *       "avg_heart_rate": 141,
+         *       "device_manufacturer": "polar_electro",
+         *       "max_heart_rate": 172
+         *     }
+         */
+        GarminActivityManualUpdate: {
+            /**
+             * Sport
+             * @description Primary sport type (e.g. cycling, running)
+             */
+            sport?: string | null;
+            /**
+             * Sub Sport
+             * @description Sub-sport classification (e.g. road, trail)
+             */
+            sub_sport?: string | null;
+            /**
+             * Start Time
+             * @description Activity start time in UTC
+             */
+            start_time?: string | null;
+            /**
+             * End Time
+             * @description Activity end time in UTC
+             */
+            end_time?: string | null;
+            /**
+             * Distance Km
+             * @description Total distance in kilometres
+             */
+            distance_km?: number | null;
+            /**
+             * Duration Seconds
+             * @description Active duration in seconds (excludes pauses)
+             */
+            duration_seconds?: number | null;
+            /**
+             * Avg Heart Rate
+             * @description Average heart rate in beats per minute
+             */
+            avg_heart_rate?: number | null;
+            /**
+             * Max Heart Rate
+             * @description Maximum heart rate in beats per minute
+             */
+            max_heart_rate?: number | null;
+            /**
+             * Min Heart Rate
+             * @description Minimum heart rate in beats per minute
+             */
+            min_heart_rate?: number | null;
+            /**
+             * Aerobic Training Effect
+             * @description Aerobic training effect score
+             */
+            aerobic_training_effect?: number | null;
+            /**
+             * Anaerobic Training Effect
+             * @description Anaerobic training effect score
+             */
+            anaerobic_training_effect?: number | null;
+            /**
+             * Exercise Load
+             * @description Exercise load score
+             */
+            exercise_load?: number | null;
+            /**
+             * Avg Respiration Rate
+             * @description Average respiration rate in breaths per minute
+             */
+            avg_respiration_rate?: number | null;
+            /**
+             * Min Respiration Rate
+             * @description Minimum respiration rate in breaths per minute
+             */
+            min_respiration_rate?: number | null;
+            /**
+             * Max Respiration Rate
+             * @description Maximum respiration rate in breaths per minute
+             */
+            max_respiration_rate?: number | null;
+            /**
+             * Sweat Loss Ml
+             * @description Estimated sweat loss in millilitres
+             */
+            sweat_loss_ml?: number | null;
+            /**
+             * Moderate Intensity Minutes
+             * @description Moderate intensity minutes
+             */
+            moderate_intensity_minutes?: number | null;
+            /**
+             * Vigorous Intensity Minutes
+             * @description Vigorous intensity minutes
+             */
+            vigorous_intensity_minutes?: number | null;
+            /**
+             * Total Intensity Minutes
+             * @description Total intensity minutes
+             */
+            total_intensity_minutes?: number | null;
+            /**
+             * Paved Distance Km
+             * @description Distance over paved surfaces in kilometres
+             */
+            paved_distance_km?: number | null;
+            /**
+             * Unpaved Distance Km
+             * @description Distance over unpaved surfaces in kilometres
+             */
+            unpaved_distance_km?: number | null;
+            /**
+             * Avg Cadence
+             * @description Average cadence in RPM
+             */
+            avg_cadence?: number | null;
+            /**
+             * Max Cadence
+             * @description Maximum cadence in RPM
+             */
+            max_cadence?: number | null;
+            /**
+             * Total Strokes
+             * @description Total activity strokes
+             */
+            total_strokes?: number | null;
+            /**
+             * Calories
+             * @description Total calories burned
+             */
+            calories?: number | null;
+            /**
+             * Avg Speed Kmh
+             * @description Average speed in km/h
+             */
+            avg_speed_kmh?: number | null;
+            /**
+             * Max Speed Kmh
+             * @description Maximum speed in km/h
+             */
+            max_speed_kmh?: number | null;
+            /**
+             * Total Ascent M
+             * @description Total elevation gain in meters
+             */
+            total_ascent_m?: number | null;
+            /**
+             * Total Descent M
+             * @description Total elevation loss in meters
+             */
+            total_descent_m?: number | null;
+            /**
+             * Total Distance
+             * @description Raw total distance in meters from FIT file
+             */
+            total_distance?: number | null;
+            /**
+             * Avg Pace
+             * @description Average pace in minutes per kilometre
+             */
+            avg_pace?: number | null;
+            /**
+             * Device Manufacturer
+             * @description Device manufacturer (e.g. garmin)
+             */
+            device_manufacturer?: string | null;
+            /**
+             * Avg Temperature C
+             * @description Average ambient temperature in degrees C
+             */
+            avg_temperature_c?: number | null;
+            /**
+             * Min Temperature C
+             * @description Minimum ambient temperature in degrees C
+             */
+            min_temperature_c?: number | null;
+            /**
+             * Max Temperature C
+             * @description Maximum ambient temperature in degrees C
+             */
+            max_temperature_c?: number | null;
+            /**
+             * Total Elapsed Time
+             * @description Total elapsed time in seconds (includes pauses)
+             */
+            total_elapsed_time?: number | null;
+            /**
+             * Total Timer Time
+             * @description Total timer time in seconds (active recording)
+             */
+            total_timer_time?: number | null;
+            /**
+             * Uploaded At
+             * @description UTC timestamp when the FIT file was uploaded
+             */
+            uploaded_at?: string | null;
+        };
+        /**
+         * GarminActivityTotal
+         * @description Aggregated Garmin activity totals for a single time bucket (week/month/year).
+         * @example {
+         *       "activity_count": 12,
+         *       "period_start": "2025-05-01",
+         *       "total_ascent_m": 4521,
+         *       "total_calories": 18234,
+         *       "total_distance_km": 632.4,
+         *       "total_duration_seconds": 90123
+         *     }
+         */
+        GarminActivityTotal: {
+            /**
+             * Period Start
+             * Format: date
+             * @description UTC start date of the period bucket (week/month/year)
+             */
+            period_start: string;
+            /**
+             * Activity Count
+             * @description Number of activities recorded in the period
+             */
+            activity_count: number;
+            /**
+             * Total Distance Km
+             * @description Sum of distance in kilometres
+             */
+            total_distance_km?: number | null;
+            /**
+             * Total Duration Seconds
+             * @description Sum of active duration in seconds (excludes pauses)
+             */
+            total_duration_seconds?: number | null;
+            /**
+             * Total Ascent M
+             * @description Sum of elevation gain in meters
+             */
+            total_ascent_m?: number | null;
+            /**
+             * Total Calories
+             * @description Sum of calories burned
+             */
+            total_calories?: number | null;
+        };
+        /**
+         * GarminChartPoint
+         * @description Lightweight track point optimised for time-series chart rendering.
+         * @example {
+         *       "altitude": 12.4,
+         *       "cadence": 80,
+         *       "distance_from_start_km": 0,
+         *       "effort_level": "steady",
+         *       "heart_rate": 135,
+         *       "hr_zone": 3,
+         *       "latitude": 40.71501586586237,
+         *       "longitude": -74.01768794283271,
+         *       "respiration_rate": 22,
+         *       "speed_kmh": 24.5,
+         *       "surface_type": "paved",
+         *       "temperature_c": 18,
+         *       "timestamp": "2025-11-08T18:21:13Z"
+         *     }
+         */
+        GarminChartPoint: {
+            /**
+             * Timestamp
+             * Format: date-time
+             * @description UTC timestamp of the data point
+             */
+            timestamp: string;
+            /**
+             * Altitude
+             * @description Elevation above sea level in meters
+             */
+            altitude?: number | null;
+            /**
+             * Distance From Start Km
+             * @description Cumulative distance from activity start in km
+             */
+            distance_from_start_km?: number | null;
+            /**
+             * Speed Kmh
+             * @description Instantaneous speed in km/h
+             */
+            speed_kmh?: number | null;
+            /**
+             * Heart Rate
+             * @description Heart rate in beats per minute
+             */
+            heart_rate?: number | null;
+            /**
+             * Hr Zone
+             * @description Heart-rate zone index (1-5)
+             */
+            hr_zone?: number | null;
+            /**
+             * Respiration Rate
+             * @description Respiration rate in breaths per minute
+             */
+            respiration_rate?: number | null;
+            /**
+             * Cadence
+             * @description Pedal/step cadence in RPM
+             */
+            cadence?: number | null;
+            /**
+             * Temperature C
+             * @description Ambient temperature in degrees C
+             */
+            temperature_c?: number | null;
+            /**
+             * Surface Type
+             * @description Road or terrain type
+             */
+            surface_type?: string | null;
+            /**
+             * Effort Level
+             * @description Effort classification label
+             */
+            effort_level?: string | null;
+            /**
+             * Latitude
+             * @description GPS latitude in decimal degrees (WGS 84)
+             */
+            latitude: number;
+            /**
+             * Longitude
+             * @description GPS longitude in decimal degrees (WGS 84)
+             */
+            longitude: number;
+        };
+        /**
+         * GarminDateRange
+         * @description Earliest and latest Garmin activity timestamps in the database.
+         * @example {
+         *       "max_date": "2026-04-06T20:00:00+00:00",
+         *       "min_date": "2025-11-08T18:21:13+00:00"
+         *     }
+         */
+        GarminDateRange: {
+            /**
+             * Min Date
+             * Format: date-time
+             * @description Timestamp of the earliest Garmin activity
+             */
+            min_date: string;
+            /**
+             * Max Date
+             * Format: date-time
+             * @description Timestamp of the latest Garmin activity
+             */
+            max_date: string;
+        };
+        /**
+         * GarminSyncResponse
+         * @description Response payload for Garmin on-demand sync trigger requests.
+         * @example {
+         *       "message": "Sync started",
+         *       "status": "accepted",
+         *       "triggered_at": "2026-03-12T01:25:14.586353+00:00",
+         *       "window_hours": 48,
+         *       "window_start": "2026-03-10T01:25:14.586331+00:00"
+         *     }
+         * @example {
+         *       "message": "Sync already in progress",
+         *       "started_at": "2026-03-12T01:24:58.102924+00:00",
+         *       "status": "conflict"
+         *     }
+         */
+        GarminSyncResponse: {
+            /**
+             * Status
+             * @description Sync trigger status (accepted, conflict, bad_request, error)
+             */
+            status: string;
+            /**
+             * Message
+             * @description Human-readable status message
+             */
+            message: string;
+            /**
+             * Triggered At
+             * @description UTC timestamp when sync was triggered
+             */
+            triggered_at?: string | null;
+            /**
+             * Started At
+             * @description UTC timestamp when active sync started
+             */
+            started_at?: string | null;
+            /**
+             * Lookback
+             * @description Effective lookback override used for this trigger
+             */
+            lookback?: number | null;
+            /**
+             * Window Hours
+             * @description Effective window in hours used for this trigger
+             */
+            window_hours?: number | null;
+            /**
+             * Window Start
+             * @description Computed UTC window start timestamp
+             */
+            window_start?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * GarminTrackPoint
+         * @description Individual GPS track point within a Garmin activity.
+         * @example {
+         *       "activity_id": "20932993811",
+         *       "altitude": 12.4,
+         *       "cadence": 80,
+         *       "created_at": "2026-02-09T23:56:37Z",
+         *       "distance_from_start_km": 0,
+         *       "effort_level": "steady",
+         *       "heart_rate": 135,
+         *       "hr_zone": 3,
+         *       "id": 7454,
+         *       "latitude": 40.71501586586237,
+         *       "longitude": -74.01768794283271,
+         *       "respiration_rate": 22,
+         *       "speed_kmh": 24.5,
+         *       "surface_type": "paved",
+         *       "temperature_c": 18,
+         *       "timestamp": "2025-11-08T18:21:13Z"
+         *     }
+         */
+        GarminTrackPoint: {
+            /**
+             * Id
+             * @description Unique track point record identifier
+             */
+            id: number;
+            /**
+             * Activity Id
+             * @description Parent Garmin activity identifier
+             */
+            activity_id: string;
+            /**
+             * Latitude
+             * @description GPS latitude in decimal degrees (WGS 84)
+             */
+            latitude: number;
+            /**
+             * Longitude
+             * @description GPS longitude in decimal degrees (WGS 84)
+             */
             longitude: number;
             /**
              * Timestamp
              * Format: date-time
+             * @description UTC timestamp of the track point recording
              */
             timestamp: string;
-            /** Altitude */
+            /**
+             * Altitude
+             * @description Elevation above sea level in meters
+             */
             altitude?: number | null;
-            /** Distance From Start Km */
+            /**
+             * Distance From Start Km
+             * @description Cumulative distance from activity start in km
+             */
             distance_from_start_km?: number | null;
-            /** Speed Kmh */
+            /**
+             * Speed Kmh
+             * @description Instantaneous speed in km/h
+             */
             speed_kmh?: number | null;
-            /** Heart Rate */
+            /**
+             * Heart Rate
+             * @description Heart rate in beats per minute
+             */
             heart_rate?: number | null;
-            /** Cadence */
+            /**
+             * Hr Zone
+             * @description Heart-rate zone index (1-5)
+             */
+            hr_zone?: number | null;
+            /**
+             * Respiration Rate
+             * @description Respiration rate in breaths per minute
+             */
+            respiration_rate?: number | null;
+            /**
+             * Cadence
+             * @description Pedal/step cadence in RPM
+             */
             cadence?: number | null;
-            /** Temperature C */
+            /**
+             * Temperature C
+             * @description Ambient temperature in degrees C
+             */
             temperature_c?: number | null;
-            /** Created At */
+            /**
+             * Surface Type
+             * @description Road or terrain type
+             */
+            surface_type?: string | null;
+            /**
+             * Effort Level
+             * @description Effort classification label
+             */
+            effort_level?: string | null;
+            /**
+             * Created At
+             * @description UTC timestamp when the record was inserted
+             */
             created_at?: string | null;
+            /** @description Reverse-geocoded address for this track point (Garmin pipeline). Only populated for waypoints that have been geocoded. */
+            address?: components["schemas"]["GeocodedAddressSummary"] | null;
+        };
+        /**
+         * GeocodedAddress
+         * @description Reverse-geocoded address components from Pelias.
+         * @example {
+         *       "confidence": 0.95,
+         *       "country": "United States",
+         *       "display_address": "123 Main St, Hoboken, NJ 07030",
+         *       "geocoded_at": "2026-02-12T08:10:55+00:00",
+         *       "housenumber": "123",
+         *       "locality": "Hoboken",
+         *       "neighbourhood": "Downtown",
+         *       "postalcode": "07030",
+         *       "region": "New Jersey",
+         *       "status": "success",
+         *       "street": "Main St"
+         *     }
+         */
+        GeocodedAddress: {
+            /**
+             * Display Address
+             * @description Full formatted address label from Pelias
+             */
+            display_address?: string | null;
+            /**
+             * Street
+             * @description Street name
+             */
+            street?: string | null;
+            /**
+             * Housenumber
+             * @description House or building number
+             */
+            housenumber?: string | null;
+            /**
+             * Neighbourhood
+             * @description Neighbourhood name
+             */
+            neighbourhood?: string | null;
+            /**
+             * Locality
+             * @description City or town
+             */
+            locality?: string | null;
+            /**
+             * Region
+             * @description State or province
+             */
+            region?: string | null;
+            /**
+             * Country
+             * @description Country name
+             */
+            country?: string | null;
+            /**
+             * Postalcode
+             * @description Postal or ZIP code
+             */
+            postalcode?: string | null;
+            /**
+             * Confidence
+             * @description Pelias confidence score (0-1)
+             */
+            confidence?: number | null;
+            /**
+             * Status
+             * @description Geocoding status: success, no_coverage, error, pending
+             */
+            status: string;
+            /**
+             * Geocoded At
+             * @description UTC timestamp when geocoding was performed
+             */
+            geocoded_at?: string | null;
+        };
+        /**
+         * GeocodedAddressSummary
+         * @description Compact address summary embedded in track-point payloads.
+         */
+        GeocodedAddressSummary: {
+            /**
+             * Display Address
+             * @description Full formatted address label from Pelias
+             */
+            display_address?: string | null;
+            /**
+             * Street
+             * @description Street name
+             */
+            street?: string | null;
+            /**
+             * Housenumber
+             * @description House or building number
+             */
+            housenumber?: string | null;
+            /**
+             * Neighbourhood
+             * @description Neighbourhood name
+             */
+            neighbourhood?: string | null;
+            /**
+             * Locality
+             * @description City or town
+             */
+            locality?: string | null;
+            /**
+             * Region
+             * @description State or province
+             */
+            region?: string | null;
+            /**
+             * Country
+             * @description Country name
+             */
+            country?: string | null;
+            /**
+             * Postalcode
+             * @description Postal or ZIP code
+             */
+            postalcode?: string | null;
+            /**
+             * Confidence
+             * @description Pelias confidence score (0-1)
+             */
+            confidence?: number | null;
+            /**
+             * Waypoint Kind
+             * @description Role of this waypoint (Garmin only)
+             */
+            waypoint_kind?: ("start" | "end" | "waypoint") | null;
+            /**
+             * Status
+             * @description Geocoding status: success, no_coverage, error, pending
+             */
+            status: string;
+            /**
+             * Geocoded At
+             * @description UTC timestamp when geocoding was performed
+             */
+            geocoded_at?: string | null;
+        };
+        /**
+         * GeocodingSourceStatus
+         * @description Coverage statistics for a single geocoding source (owntracks or garmin).
+         */
+        GeocodingSourceStatus: {
+            /**
+             * Success
+             * @description Number of successfully geocoded records for this source
+             */
+            success: number;
+            /**
+             * Pending
+             * @description Number of records awaiting geocoding for this source
+             * @default 0
+             */
+            pending: number;
+            /**
+             * No Coverage
+             * @description Number of records outside Pelias coverage area
+             */
+            no_coverage: number;
+            /**
+             * Errors
+             * @description Number of records that failed geocoding
+             */
+            errors: number;
+            /**
+             * Total
+             * @description Total number of geocoded_addresses rows for this source
+             */
+            total: number;
+        };
+        /**
+         * GeocodingStatus
+         * @description Coverage statistics for geocoded location records.
+         * @example {
+         *       "coverage_percent": 26.67,
+         *       "errors": 100,
+         *       "geocoded": 12000,
+         *       "no_coverage": 400,
+         *       "pending": 33000,
+         *       "success": 11500,
+         *       "total_locations": 45000
+         *     }
+         */
+        GeocodingStatus: {
+            /**
+             * Total Locations
+             * @description Total number of OwnTracks location records
+             */
+            total_locations: number;
+            /**
+             * Geocoded
+             * @description Number of locations with a geocoded address (any status)
+             */
+            geocoded: number;
+            /**
+             * Success
+             * @description Number of successfully geocoded locations
+             */
+            success: number;
+            /**
+             * Pending
+             * @description Number of locations awaiting geocoding
+             */
+            pending: number;
+            /**
+             * No Coverage
+             * @description Number of locations outside Pelias coverage area
+             */
+            no_coverage: number;
+            /**
+             * Errors
+             * @description Number of locations that failed geocoding
+             */
+            errors: number;
+            /**
+             * Coverage Percent
+             * @description Percentage of locations with a geocoded address
+             */
+            coverage_percent: number;
+            /** @description Per-source breakdown of geocoding coverage (owntracks, garmin) */
+            by_source: components["schemas"]["GeocodingStatusBySource"];
+            /**
+             * Dense Cells Total
+             * @description Total number of distinct 4dp (~11m) GPS cells observed in garmin_track_points
+             * @default 0
+             */
+            dense_cells_total: number;
+            /**
+             * Dense Cells Geocoded
+             * @description Number of dense cells with any geocoding row (any status)
+             * @default 0
+             */
+            dense_cells_geocoded: number;
+            /**
+             * Dense Cells Success
+             * @description Number of dense cells with status='success'
+             * @default 0
+             */
+            dense_cells_success: number;
+            /**
+             * Dense Cells Pending
+             * @description Number of dense cells awaiting geocoding
+             * @default 0
+             */
+            dense_cells_pending: number;
+            /**
+             * Dense Cells No Coverage
+             * @description Number of dense cells outside Pelias coverage
+             * @default 0
+             */
+            dense_cells_no_coverage: number;
+            /**
+             * Dense Cells Errors
+             * @description Number of dense cells that failed geocoding
+             * @default 0
+             */
+            dense_cells_errors: number;
+            /**
+             * Dense Point Coverage Percent
+             * @description Percentage of garmin_track_points whose 4dp cell has any geocoded row
+             * @default 0
+             */
+            dense_point_coverage_percent: number;
+        };
+        /**
+         * GeocodingStatusBySource
+         * @description Per-source breakdown of geocoding coverage.
+         */
+        GeocodingStatusBySource: {
+            /** @description Coverage stats for OwnTracks rows */
+            owntracks: components["schemas"]["GeocodingSourceStatus"];
+            /** @description Coverage stats for Garmin rows */
+            garmin: components["schemas"]["GeocodingSourceStatus"];
+            /**
+             * Garmin Activities Total
+             * @description Total number of Garmin activities (denominator for activity-level coverage)
+             */
+            garmin_activities_total: number;
+            /**
+             * Garmin Activities Geocoded
+             * @description Number of Garmin activities that have at least one address row
+             */
+            garmin_activities_geocoded: number;
+            /**
+             * Garmin Coverage Percent
+             * @description Percentage of Garmin activities with at least one geocoded address
+             */
+            garmin_coverage_percent: number;
+            /**
+             * Garmin Waypoint Success Percent
+             * @description Percentage of Garmin waypoint rows with status='success' (success / (success + pending + no_coverage + error)).
+             * @default 0
+             */
+            garmin_waypoint_success_percent: number;
+        };
+        /**
+         * GeocodingTriggerResponse
+         * @description Result of triggering a batch geocoding operation.
+         * @example {
+         *       "processed": 100,
+         *       "remaining": 32900,
+         *       "skipped_dedup": 35
+         *     }
+         */
+        GeocodingTriggerResponse: {
+            /**
+             * Processed
+             * @description Number of records processed in this batch
+             */
+            processed: number;
+            /**
+             * Remaining
+             * @description Number of records still awaiting geocoding
+             */
+            remaining: number;
+            /**
+             * Skipped Dedup
+             * @description Number of records skipped via proximity deduplication
+             */
+            skipped_dedup: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        /** Location */
+        /**
+         * Location
+         * @description GPS location recorded by the OwnTracks mobile app.
+         * @example {
+         *       "accuracy": 7,
+         *       "altitude": 4,
+         *       "battery": 100,
+         *       "battery_status": 2,
+         *       "connection_type": "w",
+         *       "created_at": "2026-02-12T08:10:55+00:00",
+         *       "device_id": "iphone_stuart",
+         *       "display_address": "123 Main St, Hoboken, NJ 07030",
+         *       "id": 101160,
+         *       "latitude": 40.736238,
+         *       "longitude": -74.039405,
+         *       "tid": "ss",
+         *       "timestamp": "2026-02-12T08:10:55+00:00",
+         *       "trigger": "t"
+         *     }
+         */
         Location: {
-            /** Id */
+            /**
+             * Id
+             * @description Unique location record identifier
+             */
             id: number;
-            /** Device Id */
+            /**
+             * Device Id
+             * @description OwnTracks device identifier (e.g. iphone_stuart)
+             */
             device_id: string;
-            /** Tid */
+            /**
+             * Tid
+             * @description Two-character tracker ID set in the OwnTracks app
+             */
             tid?: string | null;
-            /** Latitude */
+            /**
+             * Latitude
+             * @description GPS latitude in decimal degrees (WGS 84)
+             */
             latitude: number;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description GPS longitude in decimal degrees (WGS 84)
+             */
             longitude: number;
-            /** Accuracy */
+            /**
+             * Accuracy
+             * @description Horizontal accuracy of the GPS fix in meters
+             */
             accuracy?: number | null;
-            /** Altitude */
+            /**
+             * Altitude
+             * @description Altitude above sea level in meters
+             */
             altitude?: number | null;
-            /** Velocity */
+            /**
+             * Velocity
+             * @description Device velocity in km/h at time of report
+             */
             velocity?: number | null;
-            /** Battery */
+            /**
+             * Battery
+             * @description Device battery level as a percentage (0-100)
+             */
             battery?: number | null;
-            /** Battery Status */
+            /**
+             * Battery Status
+             * @description Battery charging state (0=unknown, 1=unplugged, 2=charging, 3=full)
+             */
             battery_status?: number | null;
-            /** Connection Type */
+            /**
+             * Connection Type
+             * @description Network connection type (w=WiFi, m=mobile)
+             */
             connection_type?: string | null;
-            /** Trigger */
+            /**
+             * Trigger
+             * @description What triggered this location report (p=ping, c=circular, t=timer)
+             */
             trigger?: string | null;
             /**
              * Timestamp
              * Format: date-time
+             * @description UTC timestamp when the device recorded the location
              */
             timestamp: string;
-            /** Created At */
+            /**
+             * Created At
+             * @description UTC timestamp when the record was inserted into the database
+             */
             created_at?: string | null;
+            /**
+             * Display Address
+             * @description Short formatted address from reverse geocoding (e.g. '123 Main St, Hoboken')
+             */
+            display_address?: string | null;
         };
-        /** LocationCount */
+        /**
+         * LocationCount
+         * @description Aggregate location count with optional filter context.
+         * @example {
+         *       "count": 45883,
+         *       "device_id": "iphone_stuart"
+         *     }
+         */
         LocationCount: {
-            /** Count */
+            /**
+             * Count
+             * @description Total number of location records matching the filter
+             */
             count: number;
-            /** Date */
+            /**
+             * Date
+             * @description Date filter applied (YYYY-MM-DD), if any
+             */
             date?: string | null;
-            /** Device Id */
+            /**
+             * Device Id
+             * @description Device ID filter applied, if any
+             */
             device_id?: string | null;
         };
-        /** LocationDetail */
+        /**
+         * LocationDateRange
+         * @description Earliest and latest location timestamps in the database.
+         * @example {
+         *       "max_date": "2026-04-06T20:00:00+00:00",
+         *       "min_date": "2025-12-27T08:44:52+00:00"
+         *     }
+         */
+        LocationDateRange: {
+            /**
+             * Min Date
+             * Format: date-time
+             * @description Timestamp of the earliest location record
+             */
+            min_date: string;
+            /**
+             * Max Date
+             * Format: date-time
+             * @description Timestamp of the latest location record
+             */
+            max_date: string;
+        };
+        /**
+         * LocationDetail
+         * @description Full location detail including the original OwnTracks JSON payload.
+         * @example {
+         *       "accuracy": 7,
+         *       "altitude": 4,
+         *       "battery": 100,
+         *       "battery_status": 2,
+         *       "connection_type": "w",
+         *       "created_at": "2026-02-12T08:10:55Z",
+         *       "device_id": "iphone_stuart",
+         *       "id": 101160,
+         *       "latitude": 40.736238,
+         *       "longitude": -74.039405,
+         *       "raw_payload": {
+         *         "_type": "location",
+         *         "acc": 7,
+         *         "batt": 100,
+         *         "lat": 40.736238,
+         *         "lon": -74.039405,
+         *         "tid": "ss"
+         *       },
+         *       "tid": "ss",
+         *       "timestamp": "2026-02-12T08:10:55Z",
+         *       "trigger": "t"
+         *     }
+         */
         LocationDetail: {
-            /** Id */
+            /**
+             * Id
+             * @description Unique location record identifier
+             */
             id: number;
-            /** Device Id */
+            /**
+             * Device Id
+             * @description OwnTracks device identifier (e.g. iphone_stuart)
+             */
             device_id: string;
-            /** Tid */
+            /**
+             * Tid
+             * @description Two-character tracker ID set in the OwnTracks app
+             */
             tid?: string | null;
-            /** Latitude */
+            /**
+             * Latitude
+             * @description GPS latitude in decimal degrees (WGS 84)
+             */
             latitude: number;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description GPS longitude in decimal degrees (WGS 84)
+             */
             longitude: number;
-            /** Accuracy */
+            /**
+             * Accuracy
+             * @description Horizontal accuracy of the GPS fix in meters
+             */
             accuracy?: number | null;
-            /** Altitude */
+            /**
+             * Altitude
+             * @description Altitude above sea level in meters
+             */
             altitude?: number | null;
-            /** Velocity */
+            /**
+             * Velocity
+             * @description Device velocity in km/h at time of report
+             */
             velocity?: number | null;
-            /** Battery */
+            /**
+             * Battery
+             * @description Device battery level as a percentage (0-100)
+             */
             battery?: number | null;
-            /** Battery Status */
+            /**
+             * Battery Status
+             * @description Battery charging state (0=unknown, 1=unplugged, 2=charging, 3=full)
+             */
             battery_status?: number | null;
-            /** Connection Type */
+            /**
+             * Connection Type
+             * @description Network connection type (w=WiFi, m=mobile)
+             */
             connection_type?: string | null;
-            /** Trigger */
+            /**
+             * Trigger
+             * @description What triggered this location report (p=ping, c=circular, t=timer)
+             */
             trigger?: string | null;
             /**
              * Timestamp
              * Format: date-time
+             * @description UTC timestamp when the device recorded the location
              */
             timestamp: string;
-            /** Created At */
+            /**
+             * Created At
+             * @description UTC timestamp when the record was inserted into the database
+             */
             created_at?: string | null;
-            /** Raw Payload */
-            raw_payload?: Record<string, never> | null;
+            /**
+             * Display Address
+             * @description Short formatted address from reverse geocoding (e.g. '123 Main St, Hoboken')
+             */
+            display_address?: string | null;
+            /**
+             * Raw Payload
+             * @description Original OwnTracks JSON payload as received from the MQTT broker
+             */
+            raw_payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Full reverse-geocoded address components from Pelias */
+            address?: components["schemas"]["GeocodedAddress"] | null;
         };
-        /** NearbyPoint */
+        /**
+         * NearbyPoint
+         * @description GPS point found within a spatial proximity search.
+         * @example {
+         *       "distance_meters": 0.4,
+         *       "id": 35144,
+         *       "latitude": 40.736202,
+         *       "longitude": -74.039404,
+         *       "source": "owntracks",
+         *       "timestamp": "2026-02-02T10:30:53Z"
+         *     }
+         */
         NearbyPoint: {
-            /** Source */
+            /**
+             * Source
+             * @description Data source: 'owntracks' or 'garmin'
+             */
             source: string;
-            /** Id */
+            /**
+             * Id
+             * @description Record identifier in the source table
+             */
             id: number;
-            /** Latitude */
+            /**
+             * Latitude
+             * @description GPS latitude in decimal degrees (WGS 84)
+             */
             latitude: number;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description GPS longitude in decimal degrees (WGS 84)
+             */
             longitude: number;
-            /** Distance Meters */
+            /**
+             * Distance Meters
+             * @description Distance from the search center point in meters
+             */
             distance_meters: number;
             /**
              * Timestamp
              * Format: date-time
+             * @description UTC timestamp of the GPS recording
              */
             timestamp: string;
         };
+        /** PaginatedResponse[DailyActivitySummary] */
+        PaginatedResponse_DailyActivitySummary_: {
+            /**
+             * Items
+             * @description List of items in the current page
+             */
+            items: components["schemas"]["DailyActivitySummary"][];
+            /**
+             * Total
+             * @description Total number of items matching the query
+             */
+            total: number;
+            /**
+             * Limit
+             * @description Maximum number of items per page
+             */
+            limit: number;
+            /**
+             * Offset
+             * @description Number of items skipped from the start
+             */
+            offset: number;
+        };
         /** PaginatedResponse[GarminActivity] */
         PaginatedResponse_GarminActivity_: {
-            /** Items */
+            /**
+             * Items
+             * @description List of items in the current page
+             */
             items: components["schemas"]["GarminActivity"][];
-            /** Total */
+            /**
+             * Total
+             * @description Total number of items matching the query
+             */
             total: number;
-            /** Limit */
+            /**
+             * Limit
+             * @description Maximum number of items per page
+             */
             limit: number;
-            /** Offset */
+            /**
+             * Offset
+             * @description Number of items skipped from the start
+             */
             offset: number;
         };
         /** PaginatedResponse[GarminTrackPoint] */
         PaginatedResponse_GarminTrackPoint_: {
-            /** Items */
+            /**
+             * Items
+             * @description List of items in the current page
+             */
             items: components["schemas"]["GarminTrackPoint"][];
-            /** Total */
+            /**
+             * Total
+             * @description Total number of items matching the query
+             */
             total: number;
-            /** Limit */
+            /**
+             * Limit
+             * @description Maximum number of items per page
+             */
             limit: number;
-            /** Offset */
+            /**
+             * Offset
+             * @description Number of items skipped from the start
+             */
             offset: number;
         };
         /** PaginatedResponse[Location] */
         PaginatedResponse_Location_: {
-            /** Items */
+            /**
+             * Items
+             * @description List of items in the current page
+             */
             items: components["schemas"]["Location"][];
-            /** Total */
+            /**
+             * Total
+             * @description Total number of items matching the query
+             */
             total: number;
-            /** Limit */
+            /**
+             * Limit
+             * @description Maximum number of items per page
+             */
             limit: number;
-            /** Offset */
+            /**
+             * Offset
+             * @description Number of items skipped from the start
+             */
             offset: number;
         };
         /** PaginatedResponse[UnifiedGpsPoint] */
         PaginatedResponse_UnifiedGpsPoint_: {
-            /** Items */
+            /**
+             * Items
+             * @description List of items in the current page
+             */
             items: components["schemas"]["UnifiedGpsPoint"][];
-            /** Total */
+            /**
+             * Total
+             * @description Total number of items matching the query
+             */
             total: number;
-            /** Limit */
+            /**
+             * Limit
+             * @description Maximum number of items per page
+             */
             limit: number;
-            /** Offset */
+            /**
+             * Offset
+             * @description Number of items skipped from the start
+             */
             offset: number;
         };
-        /** ReferenceLocation */
+        /**
+         * PeliasHealth
+         * @description Result of an upstream Pelias reverse-geocoder health probe.
+         */
+        PeliasHealth: {
+            /**
+             * Healthy
+             * @description True when Pelias returned a usable feature for the probe coordinate.
+             */
+            healthy: boolean;
+            /**
+             * Latency Ms
+             * @description Round-trip latency for the probe request, in milliseconds.
+             */
+            latency_ms: number;
+            /**
+             * Sample Features Count
+             * @description Number of features returned by the probe (0 means the probe failed).
+             * @default 0
+             */
+            sample_features_count: number;
+            /**
+             * Detail
+             * @description Failure detail when not healthy (timeout, transport error, non-2xx status).
+             */
+            detail?: string | null;
+        };
+        /**
+         * ReferenceLocation
+         * @description Named geographic reference point used for spatial queries (e.g. home, office).
+         * @example {
+         *       "created_at": "2026-02-03T22:49:07+00:00",
+         *       "description": "Primary apartment - 40m radius",
+         *       "id": 1,
+         *       "latitude": 40.7362,
+         *       "longitude": -74.0394,
+         *       "name": "home",
+         *       "radius_meters": 40,
+         *       "updated_at": "2026-02-03T22:50:01+00:00"
+         *     }
+         */
         ReferenceLocation: {
-            /** Id */
+            /**
+             * Id
+             * @description Unique reference location identifier
+             */
             id: number;
-            /** Name */
+            /**
+             * Name
+             * @description Short, unique name for the location (e.g. home, office)
+             */
             name: string;
-            /** Latitude */
+            /**
+             * Latitude
+             * @description GPS latitude in decimal degrees (WGS 84)
+             */
             latitude: number;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description GPS longitude in decimal degrees (WGS 84)
+             */
             longitude: number;
             /**
              * Radius Meters
+             * @description Geofence radius in meters for proximity queries
              * @default 50
              */
             radius_meters: number;
-            /** Description */
+            /**
+             * Description
+             * @description Optional human-readable description of the location
+             */
             description?: string | null;
-            /** Created At */
+            /**
+             * Created At
+             * @description UTC timestamp when the record was created
+             */
             created_at?: string | null;
-            /** Updated At */
+            /**
+             * Updated At
+             * @description UTC timestamp when the record was last updated
+             */
             updated_at?: string | null;
         };
-        /** ReferenceLocationCreate */
+        /**
+         * ReferenceLocationCreate
+         * @description Request body for creating a new reference location.
+         * @example {
+         *       "description": "Downtown office building",
+         *       "latitude": 40.7128,
+         *       "longitude": -74.006,
+         *       "name": "office",
+         *       "radius_meters": 100
+         *     }
+         */
         ReferenceLocationCreate: {
-            /** Name */
+            /**
+             * Name
+             * @description Short, unique name for the location (e.g. home, office)
+             */
             name: string;
-            /** Latitude */
+            /**
+             * Latitude
+             * @description GPS latitude in decimal degrees (WGS 84)
+             */
             latitude: number;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description GPS longitude in decimal degrees (WGS 84)
+             */
             longitude: number;
             /**
              * Radius Meters
+             * @description Geofence radius in meters for proximity queries
              * @default 50
              */
             radius_meters: number;
-            /** Description */
+            /**
+             * Description
+             * @description Optional human-readable description of the location
+             */
             description?: string | null;
         };
-        /** ReferenceLocationUpdate */
+        /**
+         * ReferenceLocationUpdate
+         * @description Request body for partially updating a reference location. All fields are optional.
+         * @example {
+         *       "description": "Updated radius for office building",
+         *       "radius_meters": 75
+         *     }
+         */
         ReferenceLocationUpdate: {
-            /** Name */
+            /**
+             * Name
+             * @description Updated location name
+             */
             name?: string | null;
-            /** Latitude */
+            /**
+             * Latitude
+             * @description Updated GPS latitude in decimal degrees
+             */
             latitude?: number | null;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description Updated GPS longitude in decimal degrees
+             */
             longitude?: number | null;
-            /** Radius Meters */
+            /**
+             * Radius Meters
+             * @description Updated geofence radius in meters
+             */
             radius_meters?: number | null;
-            /** Description */
+            /**
+             * Description
+             * @description Updated description text
+             */
             description?: string | null;
         };
-        /** SportInfo */
+        /**
+         * SportInfo
+         * @description Sport type with its activity count.
+         * @example {
+         *       "activity_count": 20,
+         *       "sport": "cycling"
+         *     }
+         */
         SportInfo: {
-            /** Sport */
+            /**
+             * Sport
+             * @description Sport type name (e.g. cycling, running)
+             */
             sport: string;
-            /** Activity Count */
+            /**
+             * Activity Count
+             * @description Number of activities for this sport
+             */
             activity_count: number;
         };
-        /** UnifiedGpsPoint */
+        /**
+         * UnifiedGpsPoint
+         * @description Single GPS data point from the unified view combining OwnTracks and Garmin sources.
+         * @example {
+         *       "accuracy": 7,
+         *       "battery": 100,
+         *       "created_at": "2026-02-12T08:11:55+00:00",
+         *       "identifier": "iphone_stuart",
+         *       "latitude": 40.736238,
+         *       "longitude": -74.039405,
+         *       "source": "owntracks",
+         *       "timestamp": "2026-02-12T08:11:55+00:00"
+         *     }
+         */
         UnifiedGpsPoint: {
-            /** Source */
+            /**
+             * Source
+             * @description Data source: 'owntracks' or 'garmin'
+             */
             source: string;
-            /** Identifier */
+            /**
+             * Identifier
+             * @description Device or activity identifier from the source
+             */
             identifier: string;
-            /** Latitude */
+            /**
+             * Latitude
+             * @description GPS latitude in decimal degrees (WGS 84)
+             */
             latitude: number;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description GPS longitude in decimal degrees (WGS 84)
+             */
             longitude: number;
             /**
              * Timestamp
              * Format: date-time
+             * @description UTC timestamp of the GPS recording
              */
             timestamp: string;
-            /** Accuracy */
+            /**
+             * Accuracy
+             * @description Horizontal GPS accuracy in meters (OwnTracks only)
+             */
             accuracy?: number | null;
-            /** Battery */
+            /**
+             * Battery
+             * @description Device battery percentage (OwnTracks only)
+             */
             battery?: number | null;
-            /** Speed Kmh */
+            /**
+             * Speed Kmh
+             * @description Instantaneous speed in km/h (Garmin only)
+             */
             speed_kmh?: number | null;
-            /** Heart Rate */
+            /**
+             * Heart Rate
+             * @description Heart rate in BPM (Garmin only)
+             */
             heart_rate?: number | null;
-            /** Created At */
+            /**
+             * Created At
+             * @description UTC timestamp when the record was inserted
+             */
             created_at?: string | null;
         };
         /** ValidationError */
@@ -722,16 +2683,50 @@ export type components = {
             msg: string;
             /** Error Type */
             type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
-        /** WithinReferenceResult */
+        /**
+         * WithinReferenceResult
+         * @description GPS points found within a named reference location's geofence radius.
+         * @example {
+         *       "points": [
+         *         {
+         *           "distance_meters": 0.4,
+         *           "id": 35144,
+         *           "latitude": 40.736202,
+         *           "longitude": -74.039404,
+         *           "source": "owntracks",
+         *           "timestamp": "2026-02-02T10:30:53Z"
+         *         }
+         *       ],
+         *       "radius_meters": 40,
+         *       "reference_name": "home",
+         *       "total_points": 2
+         *     }
+         */
         WithinReferenceResult: {
-            /** Reference Name */
+            /**
+             * Reference Name
+             * @description Name of the reference location searched
+             */
             reference_name: string;
-            /** Radius Meters */
+            /**
+             * Radius Meters
+             * @description Geofence radius used for the search in meters
+             */
             radius_meters: number;
-            /** Total Points */
+            /**
+             * Total Points
+             * @description Number of GPS points found within the radius
+             */
             total_points: number;
-            /** Points */
+            /**
+             * Points
+             * @description GPS points within the radius, sorted by distance
+             */
             points: components["schemas"]["NearbyPoint"][];
         };
     };
@@ -758,7 +2753,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -786,15 +2783,19 @@ export interface operations {
     list_locations_api_v1_locations_get: {
         parameters: {
             query?: {
+                /** @description Filter by device ID */
                 device_id?: string | null;
                 /** @description Filter from date (YYYY-MM-DD) */
                 date_from?: string | null;
                 /** @description Filter to date (YYYY-MM-DD) */
                 date_to?: string | null;
+                /** @description Maximum number of locations to return per page */
                 limit?: number;
+                /** @description Number of locations to skip for pagination */
                 offset?: number;
-                /** @description Sort column */
+                /** @description Sort column (id, device_id, timestamp, created_at, battery, accuracy) */
                 sort?: string;
+                /** @description Sort direction: asc (oldest first) or desc (newest first) */
                 order?: "asc" | "desc";
             };
             header?: never;
@@ -843,11 +2844,32 @@ export interface operations {
             };
         };
     };
+    location_date_range_api_v1_locations_date_range_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDateRange"];
+                };
+            };
+        };
+    };
     location_count_api_v1_locations_count_get: {
         parameters: {
             query?: {
                 /** @description Filter by date (YYYY-MM-DD) */
                 date?: string | null;
+                /** @description Filter by device ID */
                 device_id?: string | null;
             };
             header?: never;
@@ -881,6 +2903,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description Unique location record ID */
                 location_id: number;
             };
             cookie?: never;
@@ -907,18 +2930,127 @@ export interface operations {
             };
         };
     };
+    trigger_sync_api_v1_garmin_sync_post: {
+        parameters: {
+            query?: {
+                /** @description Optional activity lookback override. Non-negative integer. */
+                lookback?: number | null;
+                /** @description Optional sync window in hours. Positive integer. */
+                window_hours?: number | null;
+                /** @description Whether to re-sync activities that already exist in the database. */
+                resync_existing?: boolean | null;
+                /** @description Optional Garmin activity_id filter (repeatable). */
+                activity_id?: string[] | null;
+                /** @description Optional Garmin activity_ids filter (repeatable). */
+                activity_ids?: string[] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminSyncResponse"];
+                };
+            };
+            /** @description Invalid sync trigger parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminSyncResponse"];
+                };
+            };
+            /** @description Sync already in progress */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminSyncResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Bad gateway from Garmin sync service */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminSyncResponse"];
+                };
+            };
+            /** @description Garmin sync service unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminSyncResponse"];
+                };
+            };
+            /** @description Garmin sync service timeout */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminSyncResponse"];
+                };
+            };
+        };
+    };
+    garmin_date_range_api_v1_garmin_date_range_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminDateRange"];
+                };
+            };
+        };
+    };
     list_activities_api_v1_garmin_activities_get: {
         parameters: {
             query?: {
+                /** @description Filter by sport type */
                 sport?: string | null;
                 /** @description Filter from date (YYYY-MM-DD) */
                 date_from?: string | null;
                 /** @description Filter to date (YYYY-MM-DD) */
                 date_to?: string | null;
+                /** @description Maximum number of activities to return per page */
                 limit?: number;
+                /** @description Number of activities to skip for pagination */
                 offset?: number;
-                /** @description Sort column */
+                /** @description Sort column (start_time, distance_km, duration_seconds, sport, created_at) */
                 sort?: string;
+                /** @description Sort direction: asc (oldest first) or desc (newest first) */
                 order?: "asc" | "desc";
             };
             header?: never;
@@ -967,11 +3099,48 @@ export interface operations {
             };
         };
     };
+    list_activity_totals_api_v1_garmin_activity_totals_get: {
+        parameters: {
+            query: {
+                /** @description Time bucket for aggregation: week, month, or year */
+                period: "week" | "month" | "year";
+                /** @description Filter to a single sport (e.g. cycling) */
+                sport?: string | null;
+                /** @description Inclusive lower bound on start_time (YYYY-MM-DD, UTC) */
+                date_from?: string | null;
+                /** @description Inclusive upper bound on start_time (YYYY-MM-DD, UTC) */
+                date_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminActivityTotal"][];
+                };
+            };
+            /** @description Invalid query parameter */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get_activity_api_v1_garmin_activities__activity_id__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Garmin activity ID */
                 activity_id: string;
             };
             cookie?: never;
@@ -987,6 +3156,70 @@ export interface operations {
                     "application/json": components["schemas"]["GarminActivity"];
                 };
             };
+            /** @description Activity not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_activity_api_v1_garmin_activities__activity_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Garmin activity ID */
+                activity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GarminActivityManualUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminActivity"];
+                };
+            };
+            /** @description No fields to update */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Activity not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -1001,14 +3234,20 @@ export interface operations {
     list_track_points_api_v1_garmin_activities__activity_id__tracks_get: {
         parameters: {
             query?: {
+                /** @description Maximum number of track points to return per page */
                 limit?: number;
+                /** @description Number of track points to skip for pagination */
                 offset?: number;
-                /** @description Sort column */
+                /** @description Sort column (timestamp, altitude, speed_kmh, heart_rate, created_at) */
                 sort?: string;
+                /** @description Sort direction: asc (earliest first) or desc (latest first) */
                 order?: "asc" | "desc";
+                /** @description Douglas-Peucker simplification tolerance in degrees. When set, returns the full route simplified via PostGIS ST_Simplify, ignoring limit/offset. Recommended: 0.00001 (~1m), 0.00005 (~5m). */
+                simplify?: number | null;
             };
             header?: never;
             path: {
+                /** @description Garmin activity ID */
                 activity_id: string;
             };
             cookie?: never;
@@ -1023,6 +3262,91 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PaginatedResponse_GarminTrackPoint_"];
                 };
+            };
+            /** @description Activity not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_chart_data_api_v1_garmin_activities__activity_id__chart_data_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Garmin activity ID */
+                activity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminChartPoint"][];
+                };
+            };
+            /** @description Activity not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_activity_addresses_api_v1_garmin_activities__activity_id__addresses_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Garmin activity ID */
+                activity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminActivityAddress"][];
+                };
+            };
+            /** @description Activity not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -1040,13 +3364,20 @@ export interface operations {
             query?: {
                 /** @description Filter by source: owntracks or garmin */
                 source?: string | null;
-                /** @description Filter from date (YYYY-MM-DD) */
+                /** @description Filter from date (YYYY-MM-DD). Defaults to 90 days ago when both date_from and date_to are omitted. */
                 date_from?: string | null;
                 /** @description Filter to date (YYYY-MM-DD) */
                 date_to?: string | null;
+                /** @description Maximum number of GPS points to return per page */
                 limit?: number;
+                /** @description Number of GPS points to skip for pagination */
                 offset?: number;
+                /** @description Sort direction: asc (oldest first) or desc (newest first) */
                 order?: "asc" | "desc";
+                /** @description Exclude stationary points where speed_kmh = 0 */
+                exclude_stationary?: boolean;
+                /** @description Remove points with duplicate coordinates (rounded to ~11m precision) */
+                deduplicate?: boolean;
             };
             header?: never;
             path?: never;
@@ -1077,11 +3408,14 @@ export interface operations {
     daily_summary_api_v1_gps_daily_summary_get: {
         parameters: {
             query?: {
-                /** @description Filter from date (YYYY-MM-DD) */
+                /** @description Filter from date (YYYY-MM-DD). Defaults to 90 days ago when both date_from and date_to are omitted. */
                 date_from?: string | null;
                 /** @description Filter to date (YYYY-MM-DD) */
                 date_to?: string | null;
+                /** @description Maximum number of daily summaries to return per page */
                 limit?: number;
+                /** @description Number of daily summaries to skip for pagination */
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -1095,7 +3429,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DailyActivitySummary"][];
+                    "application/json": components["schemas"]["PaginatedResponse_DailyActivitySummary_"];
                 };
             };
             /** @description Validation Error */
@@ -1105,6 +3439,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    daily_summary_date_range_api_v1_gps_daily_summary_date_range_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailySummaryDateRange"];
                 };
             };
         };
@@ -1167,6 +3521,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description Unique reference location ID */
                 location_id: number;
             };
             cookie?: never;
@@ -1198,6 +3553,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description Unique reference location ID */
                 location_id: number;
             };
             cookie?: never;
@@ -1233,6 +3589,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description Unique reference location ID */
                 location_id: number;
             };
             cookie?: never;
@@ -1268,6 +3625,7 @@ export interface operations {
                 radius_meters?: number;
                 /** @description Filter by source: owntracks or garmin */
                 source?: string | null;
+                /** @description Maximum number of nearby points to return */
                 limit?: number;
             };
             header?: never;
@@ -1299,13 +3657,13 @@ export interface operations {
     calculate_distance_api_v1_spatial_distance_get: {
         parameters: {
             query: {
-                /** @description From latitude */
+                /** @description From latitude (e.g. NYC) */
                 from_lat: number;
-                /** @description From longitude */
+                /** @description From longitude (e.g. NYC) */
                 from_lon: number;
-                /** @description To latitude */
+                /** @description To latitude (e.g. Times Square) */
                 to_lat: number;
-                /** @description To longitude */
+                /** @description To longitude (e.g. Times Square) */
                 to_lon: number;
             };
             header?: never;
@@ -1339,10 +3697,12 @@ export interface operations {
             query?: {
                 /** @description Filter by source: owntracks or garmin */
                 source?: string | null;
+                /** @description Maximum number of points to return within the reference area */
                 limit?: number;
             };
             header?: never;
             path: {
+                /** @description Reference location name */
                 name: string;
             };
             cookie?: never;
@@ -1356,6 +3716,157 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WithinReferenceResult"];
+                };
+            };
+            /** @description Reference location not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    geocoding_status_api_v1_geocoding_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeocodingStatus"];
+                };
+            };
+        };
+    };
+    pelias_health_api_v1_geocoding_pelias_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeliasHealth"];
+                };
+            };
+        };
+    };
+    trigger_geocoding_api_v1_geocoding_trigger_post: {
+        parameters: {
+            query?: {
+                /** @description Number of locations to geocode in this batch */
+                batch_size?: number;
+                /** @description Re-process records with statuses no_coverage or error */
+                retry_failed?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeocodingTriggerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trigger_garmin_geocoding_api_v1_geocoding_trigger_garmin_post: {
+        parameters: {
+            query?: {
+                /** @description Number of Garmin activities to process in this batch */
+                batch_size?: number;
+                /** @description Approximate spacing between mid-route waypoints in kilometres */
+                waypoint_spacing_km?: number;
+                /** @description Re-process activities with at least one waypoint in statuses no_coverage or error */
+                retry_failed?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeocodingTriggerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trigger_garmin_dense_api_v1_geocoding_trigger_garmin_dense_post: {
+        parameters: {
+            query?: {
+                /** @description Number of dense cells to process in this batch */
+                batch_size?: number;
+                /** @description Re-process cells whose status is no_coverage, error, or pending */
+                retry_failed?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeocodingTriggerResponse"];
                 };
             };
             /** @description Validation Error */

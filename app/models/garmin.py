@@ -41,6 +41,7 @@ class GarminActivity(BaseModel):
     unpaved_distance_km: float | None = Field(default=None, description="Distance over unpaved surfaces in kilometres")
     avg_cadence: int | None = Field(default=None, description="Average cadence in RPM")
     max_cadence: int | None = Field(default=None, description="Maximum cadence in RPM")
+    total_strokes: int | None = Field(default=None, description="Total activity strokes")
     calories: int | None = Field(default=None, description="Total calories burned")
     avg_speed_kmh: float | None = Field(default=None, description="Average speed in km/h")
     max_speed_kmh: float | None = Field(default=None, description="Maximum speed in km/h")
@@ -89,6 +90,7 @@ class GarminActivity(BaseModel):
                     "unpaved_distance_km": 0.65,
                     "avg_cadence": 78,
                     "max_cadence": 112,
+                    "total_strokes": 4250,
                     "calories": 1689,
                     "avg_speed_kmh": 26.3,
                     "max_speed_kmh": 48.7,
@@ -320,6 +322,7 @@ class GarminActivityManualUpdate(BaseModel):
     unpaved_distance_km: float | None = Field(default=None, description="Distance over unpaved surfaces in kilometres")
     avg_cadence: int | None = Field(default=None, description="Average cadence in RPM")
     max_cadence: int | None = Field(default=None, description="Maximum cadence in RPM")
+    total_strokes: int | None = Field(default=None, description="Total activity strokes")
     calories: int | None = Field(default=None, description="Total calories burned")
     avg_speed_kmh: float | None = Field(default=None, description="Average speed in km/h")
     max_speed_kmh: float | None = Field(default=None, description="Maximum speed in km/h")

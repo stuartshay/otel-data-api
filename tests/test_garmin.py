@@ -252,6 +252,8 @@ async def test_get_activity_includes_device(client: AsyncClient, mock_db):
 @pytest.mark.asyncio
 async def test_get_activity_without_device(client: AsyncClient, mock_db):
     row = _activity_row()
+    # The SELECT always projects the joined device columns; when no device is
+    # linked they come back as explicit NULLs (not missing keys).
     for key in (
         "device_id",
         "dev_manufacturer",
@@ -259,7 +261,7 @@ async def test_get_activity_without_device(client: AsyncClient, mock_db):
         "dev_model",
         "dev_software_version",
     ):
-        row.pop(key)
+        row[key] = None
     mock_db.fetchrow.return_value = row
 
     response = await client.get("/api/v1/garmin/activities/20932993811")

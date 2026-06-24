@@ -49,9 +49,14 @@ ACTIVITY_BY_ID_SELECT = (
     "a.total_descent_m, a.total_distance, a.avg_pace, a.device_manufacturer, "
     "a.avg_temperature_c, a.min_temperature_c, a.max_temperature_c, "
     "a.total_elapsed_time, a.total_timer_time, a.created_at, a.uploaded_at, "
+    "a.device_id, d.manufacturer AS dev_manufacturer, "
+    "d.garmin_product AS dev_garmin_product, d.model AS dev_model, "
+    "d.software_version AS dev_software_version, "
     "(SELECT COUNT(*) FROM public.garmin_track_points t "
     "WHERE t.activity_id = a.activity_id) AS track_point_count "
-    "FROM public.garmin_activities a WHERE a.activity_id = $1"
+    "FROM public.garmin_activities a "
+    "LEFT JOIN public.garmin_devices d ON d.device_id = a.device_id "
+    "WHERE a.activity_id = $1"
 )
 
 
@@ -253,16 +258,20 @@ async def list_activities(
         f"a.device_manufacturer, a.avg_temperature_c, a.min_temperature_c, "
         f"a.max_temperature_c, a.total_elapsed_time, a.total_timer_time, "
         f"a.created_at, a.uploaded_at, "
+        f"a.device_id, d.manufacturer AS dev_manufacturer, "
+        f"d.garmin_product AS dev_garmin_product, d.model AS dev_model, "
+        f"d.software_version AS dev_software_version, "
         f"(SELECT COUNT(*) FROM public.garmin_track_points t "
         f"WHERE t.activity_id = a.activity_id) AS track_point_count "
-        f"FROM public.garmin_activities a {where} "
+        f"FROM public.garmin_activities a "
+        f"LEFT JOIN public.garmin_devices d ON d.device_id = a.device_id {where} "
         f"ORDER BY a.{sort} {order} "
         f"LIMIT ${idx} OFFSET ${idx + 1}"
     )
     params.extend([limit, offset])
     rows = await db.fetch(data_query, *params)
 
-    items = [GarminActivity(**dict(row)) for row in rows]
+    items = [GarminActivity.from_row(row) for row in rows]
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
 
 
@@ -351,7 +360,7 @@ async def get_activity(
     row = await db.fetchrow(ACTIVITY_BY_ID_SELECT, activity_id)
     if not row:
         raise HTTPException(status_code=404, detail="Activity not found")
-    activity = GarminActivity(**dict(row))
+    activity = GarminActivity.from_row(row)
     if request.app.state.config.log_garmin_activity_detail:
         logger.info(
             "garmin.activity.detail",
@@ -402,7 +411,7 @@ async def patch_activity(
     row = await db.fetchrow(ACTIVITY_BY_ID_SELECT, activity_id)
     if not row:
         raise HTTPException(status_code=404, detail="Activity not found")
-    return GarminActivity(**dict(row))
+    return GarminActivity.from_row(row)
 
 
 @router.get(

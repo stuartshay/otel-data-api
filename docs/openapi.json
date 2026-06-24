@@ -3015,6 +3015,17 @@
             ],
             "title": "Track Point Count",
             "description": "Number of GPS track points in this activity"
+          },
+          "device": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GarminDevice"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Recording device metadata"
           }
         },
         "type": "object",
@@ -3037,6 +3048,13 @@
             "avg_temperature_c": 18,
             "calories": 1689,
             "created_at": "2026-02-09T23:56:37+00:00",
+            "device": {
+              "device_id": 3444454776,
+              "garmin_product": 4061,
+              "manufacturer": "garmin",
+              "model": "Edge 540 Solar",
+              "software_version": "31.30"
+            },
             "device_manufacturer": "garmin",
             "distance_km": 50.6,
             "duration_seconds": 6932,
@@ -3998,6 +4016,73 @@
             "min_date": "2025-11-08T18:21:13+00:00"
           }
         ]
+      },
+      "GarminDevice": {
+        "properties": {
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id",
+            "description": "Recording device serial number"
+          },
+          "manufacturer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer",
+            "description": "Device manufacturer (e.g. garmin)"
+          },
+          "garmin_product": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Garmin Product",
+            "description": "Raw Garmin product enum id from the FIT file (e.g. 4061)"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "Friendly device model name (e.g. Edge 540 Solar)"
+          },
+          "software_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Version",
+            "description": "Device firmware/software version (e.g. 31.30)"
+          }
+        },
+        "type": "object",
+        "title": "GarminDevice",
+        "description": "Recording device metadata for a Garmin activity."
       },
       "GarminSyncResponse": {
         "properties": {

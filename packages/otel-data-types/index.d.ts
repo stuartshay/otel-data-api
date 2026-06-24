@@ -825,6 +825,13 @@ export type components = {
          *       "avg_temperature_c": 18,
          *       "calories": 1689,
          *       "created_at": "2026-02-09T23:56:37+00:00",
+         *       "device": {
+         *         "device_id": 3444454776,
+         *         "garmin_product": 4061,
+         *         "manufacturer": "garmin",
+         *         "model": "Edge 540 Solar",
+         *         "software_version": "31.30"
+         *       },
          *       "device_manufacturer": "garmin",
          *       "distance_km": 50.6,
          *       "duration_seconds": 6932,
@@ -1070,6 +1077,8 @@ export type components = {
              * @description Number of GPS track points in this activity
              */
             track_point_count?: number | null;
+            /** @description Recording device metadata */
+            device?: components["schemas"]["GarminDevice"] | null;
         };
         /**
          * GarminActivityAddress
@@ -1520,6 +1529,37 @@ export type components = {
              * @description Timestamp of the latest Garmin activity
              */
             max_date: string;
+        };
+        /**
+         * GarminDevice
+         * @description Recording device metadata for a Garmin activity.
+         */
+        GarminDevice: {
+            /**
+             * Device Id
+             * @description Recording device serial number
+             */
+            device_id?: number | null;
+            /**
+             * Manufacturer
+             * @description Device manufacturer (e.g. garmin)
+             */
+            manufacturer?: string | null;
+            /**
+             * Garmin Product
+             * @description Raw Garmin product enum id from the FIT file (e.g. 4061)
+             */
+            garmin_product?: number | null;
+            /**
+             * Model
+             * @description Friendly device model name (e.g. Edge 540 Solar)
+             */
+            model?: string | null;
+            /**
+             * Software Version
+             * @description Device firmware/software version (e.g. 31.30)
+             */
+            software_version?: string | null;
         };
         /**
          * GarminSyncResponse

@@ -2,12 +2,26 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date as date_type
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 from app.models.geocoding import GeocodedAddressSummary
+
+
+class GarminDevice(BaseModel):
+    """Recording device metadata for a Garmin activity."""
+
+    device_id: int | None = Field(default=None, description="Recording device serial number")
+    manufacturer: str | None = Field(default=None, description="Device manufacturer (e.g. garmin)")
+    garmin_product: int | None = Field(
+        default=None, description="Raw Garmin product enum id from the FIT file (e.g. 4061)"
+    )
+    model: str | None = Field(default=None, description="Friendly device model name (e.g. Edge 540 Solar)")
+    software_version: str | None = Field(default=None, description="Device firmware/software version (e.g. 31.30)")
 
 
 class GarminActivity(BaseModel):
@@ -60,6 +74,31 @@ class GarminActivity(BaseModel):
     created_at: datetime | None = Field(default=None, description="UTC timestamp when the record was inserted")
     uploaded_at: datetime | None = Field(default=None, description="UTC timestamp when the FIT file was uploaded")
     track_point_count: int | None = Field(default=None, description="Number of GPS track points in this activity")
+    device: GarminDevice | None = Field(default=None, description="Recording device metadata")
+
+    @classmethod
+    def from_row(cls, row: Mapping[str, Any]) -> GarminActivity:
+        """Build an activity from a DB row, folding joined device columns into ``device``.
+
+        Device columns are selected with a ``dev_`` prefix (plus ``device_id``)
+        so they do not collide with the activity's own ``device_manufacturer``.
+        """
+        data = dict(row)
+        device_id = data.pop("device_id", None)
+        dev_manufacturer = data.pop("dev_manufacturer", None)
+        dev_garmin_product = data.pop("dev_garmin_product", None)
+        dev_model = data.pop("dev_model", None)
+        dev_software_version = data.pop("dev_software_version", None)
+        device = None
+        if device_id is not None:
+            device = GarminDevice(
+                device_id=device_id,
+                manufacturer=dev_manufacturer,
+                garmin_product=dev_garmin_product,
+                model=dev_model,
+                software_version=dev_software_version,
+            )
+        return cls(**data, device=device)
 
     model_config = {
         "json_schema_extra": {
@@ -107,6 +146,13 @@ class GarminActivity(BaseModel):
                     "created_at": "2026-02-09T23:56:37+00:00",
                     "uploaded_at": "2026-02-09T23:56:37+00:00",
                     "track_point_count": 10707,
+                    "device": {
+                        "device_id": 3444454776,
+                        "manufacturer": "garmin",
+                        "garmin_product": 4061,
+                        "model": "Edge 540 Solar",
+                        "software_version": "31.30",
+                    },
                 }
             ]
         }

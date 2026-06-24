@@ -45,6 +45,11 @@ def _activity_row(activity_id: str = "20932993811") -> dict:
         "created_at": "2026-02-09T23:56:37+00:00",
         "uploaded_at": "2026-02-09T23:56:37+00:00",
         "track_point_count": 10707,
+        "device_id": 3444454776,
+        "dev_manufacturer": "garmin",
+        "dev_garmin_product": 4061,
+        "dev_model": "Edge 540 Solar",
+        "dev_software_version": "31.30",
     }
 
 
@@ -225,6 +230,44 @@ async def test_get_activity_success(client: AsyncClient, mock_db):
     assert data["sport"] == "cycling"
     assert data["hr_available"] is True
     assert data["total_strokes"] == 4250
+
+
+@pytest.mark.asyncio
+async def test_get_activity_includes_device(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = _activity_row()
+
+    response = await client.get("/api/v1/garmin/activities/20932993811")
+
+    assert response.status_code == 200
+    device = response.json()["device"]
+    assert device == {
+        "device_id": 3444454776,
+        "manufacturer": "garmin",
+        "garmin_product": 4061,
+        "model": "Edge 540 Solar",
+        "software_version": "31.30",
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_activity_without_device(client: AsyncClient, mock_db):
+    row = _activity_row()
+    # The SELECT always projects the joined device columns; when no device is
+    # linked they come back as explicit NULLs (not missing keys).
+    for key in (
+        "device_id",
+        "dev_manufacturer",
+        "dev_garmin_product",
+        "dev_model",
+        "dev_software_version",
+    ):
+        row[key] = None
+    mock_db.fetchrow.return_value = row
+
+    response = await client.get("/api/v1/garmin/activities/20932993811")
+
+    assert response.status_code == 200
+    assert response.json()["device"] is None
 
 
 @pytest.mark.asyncio

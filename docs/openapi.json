@@ -753,6 +753,32 @@
         }
       }
     },
+    "/api/v1/garmin/device-counts": {
+      "get": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "List Device Counts",
+        "description": "List Garmin recording device labels with activity counts.\n\nActivities without recording-device metadata are grouped under ``Manual``.\nFirmware/software version is intentionally excluded from this aggregate.",
+        "operationId": "list_device_counts_api_v1_garmin_device_counts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GarminDeviceCount"
+                  },
+                  "type": "array",
+                  "title": "Response List Device Counts Api V1 Garmin Device Counts Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/garmin/activity-totals": {
       "get": {
         "tags": [
@@ -4083,6 +4109,41 @@
         "type": "object",
         "title": "GarminDevice",
         "description": "Recording device metadata for a Garmin activity."
+      },
+      "GarminDeviceCount": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Device model label, or Manual when no recording device is available"
+          },
+          "activity_count": {
+            "type": "integer",
+            "title": "Activity Count",
+            "description": "Number of activities for this device label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "activity_count"
+        ],
+        "title": "GarminDeviceCount",
+        "description": "Garmin activity count grouped by recording device model.",
+        "examples": [
+          {
+            "activity_count": 1237,
+            "label": "Edge 500"
+          },
+          {
+            "activity_count": 194,
+            "label": "Edge 540 Solar"
+          },
+          {
+            "activity_count": 5,
+            "label": "Manual"
+          }
+        ]
       },
       "GarminSyncResponse": {
         "properties": {

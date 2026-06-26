@@ -148,7 +148,7 @@ async def test_get_device_counts(client: AsyncClient, mock_db):
     query = mock_db.fetch.await_args.args[0]
     assert "COALESCE(NULLIF(TRIM(d.model), ''), 'Manual') AS label" in query
     assert "LEFT JOIN public.garmin_devices d ON d.device_id = a.device_id" in query
-    assert "GROUP BY label" in query
+    assert "GROUP BY COALESCE(NULLIF(TRIM(d.model), ''), 'Manual')" in query
     assert "activity_count DESC" in query
 
 

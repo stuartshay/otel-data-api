@@ -300,7 +300,7 @@ async def list_device_counts(request: Request) -> list[GarminDeviceCount]:
         "COUNT(*) AS activity_count "
         "FROM public.garmin_activities a "
         "LEFT JOIN public.garmin_devices d ON d.device_id = a.device_id "
-        "GROUP BY label "
+        "GROUP BY COALESCE(NULLIF(TRIM(d.model), ''), 'Manual') "
         "ORDER BY (COALESCE(NULLIF(TRIM(d.model), ''), 'Manual') = 'Manual') ASC, "
         "activity_count DESC, label ASC"
     )

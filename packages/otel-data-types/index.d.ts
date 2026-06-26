@@ -230,6 +230,29 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/garmin/device-counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Device Counts
+         * @description List Garmin recording device labels with activity counts.
+         *
+         *     Activities without recording-device metadata are grouped under ``Manual``.
+         *     Firmware/software version is intentionally excluded from this aggregate.
+         */
+        get: operations["list_device_counts_api_v1_garmin_device_counts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/garmin/activity-totals": {
         parameters: {
             query?: never;
@@ -1560,6 +1583,34 @@ export type components = {
              * @description Device firmware/software version (e.g. 31.30)
              */
             software_version?: string | null;
+        };
+        /**
+         * GarminDeviceCount
+         * @description Garmin activity count grouped by recording device model.
+         * @example {
+         *       "activity_count": 1237,
+         *       "label": "Edge 500"
+         *     }
+         * @example {
+         *       "activity_count": 194,
+         *       "label": "Edge 540 Solar"
+         *     }
+         * @example {
+         *       "activity_count": 5,
+         *       "label": "Manual"
+         *     }
+         */
+        GarminDeviceCount: {
+            /**
+             * Label
+             * @description Device model label, or Manual when no recording device is available
+             */
+            label: string;
+            /**
+             * Activity Count
+             * @description Number of activities for this device label
+             */
+            activity_count: number;
         };
         /**
          * GarminSyncResponse
@@ -3135,6 +3186,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SportInfo"][];
+                };
+            };
+        };
+    };
+    list_device_counts_api_v1_garmin_device_counts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminDeviceCount"][];
                 };
             };
         };

@@ -21,6 +21,7 @@ from app.models.garmin import (
     GarminActivityTotal,
     GarminChartPoint,
     GarminDateRange,
+    GarminDeviceCount,
     GarminSyncResponse,
     GarminTrackPoint,
     SportInfo,
@@ -284,6 +285,26 @@ async def list_sports(request: Request) -> list[SportInfo]:
         "GROUP BY sport ORDER BY activity_count DESC"
     )
     return [SportInfo(**dict(row)) for row in rows]
+
+
+@router.get("/device-counts", response_model=list[GarminDeviceCount])
+async def list_device_counts(request: Request) -> list[GarminDeviceCount]:
+    """List Garmin recording device labels with activity counts.
+
+    Activities without recording-device metadata are grouped under ``Manual``.
+    Firmware/software version is intentionally excluded from this aggregate.
+    """
+    db = request.app.state.db
+    rows = await db.fetch(
+        "SELECT COALESCE(NULLIF(TRIM(d.model), ''), 'Manual') AS label, "
+        "COUNT(*) AS activity_count "
+        "FROM public.garmin_activities a "
+        "LEFT JOIN public.garmin_devices d ON d.device_id = a.device_id "
+        "GROUP BY label "
+        "ORDER BY (COALESCE(NULLIF(TRIM(d.model), ''), 'Manual') = 'Manual') ASC, "
+        "activity_count DESC, label ASC"
+    )
+    return [GarminDeviceCount(**dict(row)) for row in rows]
 
 
 @router.get(

@@ -130,6 +130,29 @@ async def test_get_sports(client: AsyncClient, mock_db):
 
 
 @pytest.mark.asyncio
+async def test_get_device_counts(client: AsyncClient, mock_db):
+    mock_db.fetch.return_value = [
+        {"label": "Edge 500", "activity_count": 1237},
+        {"label": "Edge 540 Solar", "activity_count": 194},
+        {"label": "Manual", "activity_count": 5},
+    ]
+
+    response = await client.get("/api/v1/garmin/device-counts")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {"label": "Edge 500", "activity_count": 1237},
+        {"label": "Edge 540 Solar", "activity_count": 194},
+        {"label": "Manual", "activity_count": 5},
+    ]
+    query = mock_db.fetch.await_args.args[0]
+    assert "COALESCE(NULLIF(TRIM(d.model), ''), 'Manual') AS label" in query
+    assert "LEFT JOIN public.garmin_devices d ON d.device_id = a.device_id" in query
+    assert "GROUP BY label" in query
+    assert "activity_count DESC" in query
+
+
+@pytest.mark.asyncio
 async def test_activity_totals_empty(client: AsyncClient, mock_db):
     mock_db.fetch.return_value = []
 

@@ -264,6 +264,23 @@ class SportInfo(BaseModel):
     model_config = {"json_schema_extra": {"examples": [{"sport": "cycling", "activity_count": 20}]}}
 
 
+class GarminDeviceCount(BaseModel):
+    """Garmin activity count grouped by recording device model."""
+
+    label: str = Field(description="Device model label, or Manual when no recording device is available")
+    activity_count: int = Field(description="Number of activities for this device label")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"label": "Edge 500", "activity_count": 1237},
+                {"label": "Edge 540 Solar", "activity_count": 194},
+                {"label": "Manual", "activity_count": 5},
+            ]
+        }
+    }
+
+
 class GarminDateRange(BaseModel):
     """Earliest and latest Garmin activity timestamps in the database."""
 

@@ -349,6 +349,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/garmin/activities/{activity_id}/climbs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Activity Climbs
+         * @description Return Garmin-native ClimbPro typed splits for an activity.
+         */
+        get: operations["list_activity_climbs_api_v1_garmin_activities__activity_id__climbs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/garmin/activities/{activity_id}/addresses": {
         parameters: {
             query?: never;
@@ -1195,6 +1215,187 @@ export type components = {
              * @description UTC timestamp when geocoding was performed
              */
             geocoded_at?: string | null;
+        };
+        /**
+         * GarminActivityClimb
+         * @description Garmin-native ClimbPro typed split for an activity.
+         */
+        GarminActivityClimb: {
+            /**
+             * Id
+             * @description Unique climb row identifier
+             */
+            id: number;
+            /**
+             * Activity Id
+             * @description Parent Garmin activity identifier
+             */
+            activity_id: string;
+            /**
+             * Source Split Index
+             * @description Zero-based Garmin typed split order
+             */
+            source_split_index: number;
+            /**
+             * Message Index
+             * @description Garmin message index
+             */
+            message_index?: number | null;
+            /**
+             * Split Type
+             * @description Garmin split type label when provided
+             */
+            split_type?: string | null;
+            /**
+             * Climb Type
+             * @description Garmin ClimbPro typed split type
+             */
+            climb_type?: string | null;
+            /**
+             * Start Time
+             * @description UTC climb start time
+             */
+            start_time?: string | null;
+            /**
+             * End Time
+             * @description UTC climb end time
+             */
+            end_time?: string | null;
+            /**
+             * Start Time Local
+             * @description Local climb start time from Garmin
+             */
+            start_time_local?: string | null;
+            /**
+             * Duration Seconds
+             * @description Climb duration in seconds
+             */
+            duration_seconds?: number | null;
+            /**
+             * Elapsed Duration Seconds
+             * @description Elapsed climb duration in seconds
+             */
+            elapsed_duration_seconds?: number | null;
+            /**
+             * Moving Duration Seconds
+             * @description Moving climb duration in seconds
+             */
+            moving_duration_seconds?: number | null;
+            /**
+             * Distance Meters
+             * @description Climb distance in meters
+             */
+            distance_meters?: number | null;
+            /**
+             * Elevation Gain Meters
+             * @description Climb elevation gain in meters
+             */
+            elevation_gain_meters?: number | null;
+            /**
+             * Elevation Loss Meters
+             * @description Climb elevation loss in meters
+             */
+            elevation_loss_meters?: number | null;
+            /**
+             * Start Elevation Meters
+             * @description Climb start elevation in meters
+             */
+            start_elevation_meters?: number | null;
+            /**
+             * Average Grade Percent
+             * @description Average climb grade percent
+             */
+            average_grade_percent?: number | null;
+            /**
+             * Max Grade Percent
+             * @description Maximum climb grade percent
+             */
+            max_grade_percent?: number | null;
+            /**
+             * Average Speed Mps
+             * @description Average speed in meters per second
+             */
+            average_speed_mps?: number | null;
+            /**
+             * Average Moving Speed Mps
+             * @description Average moving speed in meters per second
+             */
+            average_moving_speed_mps?: number | null;
+            /**
+             * Max Speed Mps
+             * @description Maximum speed in meters per second
+             */
+            max_speed_mps?: number | null;
+            /**
+             * Average Vertical Speed Mps
+             * @description Average vertical speed in meters per second
+             */
+            average_vertical_speed_mps?: number | null;
+            /**
+             * Average Elapsed Vertical Speed Mps
+             * @description Average elapsed vertical speed in meters per second
+             */
+            average_elapsed_vertical_speed_mps?: number | null;
+            /**
+             * Start Latitude
+             * @description Climb start latitude
+             */
+            start_latitude?: number | null;
+            /**
+             * Start Longitude
+             * @description Climb start longitude
+             */
+            start_longitude?: number | null;
+            /**
+             * End Latitude
+             * @description Climb end latitude
+             */
+            end_latitude?: number | null;
+            /**
+             * End Longitude
+             * @description Climb end longitude
+             */
+            end_longitude?: number | null;
+            /**
+             * Climb Pro Difficulty
+             * @description Garmin ClimbPro difficulty
+             */
+            climb_pro_difficulty?: string | null;
+            /**
+             * Calories
+             * @description Calories recorded for this climb
+             */
+            calories?: number | null;
+            /**
+             * Bmr Calories
+             * @description BMR calories recorded for this climb
+             */
+            bmr_calories?: number | null;
+            /**
+             * Average Temperature C
+             * @description Average temperature in degrees C
+             */
+            average_temperature_c?: number | null;
+            /**
+             * Min Temperature C
+             * @description Minimum temperature in degrees C
+             */
+            min_temperature_c?: number | null;
+            /**
+             * Max Temperature C
+             * @description Maximum temperature in degrees C
+             */
+            max_temperature_c?: number | null;
+            /**
+             * Created At
+             * @description UTC timestamp when the row was inserted
+             */
+            created_at?: string | null;
+            /**
+             * Updated At
+             * @description UTC timestamp when the row was last updated
+             */
+            updated_at?: string | null;
         };
         /**
          * GarminActivityManualUpdate
@@ -3411,6 +3612,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GarminChartPoint"][];
+                };
+            };
+            /** @description Activity not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_activity_climbs_api_v1_garmin_activities__activity_id__climbs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Garmin activity ID */
+                activity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminActivityClimb"][];
                 };
             };
             /** @description Activity not found */

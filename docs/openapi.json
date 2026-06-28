@@ -1182,6 +1182,61 @@
         }
       }
     },
+    "/api/v1/garmin/activities/{activity_id}/climbs": {
+      "get": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "List Activity Climbs",
+        "description": "Return Garmin-native ClimbPro typed splits for an activity.",
+        "operationId": "list_activity_climbs_api_v1_garmin_activities__activity_id__climbs_get",
+        "parameters": [
+          {
+            "name": "activity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Garmin activity ID",
+              "examples": [
+                "20932993811"
+              ],
+              "title": "Activity Id"
+            },
+            "description": "Garmin activity ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GarminActivityClimb"
+                  },
+                  "title": "Response List Activity Climbs Api V1 Garmin Activities  Activity Id  Climbs Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Activity not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/garmin/activities/{activity_id}/addresses": {
       "get": {
         "tags": [
@@ -3292,6 +3347,422 @@
         ],
         "title": "GarminActivityAddress",
         "description": "Reverse-geocoded address attached to a Garmin activity waypoint."
+      },
+      "GarminActivityClimb": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Unique climb row identifier"
+          },
+          "activity_id": {
+            "type": "string",
+            "title": "Activity Id",
+            "description": "Parent Garmin activity identifier"
+          },
+          "source_split_index": {
+            "type": "integer",
+            "title": "Source Split Index",
+            "description": "Zero-based Garmin typed split order"
+          },
+          "message_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Index",
+            "description": "Garmin message index"
+          },
+          "split_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Split Type",
+            "description": "Garmin split type label when provided"
+          },
+          "climb_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Climb Type",
+            "description": "Garmin ClimbPro typed split type"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time",
+            "description": "UTC climb start time"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Time",
+            "description": "UTC climb end time"
+          },
+          "start_time_local": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time Local",
+            "description": "Local climb start time from Garmin"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds",
+            "description": "Climb duration in seconds"
+          },
+          "elapsed_duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed Duration Seconds",
+            "description": "Elapsed climb duration in seconds"
+          },
+          "moving_duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moving Duration Seconds",
+            "description": "Moving climb duration in seconds"
+          },
+          "distance_meters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance Meters",
+            "description": "Climb distance in meters"
+          },
+          "elevation_gain_meters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevation Gain Meters",
+            "description": "Climb elevation gain in meters"
+          },
+          "elevation_loss_meters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elevation Loss Meters",
+            "description": "Climb elevation loss in meters"
+          },
+          "start_elevation_meters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Elevation Meters",
+            "description": "Climb start elevation in meters"
+          },
+          "average_grade_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Grade Percent",
+            "description": "Average climb grade percent"
+          },
+          "max_grade_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Grade Percent",
+            "description": "Maximum climb grade percent"
+          },
+          "average_speed_mps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Speed Mps",
+            "description": "Average speed in meters per second"
+          },
+          "average_moving_speed_mps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Moving Speed Mps",
+            "description": "Average moving speed in meters per second"
+          },
+          "max_speed_mps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Speed Mps",
+            "description": "Maximum speed in meters per second"
+          },
+          "average_vertical_speed_mps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Vertical Speed Mps",
+            "description": "Average vertical speed in meters per second"
+          },
+          "average_elapsed_vertical_speed_mps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Elapsed Vertical Speed Mps",
+            "description": "Average elapsed vertical speed in meters per second"
+          },
+          "start_latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Latitude",
+            "description": "Climb start latitude"
+          },
+          "start_longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Longitude",
+            "description": "Climb start longitude"
+          },
+          "end_latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Latitude",
+            "description": "Climb end latitude"
+          },
+          "end_longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Longitude",
+            "description": "Climb end longitude"
+          },
+          "climb_pro_difficulty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Climb Pro Difficulty",
+            "description": "Garmin ClimbPro difficulty"
+          },
+          "calories": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calories",
+            "description": "Calories recorded for this climb"
+          },
+          "bmr_calories": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bmr Calories",
+            "description": "BMR calories recorded for this climb"
+          },
+          "average_temperature_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Temperature C",
+            "description": "Average temperature in degrees C"
+          },
+          "min_temperature_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Temperature C",
+            "description": "Minimum temperature in degrees C"
+          },
+          "max_temperature_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Temperature C",
+            "description": "Maximum temperature in degrees C"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "UTC timestamp when the row was inserted"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "UTC timestamp when the row was last updated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "activity_id",
+          "source_split_index"
+        ],
+        "title": "GarminActivityClimb",
+        "description": "Garmin-native ClimbPro typed split for an activity."
       },
       "GarminActivityManualUpdate": {
         "properties": {

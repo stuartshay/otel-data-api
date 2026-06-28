@@ -255,6 +255,53 @@ class GarminChartPoint(BaseModel):
     }
 
 
+class GarminActivityClimb(BaseModel):
+    """Garmin-native ClimbPro typed split for an activity."""
+
+    id: int = Field(description="Unique climb row identifier")
+    activity_id: str = Field(description="Parent Garmin activity identifier")
+    source_split_index: int = Field(description="Zero-based Garmin typed split order")
+    message_index: int | None = Field(default=None, description="Garmin message index")
+    split_type: str | None = Field(default=None, description="Garmin split type label when provided")
+    climb_type: str | None = Field(default=None, description="Garmin ClimbPro typed split type")
+    start_time: datetime | None = Field(default=None, description="UTC climb start time")
+    end_time: datetime | None = Field(default=None, description="UTC climb end time")
+    start_time_local: datetime | None = Field(default=None, description="Local climb start time from Garmin")
+    duration_seconds: float | None = Field(default=None, description="Climb duration in seconds")
+    elapsed_duration_seconds: float | None = Field(default=None, description="Elapsed climb duration in seconds")
+    moving_duration_seconds: float | None = Field(default=None, description="Moving climb duration in seconds")
+    distance_meters: float | None = Field(default=None, description="Climb distance in meters")
+    elevation_gain_meters: float | None = Field(default=None, description="Climb elevation gain in meters")
+    elevation_loss_meters: float | None = Field(default=None, description="Climb elevation loss in meters")
+    start_elevation_meters: float | None = Field(default=None, description="Climb start elevation in meters")
+    average_grade_percent: float | None = Field(default=None, description="Average climb grade percent")
+    max_grade_percent: float | None = Field(default=None, description="Maximum climb grade percent")
+    average_speed_mps: float | None = Field(default=None, description="Average speed in meters per second")
+    average_moving_speed_mps: float | None = Field(
+        default=None, description="Average moving speed in meters per second"
+    )
+    max_speed_mps: float | None = Field(default=None, description="Maximum speed in meters per second")
+    average_vertical_speed_mps: float | None = Field(
+        default=None, description="Average vertical speed in meters per second"
+    )
+    average_elapsed_vertical_speed_mps: float | None = Field(
+        default=None,
+        description="Average elapsed vertical speed in meters per second",
+    )
+    start_latitude: float | None = Field(default=None, description="Climb start latitude")
+    start_longitude: float | None = Field(default=None, description="Climb start longitude")
+    end_latitude: float | None = Field(default=None, description="Climb end latitude")
+    end_longitude: float | None = Field(default=None, description="Climb end longitude")
+    climb_pro_difficulty: str | None = Field(default=None, description="Garmin ClimbPro difficulty")
+    calories: float | None = Field(default=None, description="Calories recorded for this climb")
+    bmr_calories: float | None = Field(default=None, description="BMR calories recorded for this climb")
+    average_temperature_c: float | None = Field(default=None, description="Average temperature in degrees C")
+    min_temperature_c: float | None = Field(default=None, description="Minimum temperature in degrees C")
+    max_temperature_c: float | None = Field(default=None, description="Maximum temperature in degrees C")
+    created_at: datetime | None = Field(default=None, description="UTC timestamp when the row was inserted")
+    updated_at: datetime | None = Field(default=None, description="UTC timestamp when the row was last updated")
+
+
 class SportInfo(BaseModel):
     """Sport type with its activity count."""
 

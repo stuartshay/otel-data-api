@@ -74,6 +74,46 @@ def _track_row(activity_id: str = "20932993811") -> dict:
     }
 
 
+def _climb_row(activity_id: str = "20932993811") -> dict:
+    return {
+        "id": 1,
+        "activity_id": activity_id,
+        "source_split_index": 0,
+        "message_index": 0,
+        "split_type": None,
+        "climb_type": "CLIMB_PRO_CYCLING_CLIMB",
+        "start_time": "2026-03-08T19:58:56+00:00",
+        "end_time": "2026-03-08T20:01:01+00:00",
+        "start_time_local": "2026-03-08T15:58:56",
+        "duration_seconds": 126.09,
+        "elapsed_duration_seconds": 126.09,
+        "moving_duration_seconds": 125.0,
+        "distance_meters": 503.59,
+        "elevation_gain_meters": 9.0,
+        "elevation_loss_meters": 0.6,
+        "start_elevation_meters": 24.2,
+        "average_grade_percent": 1.79,
+        "max_grade_percent": 6.43,
+        "average_speed_mps": 3.994,
+        "average_moving_speed_mps": 4.029,
+        "max_speed_mps": 6.27,
+        "average_vertical_speed_mps": 0.071,
+        "average_elapsed_vertical_speed_mps": 0.072,
+        "start_latitude": 40.7937,
+        "start_longitude": -73.961,
+        "end_latitude": 40.7901,
+        "end_longitude": -73.9642,
+        "climb_pro_difficulty": "NONE",
+        "calories": 24.0,
+        "bmr_calories": 3.0,
+        "average_temperature_c": 21.0,
+        "min_temperature_c": 21.0,
+        "max_temperature_c": 21.0,
+        "created_at": "2026-06-27T03:00:00+00:00",
+        "updated_at": "2026-06-27T03:00:00+00:00",
+    }
+
+
 @pytest.mark.asyncio
 async def test_list_activities_empty(client: AsyncClient, mock_db):
     mock_db.fetch.return_value = []
@@ -557,6 +597,38 @@ async def test_get_chart_data_not_found(client: AsyncClient, mock_db):
     mock_db.fetchval.return_value = None
 
     response = await client.get("/api/v1/garmin/activities/nonexistent/chart-data")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Activity not found"}
+
+
+@pytest.mark.asyncio
+async def test_list_activity_climbs_success(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = [_climb_row()]
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/climbs")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["activity_id"] == "20932993811"
+    assert data[0]["climb_type"] == "CLIMB_PRO_CYCLING_CLIMB"
+    assert data[0]["distance_meters"] == 503.59
+    assert data[0]["elevation_gain_meters"] == 9.0
+    assert data[0]["average_grade_percent"] == 1.79
+    assert data[0]["climb_pro_difficulty"] == "NONE"
+
+    query = mock_db.fetch.await_args.args[0]
+    assert "public.garmin_activity_climbs" in query
+    assert "ORDER BY source_split_index ASC" in query
+
+
+@pytest.mark.asyncio
+async def test_list_activity_climbs_not_found(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = None
+
+    response = await client.get("/api/v1/garmin/activities/nonexistent/climbs")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Activity not found"}

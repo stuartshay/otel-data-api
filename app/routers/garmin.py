@@ -17,6 +17,7 @@ from app.auth import require_auth
 from app.models import PaginatedResponse
 from app.models.garmin import (
     GarminActivity,
+    GarminActivityClimb,
     GarminActivityManualUpdate,
     GarminActivityTotal,
     GarminChartPoint,
@@ -589,6 +590,41 @@ async def get_chart_data(
     )
 
     return [GarminChartPoint(**dict(row)) for row in rows]
+
+
+@router.get(
+    "/activities/{activity_id}/climbs",
+    response_model=list[GarminActivityClimb],
+    responses={404: {"description": "Activity not found"}},
+)
+async def list_activity_climbs(
+    request: Request,
+    activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
+) -> list[GarminActivityClimb]:
+    """Return Garmin-native ClimbPro typed splits for an activity."""
+    db = request.app.state.db
+
+    exists = await db.fetchval("SELECT 1 FROM public.garmin_activities WHERE activity_id = $1", activity_id)
+    if not exists:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    rows = await db.fetch(
+        "SELECT id, activity_id, source_split_index, message_index, split_type, "
+        "climb_type, start_time, end_time, start_time_local, duration_seconds, "
+        "elapsed_duration_seconds, moving_duration_seconds, distance_meters, "
+        "elevation_gain_meters, elevation_loss_meters, start_elevation_meters, "
+        "average_grade_percent, max_grade_percent, average_speed_mps, "
+        "average_moving_speed_mps, max_speed_mps, average_vertical_speed_mps, "
+        "average_elapsed_vertical_speed_mps, start_latitude, start_longitude, "
+        "end_latitude, end_longitude, climb_pro_difficulty, calories, "
+        "bmr_calories, average_temperature_c, min_temperature_c, "
+        "max_temperature_c, created_at, updated_at "
+        "FROM public.garmin_activity_climbs WHERE activity_id = $1 "
+        "ORDER BY source_split_index ASC",
+        activity_id,
+    )
+
+    return [GarminActivityClimb(**dict(row)) for row in rows]
 
 
 def _row_to_track_point(row: Mapping[str, Any]) -> GarminTrackPoint:

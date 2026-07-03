@@ -13,7 +13,7 @@ on:
         default: true
         type: boolean
       publish_types:
-        description: 'Publish @stuartshay/otel-data-types from the current schema artifacts'
+        description: 'Regenerate and force-publish @stuartshay/otel-data-types'
         required: false
         default: false
         type: boolean

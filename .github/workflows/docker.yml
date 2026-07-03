@@ -12,6 +12,11 @@ on:
         required: true
         default: true
         type: boolean
+      publish_types:
+        description: 'Publish @stuartshay/otel-data-types from the current schema artifacts'
+        required: false
+        default: false
+        type: boolean
   pull_request:
     branches: [master, develop]
 
@@ -222,7 +227,9 @@ jobs:
     name: Check API Schema Changes
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    if: >-
+      github.ref == 'refs/heads/master' &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_types))
 
     outputs:
       schema_changed: ${{ steps.detect.outputs.changed }}
@@ -254,21 +261,40 @@ jobs:
 
       - name: Detect schema changes
         id: detect
+        env:
+          FORCE_PUBLISH_TYPES: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_types }}
         run: |
           # Generate types from source code
           bash scripts/generate-types.sh
 
-          # Compare generated schema/types against committed versions
+          # Compare generated schema/types against committed versions. This
+          # catches cases where API source changed but generated artifacts were
+          # not committed.
           SHOULD_PUBLISH=false
+          COMMITTED_SCHEMA_CHANGED=false
 
-          if ! git diff --quiet -- packages/otel-data-types/index.d.ts docs/openapi.json 2>/dev/null; then
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            if ! git diff --quiet HEAD^ HEAD -- packages/otel-data-types/index.d.ts docs/openapi.json 2>/dev/null; then
+              COMMITTED_SCHEMA_CHANGED=true
+            fi
+          else
+            echo "No parent commit available for committed schema/type comparison"
+          fi
+
+          if [ "$FORCE_PUBLISH_TYPES" = "true" ]; then
+            echo "✓ Manual publish requested via workflow_dispatch"
+            SHOULD_PUBLISH=true
+          elif ! git diff --quiet -- packages/otel-data-types/index.d.ts docs/openapi.json 2>/dev/null; then
             echo "✓ Generated schema/types differ from committed versions"
+            SHOULD_PUBLISH=true
+          elif [ "$COMMITTED_SCHEMA_CHANGED" = true ]; then
+            echo "✓ Committed schema/type artifacts changed in this push"
             SHOULD_PUBLISH=true
           elif [ ! -f packages/otel-data-types/index.d.ts ] || [ ! -f docs/openapi.json ]; then
             echo "✓ Generated artifacts are new (not yet committed)"
             SHOULD_PUBLISH=true
           else
-            echo "No changes detected in generated schema/types"
+            echo "No changes detected in generated or committed schema/types"
           fi
 
           if [ "$SHOULD_PUBLISH" = true ]; then

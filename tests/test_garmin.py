@@ -114,6 +114,30 @@ def _climb_row(activity_id: str = "20932993811") -> dict:
     }
 
 
+def _lap_row(activity_id: str = "20932993811", lap_index: int = 1) -> dict:
+    return {
+        "id": lap_index,
+        "activity_id": activity_id,
+        "lap_index": lap_index,
+        "start_time": "2026-03-08T19:58:56+00:00",
+        "end_time": "2026-03-08T20:26:13+00:00",
+        "duration_seconds": 1637.0,
+        "elapsed_duration_seconds": 1637.0,
+        "moving_duration_seconds": 1600.0,
+        "distance_meters": 8046.72,
+        "paved_distance_meters": 7805.32,
+        "unpaved_distance_meters": 241.4,
+        "avg_speed_mps": 4.92,
+        "avg_heart_rate": 130,
+        "max_heart_rate": 150,
+        "total_ascent_meters": 98.0,
+        "total_descent_meters": 88.0,
+        "calories": 210.0,
+        "created_at": "2026-07-03T03:00:00+00:00",
+        "updated_at": "2026-07-03T03:00:00+00:00",
+    }
+
+
 @pytest.mark.asyncio
 async def test_list_activities_empty(client: AsyncClient, mock_db):
     mock_db.fetch.return_value = []
@@ -629,6 +653,49 @@ async def test_list_activity_climbs_not_found(client: AsyncClient, mock_db):
     mock_db.fetchval.return_value = None
 
     response = await client.get("/api/v1/garmin/activities/nonexistent/climbs")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Activity not found"}
+
+
+@pytest.mark.asyncio
+async def test_list_activity_laps_success(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = [_lap_row(lap_index=1), _lap_row(lap_index=2)]
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/laps")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["activity_id"] == "20932993811"
+    assert data[0]["lap_index"] == 1
+    assert data[0]["distance_meters"] == 8046.72
+    assert data[0]["avg_heart_rate"] == 130
+    assert data[0]["max_heart_rate"] == 150
+    assert data[0]["total_ascent_meters"] == 98.0
+
+    query = mock_db.fetch.await_args.args[0]
+    assert "public.garmin_activity_laps" in query
+    assert "ORDER BY lap_index ASC" in query
+
+
+@pytest.mark.asyncio
+async def test_list_activity_laps_empty_for_existing_activity(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = []
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/laps")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_list_activity_laps_not_found(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = None
+
+    response = await client.get("/api/v1/garmin/activities/nonexistent/laps")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Activity not found"}

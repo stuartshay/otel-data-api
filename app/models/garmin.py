@@ -302,6 +302,30 @@ class GarminActivityClimb(BaseModel):
     updated_at: datetime | None = Field(default=None, description="UTC timestamp when the row was last updated")
 
 
+class GarminActivityLap(BaseModel):
+    """Garmin-native or derived activity lap row."""
+
+    id: int = Field(description="Unique lap row identifier")
+    activity_id: str = Field(description="Parent Garmin activity identifier")
+    lap_index: int = Field(description="One-based lap order within the activity")
+    start_time: datetime | None = Field(default=None, description="UTC lap start time")
+    end_time: datetime | None = Field(default=None, description="UTC lap end time")
+    duration_seconds: float | None = Field(default=None, description="Lap timer duration in seconds")
+    elapsed_duration_seconds: float | None = Field(default=None, description="Lap elapsed duration in seconds")
+    moving_duration_seconds: float | None = Field(default=None, description="Lap moving duration in seconds")
+    distance_meters: float | None = Field(default=None, description="Lap distance in meters")
+    paved_distance_meters: float | None = Field(default=None, description="Lap paved distance in meters")
+    unpaved_distance_meters: float | None = Field(default=None, description="Lap unpaved distance in meters")
+    avg_speed_mps: float | None = Field(default=None, description="Average lap speed in meters per second")
+    avg_heart_rate: int | None = Field(default=None, description="Average lap heart rate in bpm")
+    max_heart_rate: int | None = Field(default=None, description="Maximum lap heart rate in bpm")
+    total_ascent_meters: float | None = Field(default=None, description="Lap elevation gain in meters")
+    total_descent_meters: float | None = Field(default=None, description="Lap elevation loss in meters")
+    calories: float | None = Field(default=None, description="Calories recorded for this lap")
+    created_at: datetime | None = Field(default=None, description="UTC timestamp when the row was inserted")
+    updated_at: datetime | None = Field(default=None, description="UTC timestamp when the row was last updated")
+
+
 class SportInfo(BaseModel):
     """Sport type with its activity count."""
 

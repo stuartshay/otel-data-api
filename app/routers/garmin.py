@@ -18,6 +18,7 @@ from app.models import PaginatedResponse
 from app.models.garmin import (
     GarminActivity,
     GarminActivityClimb,
+    GarminActivityLap,
     GarminActivityManualUpdate,
     GarminActivityTotal,
     GarminChartPoint,
@@ -625,6 +626,36 @@ async def list_activity_climbs(
     )
 
     return [GarminActivityClimb(**dict(row)) for row in rows]
+
+
+@router.get(
+    "/activities/{activity_id}/laps",
+    response_model=list[GarminActivityLap],
+    responses={404: {"description": "Activity not found"}},
+)
+async def list_activity_laps(
+    request: Request,
+    activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
+) -> list[GarminActivityLap]:
+    """Return Garmin-native or derived laps for an activity."""
+    db = request.app.state.db
+
+    exists = await db.fetchval("SELECT 1 FROM public.garmin_activities WHERE activity_id = $1", activity_id)
+    if not exists:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    rows = await db.fetch(
+        "SELECT id, activity_id, lap_index, start_time, end_time, "
+        "duration_seconds, elapsed_duration_seconds, moving_duration_seconds, "
+        "distance_meters, paved_distance_meters, unpaved_distance_meters, "
+        "avg_speed_mps, avg_heart_rate, max_heart_rate, total_ascent_meters, "
+        "total_descent_meters, calories, created_at, updated_at "
+        "FROM public.garmin_activity_laps WHERE activity_id = $1 "
+        "ORDER BY lap_index ASC",
+        activity_id,
+    )
+
+    return [GarminActivityLap(**dict(row)) for row in rows]
 
 
 def _row_to_track_point(row: Mapping[str, Any]) -> GarminTrackPoint:

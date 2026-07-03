@@ -74,7 +74,6 @@ repos:
     hooks:
       - id: cspell
         name: Spell check
-        args: [--no-progress, --no-summary, --gitignore]
         additional_dependencies:
           - '@cspell/dict-python'
           - '@cspell/dict-bash'

@@ -1237,6 +1237,61 @@
         }
       }
     },
+    "/api/v1/garmin/activities/{activity_id}/laps": {
+      "get": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "List Activity Laps",
+        "description": "Return Garmin-native or derived laps for an activity.",
+        "operationId": "list_activity_laps_api_v1_garmin_activities__activity_id__laps_get",
+        "parameters": [
+          {
+            "name": "activity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Garmin activity ID",
+              "examples": [
+                "20932993811"
+              ],
+              "title": "Activity Id"
+            },
+            "description": "Garmin activity ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GarminActivityLap"
+                  },
+                  "title": "Response List Activity Laps Api V1 Garmin Activities  Activity Id  Laps Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Activity not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/garmin/activities/{activity_id}/addresses": {
       "get": {
         "tags": [
@@ -3763,6 +3818,229 @@
         ],
         "title": "GarminActivityClimb",
         "description": "Garmin-native ClimbPro typed split for an activity."
+      },
+      "GarminActivityLap": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Unique lap row identifier"
+          },
+          "activity_id": {
+            "type": "string",
+            "title": "Activity Id",
+            "description": "Parent Garmin activity identifier"
+          },
+          "lap_index": {
+            "type": "integer",
+            "title": "Lap Index",
+            "description": "One-based lap order within the activity"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time",
+            "description": "UTC lap start time"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Time",
+            "description": "UTC lap end time"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds",
+            "description": "Lap timer duration in seconds"
+          },
+          "elapsed_duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed Duration Seconds",
+            "description": "Lap elapsed duration in seconds"
+          },
+          "moving_duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moving Duration Seconds",
+            "description": "Lap moving duration in seconds"
+          },
+          "distance_meters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance Meters",
+            "description": "Lap distance in meters"
+          },
+          "paved_distance_meters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paved Distance Meters",
+            "description": "Lap paved distance in meters"
+          },
+          "unpaved_distance_meters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unpaved Distance Meters",
+            "description": "Lap unpaved distance in meters"
+          },
+          "avg_speed_mps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Speed Mps",
+            "description": "Average lap speed in meters per second"
+          },
+          "avg_heart_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Heart Rate",
+            "description": "Average lap heart rate in bpm"
+          },
+          "max_heart_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Heart Rate",
+            "description": "Maximum lap heart rate in bpm"
+          },
+          "total_ascent_meters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Ascent Meters",
+            "description": "Lap elevation gain in meters"
+          },
+          "total_descent_meters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Descent Meters",
+            "description": "Lap elevation loss in meters"
+          },
+          "calories": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calories",
+            "description": "Calories recorded for this lap"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "UTC timestamp when the row was inserted"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "UTC timestamp when the row was last updated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "activity_id",
+          "lap_index"
+        ],
+        "title": "GarminActivityLap",
+        "description": "Garmin-native or derived activity lap row."
       },
       "GarminActivityManualUpdate": {
         "properties": {

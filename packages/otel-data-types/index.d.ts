@@ -369,6 +369,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/garmin/activities/{activity_id}/laps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Activity Laps
+         * @description Return Garmin-native or derived laps for an activity.
+         */
+        get: operations["list_activity_laps_api_v1_garmin_activities__activity_id__laps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/garmin/activities/{activity_id}/addresses": {
         parameters: {
             query?: never;
@@ -1386,6 +1406,107 @@ export type components = {
              * @description Maximum temperature in degrees C
              */
             max_temperature_c?: number | null;
+            /**
+             * Created At
+             * @description UTC timestamp when the row was inserted
+             */
+            created_at?: string | null;
+            /**
+             * Updated At
+             * @description UTC timestamp when the row was last updated
+             */
+            updated_at?: string | null;
+        };
+        /**
+         * GarminActivityLap
+         * @description Garmin-native or derived activity lap row.
+         */
+        GarminActivityLap: {
+            /**
+             * Id
+             * @description Unique lap row identifier
+             */
+            id: number;
+            /**
+             * Activity Id
+             * @description Parent Garmin activity identifier
+             */
+            activity_id: string;
+            /**
+             * Lap Index
+             * @description One-based lap order within the activity
+             */
+            lap_index: number;
+            /**
+             * Start Time
+             * @description UTC lap start time
+             */
+            start_time?: string | null;
+            /**
+             * End Time
+             * @description UTC lap end time
+             */
+            end_time?: string | null;
+            /**
+             * Duration Seconds
+             * @description Lap timer duration in seconds
+             */
+            duration_seconds?: number | null;
+            /**
+             * Elapsed Duration Seconds
+             * @description Lap elapsed duration in seconds
+             */
+            elapsed_duration_seconds?: number | null;
+            /**
+             * Moving Duration Seconds
+             * @description Lap moving duration in seconds
+             */
+            moving_duration_seconds?: number | null;
+            /**
+             * Distance Meters
+             * @description Lap distance in meters
+             */
+            distance_meters?: number | null;
+            /**
+             * Paved Distance Meters
+             * @description Lap paved distance in meters
+             */
+            paved_distance_meters?: number | null;
+            /**
+             * Unpaved Distance Meters
+             * @description Lap unpaved distance in meters
+             */
+            unpaved_distance_meters?: number | null;
+            /**
+             * Avg Speed Mps
+             * @description Average lap speed in meters per second
+             */
+            avg_speed_mps?: number | null;
+            /**
+             * Avg Heart Rate
+             * @description Average lap heart rate in bpm
+             */
+            avg_heart_rate?: number | null;
+            /**
+             * Max Heart Rate
+             * @description Maximum lap heart rate in bpm
+             */
+            max_heart_rate?: number | null;
+            /**
+             * Total Ascent Meters
+             * @description Lap elevation gain in meters
+             */
+            total_ascent_meters?: number | null;
+            /**
+             * Total Descent Meters
+             * @description Lap elevation loss in meters
+             */
+            total_descent_meters?: number | null;
+            /**
+             * Calories
+             * @description Calories recorded for this lap
+             */
+            calories?: number | null;
             /**
              * Created At
              * @description UTC timestamp when the row was inserted
@@ -3651,6 +3772,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GarminActivityClimb"][];
+                };
+            };
+            /** @description Activity not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_activity_laps_api_v1_garmin_activities__activity_id__laps_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Garmin activity ID */
+                activity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminActivityLap"][];
                 };
             };
             /** @description Activity not found */

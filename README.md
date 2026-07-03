@@ -49,6 +49,7 @@ flowchart LR
 | GET | `/api/v1/garmin/sports` | List sport types |
 | GET | `/api/v1/garmin/activities/{id}` | Activity detail |
 | GET | `/api/v1/garmin/activities/{id}/tracks` | Track points |
+| GET | `/api/v1/garmin/activities/{id}/laps` | Activity laps |
 | POST | `/api/v1/garmin/sync` | Trigger on-demand Garmin sync |
 | GET | `/api/v1/gps/unified` | Unified GPS points (view) |
 | GET | `/api/v1/gps/daily-summary` | Daily activity summary |
@@ -182,6 +183,7 @@ The API reads from these tables managed by
 - `public.locations` — OwnTracks GPS data
 - `public.garmin_activities` — Garmin Connect activities
 - `public.garmin_track_points` — Garmin GPS track points
+- `public.garmin_activity_laps` — Garmin-native and derived activity laps
 - `public.reference_locations` — Named reference locations
 - `unified_gps_points` (view) — Combined GPS data
 - `daily_activity_summary` (view) — Aggregated daily stats

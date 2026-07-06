@@ -1292,6 +1292,130 @@
         }
       }
     },
+    "/api/v1/garmin/laps": {
+      "get": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "List Laps",
+        "description": "Batch laps across activities for cross-activity comparison.\n\nReturns activities (newest first) that have at least one lap, each with\nits laps ordered by ``lap_index`` ascending, so lap N can be compared\nacross dates. Pagination applies to activities, not individual laps.",
+        "operationId": "list_laps_api_v1_garmin_laps_get",
+        "parameters": [
+          {
+            "name": "sport",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by sport type",
+              "examples": [
+                "cycling"
+              ],
+              "title": "Sport"
+            },
+            "description": "Filter by sport type"
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter from date (YYYY-MM-DD)",
+              "examples": [
+                "2026-01-01"
+              ],
+              "title": "Date From"
+            },
+            "description": "Filter from date (YYYY-MM-DD)"
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to date (YYYY-MM-DD)",
+              "examples": [
+                "2026-06-30"
+              ],
+              "title": "Date To"
+            },
+            "description": "Filter to date (YYYY-MM-DD)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "Maximum number of activities to return per page",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Maximum number of activities to return per page"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of activities to skip for pagination",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Number of activities to skip for pagination"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_GarminActivityLapsGroup_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/garmin/activities/{activity_id}/addresses": {
       "get": {
         "tags": [
@@ -4042,6 +4166,29 @@
         "title": "GarminActivityLap",
         "description": "Garmin-native or derived activity lap row."
       },
+      "GarminActivityLapsGroup": {
+        "properties": {
+          "activity": {
+            "$ref": "#/components/schemas/GarminLapsActivity",
+            "description": "Parent activity summary"
+          },
+          "laps": {
+            "items": {
+              "$ref": "#/components/schemas/GarminActivityLap"
+            },
+            "type": "array",
+            "title": "Laps",
+            "description": "Laps ordered by lap_index ascending"
+          }
+        },
+        "type": "object",
+        "required": [
+          "activity",
+          "laps"
+        ],
+        "title": "GarminActivityLapsGroup",
+        "description": "Laps for a single activity within the batch laps response."
+      },
       "GarminActivityManualUpdate": {
         "properties": {
           "sport": {
@@ -4893,6 +5040,130 @@
             "label": "Manual"
           }
         ]
+      },
+      "GarminLapsActivity": {
+        "properties": {
+          "activity_id": {
+            "type": "string",
+            "title": "Activity Id",
+            "description": "Garmin activity identifier"
+          },
+          "sport": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sport",
+            "description": "Sport type (e.g. cycling)"
+          },
+          "sub_sport": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Sport",
+            "description": "Sub-sport type (e.g. road)"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time",
+            "description": "UTC activity start time"
+          },
+          "distance_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance Km",
+            "description": "Total activity distance in kilometers"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds",
+            "description": "Total activity duration in seconds"
+          },
+          "avg_speed_kmh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Speed Kmh",
+            "description": "Average activity speed in km/h"
+          },
+          "avg_heart_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Heart Rate",
+            "description": "Average activity heart rate in bpm"
+          },
+          "max_heart_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Heart Rate",
+            "description": "Maximum activity heart rate in bpm"
+          },
+          "total_ascent_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Ascent M",
+            "description": "Total activity elevation gain in meters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "activity_id"
+        ],
+        "title": "GarminLapsActivity",
+        "description": "Activity summary metadata for a batch laps response item."
       },
       "GarminSyncResponse": {
         "properties": {
@@ -6292,6 +6563,41 @@
           "offset"
         ],
         "title": "PaginatedResponse[DailyActivitySummary]"
+      },
+      "PaginatedResponse_GarminActivityLapsGroup_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GarminActivityLapsGroup"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "List of items in the current page"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Total number of items matching the query"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit",
+            "description": "Maximum number of items per page"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset",
+            "description": "Number of items skipped from the start"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "PaginatedResponse[GarminActivityLapsGroup]"
       },
       "PaginatedResponse_GarminActivity_": {
         "properties": {

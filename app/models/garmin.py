@@ -326,6 +326,28 @@ class GarminActivityLap(BaseModel):
     updated_at: datetime | None = Field(default=None, description="UTC timestamp when the row was last updated")
 
 
+class GarminLapsActivity(BaseModel):
+    """Activity summary metadata for a batch laps response item."""
+
+    activity_id: str = Field(description="Garmin activity identifier")
+    sport: str | None = Field(default=None, description="Sport type (e.g. cycling)")
+    sub_sport: str | None = Field(default=None, description="Sub-sport type (e.g. road)")
+    start_time: datetime | None = Field(default=None, description="UTC activity start time")
+    distance_km: float | None = Field(default=None, description="Total activity distance in kilometers")
+    duration_seconds: float | None = Field(default=None, description="Total activity duration in seconds")
+    avg_speed_kmh: float | None = Field(default=None, description="Average activity speed in km/h")
+    avg_heart_rate: int | None = Field(default=None, description="Average activity heart rate in bpm")
+    max_heart_rate: int | None = Field(default=None, description="Maximum activity heart rate in bpm")
+    total_ascent_m: float | None = Field(default=None, description="Total activity elevation gain in meters")
+
+
+class GarminActivityLapsGroup(BaseModel):
+    """Laps for a single activity within the batch laps response."""
+
+    activity: GarminLapsActivity = Field(description="Parent activity summary")
+    laps: list[GarminActivityLap] = Field(description="Laps ordered by lap_index ascending")
+
+
 class SportInfo(BaseModel):
     """Sport type with its activity count."""
 

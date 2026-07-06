@@ -389,6 +389,30 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/garmin/laps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Laps
+         * @description Batch laps across activities for cross-activity comparison.
+         *
+         *     Returns activities (newest first) that have at least one lap, each with
+         *     its laps ordered by ``lap_index`` ascending, so lap N can be compared
+         *     across dates. Pagination applies to activities, not individual laps.
+         */
+        get: operations["list_laps_api_v1_garmin_laps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/garmin/activities/{activity_id}/addresses": {
         parameters: {
             query?: never;
@@ -1519,6 +1543,19 @@ export type components = {
             updated_at?: string | null;
         };
         /**
+         * GarminActivityLapsGroup
+         * @description Laps for a single activity within the batch laps response.
+         */
+        GarminActivityLapsGroup: {
+            /** @description Parent activity summary */
+            activity: components["schemas"]["GarminLapsActivity"];
+            /**
+             * Laps
+             * @description Laps ordered by lap_index ascending
+             */
+            laps: components["schemas"]["GarminActivityLap"][];
+        };
+        /**
          * GarminActivityManualUpdate
          * @description Partial manual update payload for Garmin activity records.
          * @example {
@@ -1933,6 +1970,62 @@ export type components = {
              * @description Number of activities for this device label
              */
             activity_count: number;
+        };
+        /**
+         * GarminLapsActivity
+         * @description Activity summary metadata for a batch laps response item.
+         */
+        GarminLapsActivity: {
+            /**
+             * Activity Id
+             * @description Garmin activity identifier
+             */
+            activity_id: string;
+            /**
+             * Sport
+             * @description Sport type (e.g. cycling)
+             */
+            sport?: string | null;
+            /**
+             * Sub Sport
+             * @description Sub-sport type (e.g. road)
+             */
+            sub_sport?: string | null;
+            /**
+             * Start Time
+             * @description UTC activity start time
+             */
+            start_time?: string | null;
+            /**
+             * Distance Km
+             * @description Total activity distance in kilometers
+             */
+            distance_km?: number | null;
+            /**
+             * Duration Seconds
+             * @description Total activity duration in seconds
+             */
+            duration_seconds?: number | null;
+            /**
+             * Avg Speed Kmh
+             * @description Average activity speed in km/h
+             */
+            avg_speed_kmh?: number | null;
+            /**
+             * Avg Heart Rate
+             * @description Average activity heart rate in bpm
+             */
+            avg_heart_rate?: number | null;
+            /**
+             * Max Heart Rate
+             * @description Maximum activity heart rate in bpm
+             */
+            max_heart_rate?: number | null;
+            /**
+             * Total Ascent M
+             * @description Total activity elevation gain in meters
+             */
+            total_ascent_m?: number | null;
         };
         /**
          * GarminSyncResponse
@@ -2735,6 +2828,29 @@ export type components = {
              * @description List of items in the current page
              */
             items: components["schemas"]["DailyActivitySummary"][];
+            /**
+             * Total
+             * @description Total number of items matching the query
+             */
+            total: number;
+            /**
+             * Limit
+             * @description Maximum number of items per page
+             */
+            limit: number;
+            /**
+             * Offset
+             * @description Number of items skipped from the start
+             */
+            offset: number;
+        };
+        /** PaginatedResponse[GarminActivityLapsGroup] */
+        PaginatedResponse_GarminActivityLapsGroup_: {
+            /**
+             * Items
+             * @description List of items in the current page
+             */
+            items: components["schemas"]["GarminActivityLapsGroup"][];
             /**
              * Total
              * @description Total number of items matching the query
@@ -3819,6 +3935,46 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_laps_api_v1_garmin_laps_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by sport type */
+                sport?: string | null;
+                /** @description Filter from date (YYYY-MM-DD) */
+                date_from?: string | null;
+                /** @description Filter to date (YYYY-MM-DD) */
+                date_to?: string | null;
+                /** @description Maximum number of activities to return per page */
+                limit?: number;
+                /** @description Number of activities to skip for pagination */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse_GarminActivityLapsGroup_"];
+                };
             };
             /** @description Validation Error */
             422: {

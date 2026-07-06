@@ -701,6 +701,105 @@ async def test_list_activity_laps_not_found(client: AsyncClient, mock_db):
     assert response.json() == {"detail": "Activity not found"}
 
 
+def _laps_activity_row(activity_id: str = "20932993811") -> dict:
+    return {
+        "activity_id": activity_id,
+        "sport": "cycling",
+        "sub_sport": "road",
+        "start_time": "2026-03-08T19:58:56+00:00",
+        "distance_km": 52.35,
+        "duration_seconds": 11045.0,
+        "avg_speed_kmh": 17.1,
+        "avg_heart_rate": 118,
+        "max_heart_rate": 149,
+        "total_ascent_m": 191.0,
+    }
+
+
+@pytest.mark.asyncio
+async def test_list_laps_batch_success(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 2
+    mock_db.fetch.side_effect = [
+        [_laps_activity_row("111"), _laps_activity_row("222")],
+        [
+            _lap_row(activity_id="111", lap_index=1),
+            _lap_row(activity_id="111", lap_index=2),
+            _lap_row(activity_id="222", lap_index=1),
+        ],
+    ]
+
+    response = await client.get("/api/v1/garmin/laps")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 2
+    assert data["limit"] == 50
+    assert data["offset"] == 0
+    assert len(data["items"]) == 2
+
+    first = data["items"][0]
+    assert first["activity"]["activity_id"] == "111"
+    assert first["activity"]["sport"] == "cycling"
+    assert [lap["lap_index"] for lap in first["laps"]] == [1, 2]
+
+    second = data["items"][1]
+    assert second["activity"]["activity_id"] == "222"
+    assert len(second["laps"]) == 1
+
+    activity_query = mock_db.fetch.await_args_list[0].args[0]
+    assert "EXISTS (SELECT 1 FROM public.garmin_activity_laps" in activity_query
+    assert "ORDER BY a.start_time DESC" in activity_query
+
+    laps_query = mock_db.fetch.await_args_list[1].args[0]
+    assert "activity_id = ANY($1::text[])" in laps_query
+    assert "ORDER BY lap_index ASC" in laps_query
+
+
+@pytest.mark.asyncio
+async def test_list_laps_batch_sport_and_date_filters(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.side_effect = [
+        [_laps_activity_row("111")],
+        [_lap_row(activity_id="111", lap_index=1)],
+    ]
+
+    response = await client.get(
+        "/api/v1/garmin/laps",
+        params={"sport": "cycling", "date_from": "2026-01-01", "date_to": "2026-06-30"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+
+    count_query = mock_db.fetchval.await_args.args[0]
+    assert "a.sport = $1" in count_query
+    assert "a.start_time >= $2::date" in count_query
+    assert "a.start_time < ($3::date + INTERVAL '1 day')" in count_query
+
+
+@pytest.mark.asyncio
+async def test_list_laps_batch_empty(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 0
+    mock_db.fetch.side_effect = [[]]
+
+    response = await client.get("/api/v1/garmin/laps")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data == {"items": [], "total": 0, "limit": 50, "offset": 0}
+
+    # Laps query must be skipped when no activities match.
+    assert mock_db.fetch.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_list_laps_batch_invalid_date(client: AsyncClient, mock_db):
+    response = await client.get("/api/v1/garmin/laps", params={"date_from": "not-a-date"})
+
+    assert response.status_code == 422
+
+
 class _FakeSyncResponse:
     def __init__(self, status_code: int, payload):
         self.status_code = status_code

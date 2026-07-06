@@ -19,11 +19,13 @@ from app.models.garmin import (
     GarminActivity,
     GarminActivityClimb,
     GarminActivityLap,
+    GarminActivityLapsGroup,
     GarminActivityManualUpdate,
     GarminActivityTotal,
     GarminChartPoint,
     GarminDateRange,
     GarminDeviceCount,
+    GarminLapsActivity,
     GarminSyncResponse,
     GarminTrackPoint,
     SportInfo,
@@ -656,6 +658,82 @@ async def list_activity_laps(
     )
 
     return [GarminActivityLap(**dict(row)) for row in rows]
+
+
+@router.get("/laps", response_model=PaginatedResponse[GarminActivityLapsGroup])
+async def list_laps(
+    request: Request,
+    sport: str | None = Query(None, description="Filter by sport type", examples=["cycling"]),
+    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2026-01-01"]),
+    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-06-30"]),
+    limit: int = Query(50, ge=1, le=500, description="Maximum number of activities to return per page"),
+    offset: int = Query(0, ge=0, description="Number of activities to skip for pagination"),
+) -> PaginatedResponse[GarminActivityLapsGroup]:
+    """Batch laps across activities for cross-activity comparison.
+
+    Returns activities (newest first) that have at least one lap, each with
+    its laps ordered by ``lap_index`` ascending, so lap N can be compared
+    across dates. Pagination applies to activities, not individual laps.
+    """
+    db = request.app.state.db
+
+    conditions: list[str] = ["EXISTS (SELECT 1 FROM public.garmin_activity_laps l WHERE l.activity_id = a.activity_id)"]
+    params: list = []
+    idx = 1
+
+    if sport:
+        conditions.append(f"a.sport = ${idx}")
+        params.append(sport)
+        idx += 1
+
+    if date_from:
+        conditions.append(f"a.start_time >= ${idx}::date")
+        params.append(_parse_date(date_from))
+        idx += 1
+
+    if date_to:
+        conditions.append(f"a.start_time < (${idx}::date + INTERVAL '1 day')")
+        params.append(_parse_date(date_to))
+        idx += 1
+
+    where = f"WHERE {' AND '.join(conditions)}"
+
+    total = await db.fetchval(f"SELECT COUNT(*) FROM public.garmin_activities a {where}", *params)
+
+    activity_rows = await db.fetch(
+        f"SELECT a.activity_id, a.sport, a.sub_sport, a.start_time, a.distance_km, "
+        f"a.duration_seconds, a.avg_speed_kmh, a.avg_heart_rate, a.max_heart_rate, a.total_ascent_m "
+        f"FROM public.garmin_activities a {where} "
+        f"ORDER BY a.start_time DESC "
+        f"LIMIT ${idx} OFFSET ${idx + 1}",
+        *params,
+        limit,
+        offset,
+    )
+
+    activities = [GarminLapsActivity(**dict(row)) for row in activity_rows]
+    laps_by_activity: dict[str, list[GarminActivityLap]] = {a.activity_id: [] for a in activities}
+
+    if activities:
+        lap_rows = await db.fetch(
+            "SELECT id, activity_id, lap_index, start_time, end_time, "
+            "duration_seconds, elapsed_duration_seconds, moving_duration_seconds, "
+            "distance_meters, paved_distance_meters, unpaved_distance_meters, "
+            "avg_speed_mps, avg_heart_rate, max_heart_rate, total_ascent_meters, "
+            "total_descent_meters, calories, created_at, updated_at "
+            "FROM public.garmin_activity_laps WHERE activity_id = ANY($1::text[]) "
+            "ORDER BY lap_index ASC",
+            list(laps_by_activity.keys()),
+        )
+        for row in lap_rows:
+            lap = GarminActivityLap(**dict(row))
+            laps_by_activity[lap.activity_id].append(lap)
+
+    items = [
+        GarminActivityLapsGroup(activity=activity, laps=laps_by_activity[activity.activity_id])
+        for activity in activities
+    ]
+    return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 def _row_to_track_point(row: Mapping[str, Any]) -> GarminTrackPoint:

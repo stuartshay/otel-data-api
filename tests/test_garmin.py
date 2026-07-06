@@ -1,7 +1,7 @@
 """Tests for Garmin endpoints."""
 
 import dataclasses
-from datetime import date
+from datetime import date, datetime
 
 import fastapi
 import httpx
@@ -1429,3 +1429,117 @@ async def test_pending_cell_does_not_hide_waypoint_address(client: AsyncClient, 
     assert addr["display_address"] == row["display_address"]
     assert addr["waypoint_kind"] == "start"
     assert addr["status"] == "success"
+
+
+def _segment_effort_row(activity_id: str, elapsed: float) -> dict:
+    return {
+        "activity_id": activity_id,
+        "sport": "cycling",
+        "activity_start_time": datetime(2026, 7, 5, 10, 0, 0),
+        "effort_start": datetime(2026, 7, 5, 10, 30, 0),
+        "effort_end": datetime(2026, 7, 5, 10, 30, int(elapsed % 60)),
+        "elapsed_seconds": elapsed,
+        "distance_km": 0.51,
+        "avg_speed_kmh": 18.2,
+        "avg_heart_rate": 128,
+        "max_heart_rate": 150,
+    }
+
+
+@pytest.mark.asyncio
+async def test_segment_efforts_returns_ranked(client: AsyncClient, mock_db):
+    mock_db.fetch.return_value = [
+        _segment_effort_row("a-fast", 89.0),
+        _segment_effort_row("a-slow", 130.0),
+    ]
+
+    response = await client.get(
+        "/api/v1/garmin/segment-efforts"
+        "?start_lat=40.79366846&start_lon=-73.96104321"
+        "&end_lat=40.79002409&end_lon=-73.96422816"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    assert body["segment"] == {
+        "start_lat": 40.79366846,
+        "start_lon": -73.96104321,
+        "end_lat": 40.79002409,
+        "end_lon": -73.96422816,
+        "tolerance_meters": 35,
+    }
+    assert [e["rank"] for e in body["items"]] == [1, 2]
+    assert [e["activity_id"] for e in body["items"]] == ["a-fast", "a-slow"]
+    assert body["items"][0]["elapsed_seconds"] == 89.0
+
+
+@pytest.mark.asyncio
+async def test_segment_efforts_query_and_params(client: AsyncClient, mock_db):
+    mock_db.fetch.return_value = []
+
+    response = await client.get(
+        "/api/v1/garmin/segment-efforts"
+        "?start_lat=40.79366846&start_lon=-73.96104321"
+        "&end_lat=40.79002409&end_lon=-73.96422816"
+        "&tolerance_meters=40&date_from=2024-01-01&date_to=2026-06-30&limit=25"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "segment": {
+            "start_lat": 40.79366846,
+            "start_lon": -73.96104321,
+            "end_lat": 40.79002409,
+            "end_lon": -73.96422816,
+            "tolerance_meters": 40,
+        },
+        "total": 0,
+        "items": [],
+    }
+
+    query, *params = mock_db.fetch.await_args.args
+    assert "ST_DWithin(t.geog, seg.start_pt, seg.tol)" in query
+    assert "ST_DWithin(t.geog, seg.end_pt, seg.tol)" in query
+    assert "e.e_ts > s.s_ts" in query  # same-direction enforcement
+    assert "DISTINCT ON (activity_id)" in query  # shortest traversal per activity
+    assert "ORDER BY m.elapsed_seconds ASC" in query
+    # $1..$5 = start_lon, start_lat, end_lon, end_lat, tolerance
+    assert params[:5] == [-73.96104321, 40.79366846, -73.96422816, 40.79002409, 40]
+    # default sport filter applied, then date range, then max_effort + limit
+    assert "a.sport = $6" in query
+    assert params[5] == "cycling"
+    assert params[6] == date(2024, 1, 1)
+    assert params[7] == date(2026, 6, 30)
+    assert params[-1] == 25  # limit is the last bound parameter
+
+
+@pytest.mark.asyncio
+async def test_segment_efforts_all_sports_when_blank(client: AsyncClient, mock_db):
+    mock_db.fetch.return_value = []
+
+    response = await client.get(
+        "/api/v1/garmin/segment-efforts?start_lat=40.79&start_lon=-73.96&end_lat=40.79&end_lon=-73.964&sport="
+    )
+
+    assert response.status_code == 200
+    query, *params = mock_db.fetch.await_args.args
+    assert "a.sport =" not in query
+    assert "cycling" not in params
+
+
+@pytest.mark.asyncio
+async def test_segment_efforts_invalid_date(client: AsyncClient, mock_db):
+    response = await client.get(
+        "/api/v1/garmin/segment-efforts?start_lat=40.79&start_lon=-73.96&end_lat=40.79&end_lon=-73.964&date_from=nope"
+    )
+
+    assert response.status_code == 422
+    assert "Invalid date format" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_segment_efforts_requires_coordinates(client: AsyncClient, mock_db):
+    response = await client.get("/api/v1/garmin/segment-efforts?start_lat=40.79")
+
+    assert response.status_code == 422

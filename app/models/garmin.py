@@ -511,3 +511,37 @@ class GarminActivityManualUpdate(BaseModel):
             ]
         },
     }
+
+
+class SegmentDefinition(BaseModel):
+    """The ad-hoc segment queried for efforts (a start→end corridor)."""
+
+    start_lat: float = Field(description="Segment start latitude")
+    start_lon: float = Field(description="Segment start longitude")
+    end_lat: float = Field(description="Segment end latitude")
+    end_lon: float = Field(description="Segment end longitude")
+    tolerance_meters: int = Field(description="Corridor radius around the start/end points in meters")
+
+
+class SegmentEffort(BaseModel):
+    """A single activity's best traversal of a segment, for cross-activity comparison."""
+
+    rank: int = Field(description="1-based rank by elapsed time (1 = fastest)")
+    activity_id: str = Field(description="Garmin activity identifier")
+    sport: str | None = Field(default=None, description="Sport type (e.g. cycling)")
+    activity_start_time: datetime | None = Field(default=None, description="UTC start time of the parent activity")
+    effort_start: datetime = Field(description="UTC timestamp entering the segment start corridor")
+    effort_end: datetime = Field(description="UTC timestamp reaching the segment end corridor")
+    elapsed_seconds: float = Field(description="Segment elapsed time in seconds")
+    distance_km: float | None = Field(default=None, description="Distance covered across the segment in km")
+    avg_speed_kmh: float | None = Field(default=None, description="Average speed across the segment in km/h")
+    avg_heart_rate: int | None = Field(default=None, description="Average heart rate across the segment in bpm")
+    max_heart_rate: int | None = Field(default=None, description="Maximum heart rate across the segment in bpm")
+
+
+class SegmentEffortsResponse(BaseModel):
+    """Ranked efforts for a segment across all matching activities."""
+
+    segment: SegmentDefinition = Field(description="The queried segment definition")
+    total: int = Field(description="Number of matching efforts returned")
+    items: list[SegmentEffort] = Field(description="Efforts ordered fastest-first")

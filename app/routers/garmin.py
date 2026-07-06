@@ -28,6 +28,9 @@ from app.models.garmin import (
     GarminLapsActivity,
     GarminSyncResponse,
     GarminTrackPoint,
+    SegmentDefinition,
+    SegmentEffort,
+    SegmentEffortsResponse,
     SportInfo,
 )
 from app.models.geocoding import GarminActivityAddress, GeocodedAddressSummary
@@ -844,3 +847,129 @@ async def list_activity_addresses(
     )
 
     return [GarminActivityAddress(**dict(row)) for row in rows]
+
+
+@router.get("/segment-efforts", response_model=SegmentEffortsResponse)
+async def list_segment_efforts(
+    request: Request,
+    start_lat: float = Query(..., description="Segment start latitude", examples=[40.79366846]),
+    start_lon: float = Query(..., description="Segment start longitude", examples=[-73.96104321]),
+    end_lat: float = Query(..., description="Segment end latitude", examples=[40.79002409]),
+    end_lon: float = Query(..., description="Segment end longitude", examples=[-73.96422816]),
+    tolerance_meters: int = Query(
+        35, ge=5, le=200, description="Corridor radius around the start/end points in meters"
+    ),
+    sport: str | None = Query("cycling", description="Filter by sport type; pass an empty value to include all sports"),
+    date_from: str | None = Query(
+        None, description="Filter from date (YYYY-MM-DD) on activity start_time", examples=["2024-01-01"]
+    ),
+    date_to: str | None = Query(
+        None, description="Filter to date (YYYY-MM-DD) on activity start_time", examples=["2026-06-30"]
+    ),
+    max_effort_seconds: int = Query(
+        3600, ge=1, le=86400, description="Ignore traversals longer than this (filters loop/return mismatches)"
+    ),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of efforts to return"),
+) -> SegmentEffortsResponse:
+    """Rank activity efforts over an ad-hoc segment defined by start/end coordinates.
+
+    Matches raw GPS track points with PostGIS: an activity qualifies when its
+    route passes within ``tolerance_meters`` of the start point and, later in
+    time, within tolerance of the end point (same direction of travel). For each
+    activity the shortest such start→end traversal is used, and efforts are
+    ranked fastest-first. Stateless (no stored segment) — the coordinate pair can
+    be sourced from a detected climb or lap.
+    """
+    db = request.app.state.db
+
+    params: list[Any] = [start_lon, start_lat, end_lon, end_lat, tolerance_meters]
+    idx = 6
+
+    sport_clause = ""
+    if sport:
+        sport_clause = f" AND a.sport = ${idx}"
+        params.append(sport)
+        idx += 1
+
+    date_from_clause = ""
+    if date_from:
+        date_from_clause = f" AND a.start_time >= ${idx}::date"
+        params.append(_parse_date(date_from))
+        idx += 1
+
+    date_to_clause = ""
+    if date_to:
+        date_to_clause = f" AND a.start_time < (${idx}::date + INTERVAL '1 day')"
+        params.append(_parse_date(date_to))
+        idx += 1
+
+    max_effort_idx = idx
+    params.append(max_effort_seconds)
+    idx += 1
+    limit_idx = idx
+    params.append(limit)
+
+    query = f"""
+        WITH seg AS (
+            SELECT ST_MakePoint($1, $2)::geography AS start_pt,
+                   ST_MakePoint($3, $4)::geography AS end_pt,
+                   $5::double precision AS tol
+        ),
+        starts AS (
+            SELECT t.activity_id, t.timestamp AS s_ts
+            FROM public.garmin_track_points t CROSS JOIN seg
+            WHERE t.geog IS NOT NULL AND ST_DWithin(t.geog, seg.start_pt, seg.tol)
+        ),
+        ends AS (
+            SELECT t.activity_id, t.timestamp AS e_ts
+            FROM public.garmin_track_points t CROSS JOIN seg
+            WHERE t.geog IS NOT NULL AND ST_DWithin(t.geog, seg.end_pt, seg.tol)
+        ),
+        pairs AS (
+            SELECT s.activity_id, s.s_ts, MIN(e.e_ts) AS e_ts
+            FROM starts s
+            JOIN ends e ON e.activity_id = s.activity_id AND e.e_ts > s.s_ts
+            GROUP BY s.activity_id, s.s_ts
+        ),
+        best AS (
+            SELECT DISTINCT ON (activity_id) activity_id, s_ts, e_ts
+            FROM pairs
+            ORDER BY activity_id, (e_ts - s_ts) ASC
+        ),
+        metrics AS (
+            SELECT b.activity_id, b.s_ts, b.e_ts,
+                   EXTRACT(EPOCH FROM (b.e_ts - b.s_ts)) AS elapsed_seconds,
+                   AVG(t.speed_kmh) AS avg_speed_kmh,
+                   AVG(t.heart_rate) FILTER (WHERE t.heart_rate > 0) AS avg_hr,
+                   MAX(t.heart_rate) AS max_heart_rate,
+                   MAX(t.distance_from_start_km) - MIN(t.distance_from_start_km) AS distance_km
+            FROM best b
+            JOIN public.garmin_track_points t
+              ON t.activity_id = b.activity_id
+             AND t.timestamp BETWEEN b.s_ts AND b.e_ts
+            GROUP BY b.activity_id, b.s_ts, b.e_ts
+        )
+        SELECT m.activity_id, a.sport, a.start_time AS activity_start_time,
+               m.s_ts AS effort_start, m.e_ts AS effort_end,
+               m.elapsed_seconds, m.distance_km, m.avg_speed_kmh,
+               ROUND(m.avg_hr)::int AS avg_heart_rate, m.max_heart_rate
+        FROM metrics m
+        JOIN public.garmin_activities a ON a.activity_id = m.activity_id
+        WHERE m.elapsed_seconds <= ${max_effort_idx}{sport_clause}{date_from_clause}{date_to_clause}
+        ORDER BY m.elapsed_seconds ASC
+        LIMIT ${limit_idx}
+    """
+
+    rows = await db.fetch(query, *params)
+    items = [SegmentEffort(rank=i + 1, **dict(row)) for i, row in enumerate(rows)]
+    return SegmentEffortsResponse(
+        segment=SegmentDefinition(
+            start_lat=start_lat,
+            start_lon=start_lon,
+            end_lat=end_lat,
+            end_lon=end_lon,
+            tolerance_meters=tolerance_meters,
+        ),
+        total=len(items),
+        items=items,
+    )

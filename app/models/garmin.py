@@ -520,7 +520,7 @@ class SegmentDefinition(BaseModel):
     start_lon: float = Field(description="Segment start longitude")
     end_lat: float = Field(description="Segment end latitude")
     end_lon: float = Field(description="Segment end longitude")
-    tolerance_meters: int = Field(description="Corridor radius around the start/end points in meters")
+    tolerance_meters: float = Field(description="Corridor radius around the start/end points in meters")
 
 
 class SegmentEffort(BaseModel):

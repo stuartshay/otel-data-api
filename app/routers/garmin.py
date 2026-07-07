@@ -1159,7 +1159,7 @@ async def get_segment_efforts(
             start_lon=seg["start_longitude"],
             end_lat=seg["end_latitude"],
             end_lon=seg["end_longitude"],
-            tolerance_meters=int(tolerance),
+            tolerance_meters=tolerance,
         ),
         total=len(items),
         items=items,

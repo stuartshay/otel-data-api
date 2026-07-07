@@ -520,7 +520,7 @@ class SegmentDefinition(BaseModel):
     start_lon: float = Field(description="Segment start longitude")
     end_lat: float = Field(description="Segment end latitude")
     end_lon: float = Field(description="Segment end longitude")
-    tolerance_meters: int = Field(description="Corridor radius around the start/end points in meters")
+    tolerance_meters: float = Field(description="Corridor radius around the start/end points in meters")
 
 
 class SegmentEffort(BaseModel):
@@ -545,3 +545,40 @@ class SegmentEffortsResponse(BaseModel):
     segment: SegmentDefinition = Field(description="The queried segment definition")
     total: int = Field(description="Number of matching efforts returned")
     items: list[SegmentEffort] = Field(description="Efforts ordered fastest-first")
+
+
+class GarminSegment(BaseModel):
+    """A saved named segment (path) for cross-activity effort comparison."""
+
+    id: int = Field(description="Unique saved segment identifier")
+    name: str = Field(description="Human-readable segment name")
+    sport: str | None = Field(default=None, description="Sport type (e.g. cycling)")
+    start_latitude: float = Field(description="Segment start latitude")
+    start_longitude: float = Field(description="Segment start longitude")
+    end_latitude: float = Field(description="Segment end latitude")
+    end_longitude: float = Field(description="Segment end longitude")
+    distance_meters: float | None = Field(default=None, description="Segment distance in meters")
+    match_tolerance_meters: float = Field(description="Corridor radius (m) used to match traversing activities")
+    source_activity_id: str | None = Field(default=None, description="Activity the segment was created from")
+    source_lap_index: int | None = Field(default=None, description="Lap index the segment was created from")
+    source_climb_index: int | None = Field(default=None, description="Climb split index the segment was created from")
+    created_at: datetime | None = Field(default=None, description="UTC creation timestamp")
+    updated_at: datetime | None = Field(default=None, description="UTC last-update timestamp")
+
+
+class GarminSegmentCreate(BaseModel):
+    """Request body to save a new segment (path)."""
+
+    name: str = Field(min_length=1, max_length=200, description="Human-readable segment name")
+    sport: str | None = Field(default="cycling", description="Sport type; defaults to cycling")
+    start_latitude: float = Field(description="Segment start latitude")
+    start_longitude: float = Field(description="Segment start longitude")
+    end_latitude: float = Field(description="Segment end latitude")
+    end_longitude: float = Field(description="Segment end longitude")
+    distance_meters: float | None = Field(default=None, description="Segment distance in meters")
+    match_tolerance_meters: float = Field(
+        default=35, ge=5, le=200, description="Corridor radius (m) used to match traversing activities"
+    )
+    source_activity_id: str | None = Field(default=None, description="Activity the segment was created from")
+    source_lap_index: int | None = Field(default=None, description="Lap index the segment was created from")
+    source_climb_index: int | None = Field(default=None, description="Climb split index the segment was created from")

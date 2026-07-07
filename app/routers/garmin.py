@@ -26,6 +26,8 @@ from app.models.garmin import (
     GarminDateRange,
     GarminDeviceCount,
     GarminLapsActivity,
+    GarminSegment,
+    GarminSegmentCreate,
     GarminSyncResponse,
     GarminTrackPoint,
     SegmentDefinition,
@@ -849,39 +851,28 @@ async def list_activity_addresses(
     return [GarminActivityAddress(**dict(row)) for row in rows]
 
 
-@router.get("/segment-efforts", response_model=SegmentEffortsResponse)
-async def list_segment_efforts(
-    request: Request,
-    start_lat: float = Query(..., description="Segment start latitude", examples=[40.79366846]),
-    start_lon: float = Query(..., description="Segment start longitude", examples=[-73.96104321]),
-    end_lat: float = Query(..., description="Segment end latitude", examples=[40.79002409]),
-    end_lon: float = Query(..., description="Segment end longitude", examples=[-73.96422816]),
-    tolerance_meters: int = Query(
-        35, ge=5, le=200, description="Corridor radius around the start/end points in meters"
-    ),
-    sport: str | None = Query("cycling", description="Filter by sport type; pass an empty value to include all sports"),
-    date_from: str | None = Query(
-        None, description="Filter from date (YYYY-MM-DD) on activity start_time", examples=["2024-01-01"]
-    ),
-    date_to: str | None = Query(
-        None, description="Filter to date (YYYY-MM-DD) on activity start_time", examples=["2026-06-30"]
-    ),
-    max_effort_seconds: int = Query(
-        3600, ge=1, le=86400, description="Ignore traversals longer than this (filters loop/return mismatches)"
-    ),
-    limit: int = Query(100, ge=1, le=500, description="Maximum number of efforts to return"),
-) -> SegmentEffortsResponse:
-    """Rank activity efforts over an ad-hoc segment defined by start/end coordinates.
+async def _fetch_segment_efforts(
+    db: Any,
+    *,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    tolerance_meters: float,
+    sport: str | None,
+    date_from: date | None,
+    date_to: date | None,
+    max_effort_seconds: int,
+    limit: int,
+) -> list[SegmentEffort]:
+    """Match GPS track points to a start→end corridor and rank efforts fastest-first.
 
-    Matches raw GPS track points with PostGIS: an activity qualifies when its
-    route passes within ``tolerance_meters`` of the start point and, later in
-    time, within tolerance of the end point (same direction of travel). For each
-    activity the shortest such start→end traversal is used, and efforts are
-    ranked fastest-first. Stateless (no stored segment) — the coordinate pair can
-    be sourced from a detected climb or lap.
+    Shared by the stateless ``/segment-efforts`` endpoint and the saved-segment
+    ``/segments/{id}/efforts`` endpoint. An activity qualifies when its route
+    passes within ``tolerance_meters`` of the start point and, later in time,
+    within tolerance of the end point (same direction); the shortest such
+    traversal per activity is used.
     """
-    db = request.app.state.db
-
     params: list[Any] = [start_lon, start_lat, end_lon, end_lat, tolerance_meters]
     idx = 6
 
@@ -894,13 +885,13 @@ async def list_segment_efforts(
     date_from_clause = ""
     if date_from:
         date_from_clause = f" AND a.start_time >= ${idx}::date"
-        params.append(_parse_date(date_from))
+        params.append(date_from)
         idx += 1
 
     date_to_clause = ""
     if date_to:
         date_to_clause = f" AND a.start_time < (${idx}::date + INTERVAL '1 day')"
-        params.append(_parse_date(date_to))
+        params.append(date_to)
         idx += 1
 
     max_effort_idx = idx
@@ -970,7 +961,55 @@ async def list_segment_efforts(
     """
 
     rows = await db.fetch(query, *params)
-    items = [SegmentEffort(rank=i + 1, **dict(row)) for i, row in enumerate(rows)]
+    return [SegmentEffort(rank=i + 1, **dict(row)) for i, row in enumerate(rows)]
+
+
+@router.get("/segment-efforts", response_model=SegmentEffortsResponse)
+async def list_segment_efforts(
+    request: Request,
+    start_lat: float = Query(..., description="Segment start latitude", examples=[40.79366846]),
+    start_lon: float = Query(..., description="Segment start longitude", examples=[-73.96104321]),
+    end_lat: float = Query(..., description="Segment end latitude", examples=[40.79002409]),
+    end_lon: float = Query(..., description="Segment end longitude", examples=[-73.96422816]),
+    tolerance_meters: int = Query(
+        35, ge=5, le=200, description="Corridor radius around the start/end points in meters"
+    ),
+    sport: str | None = Query("cycling", description="Filter by sport type; pass an empty value to include all sports"),
+    date_from: str | None = Query(
+        None, description="Filter from date (YYYY-MM-DD) on activity start_time", examples=["2024-01-01"]
+    ),
+    date_to: str | None = Query(
+        None, description="Filter to date (YYYY-MM-DD) on activity start_time", examples=["2026-06-30"]
+    ),
+    max_effort_seconds: int = Query(
+        3600, ge=1, le=86400, description="Ignore traversals longer than this (filters loop/return mismatches)"
+    ),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of efforts to return"),
+) -> SegmentEffortsResponse:
+    """Rank activity efforts over an ad-hoc segment defined by start/end coordinates.
+
+    Matches raw GPS track points with PostGIS: an activity qualifies when its
+    route passes within ``tolerance_meters`` of the start point and, later in
+    time, within tolerance of the end point (same direction of travel). For each
+    activity the shortest such start→end traversal is used, and efforts are
+    ranked fastest-first. Stateless (no stored segment) — the coordinate pair can
+    be sourced from a detected climb or lap.
+    """
+    db = request.app.state.db
+
+    items = await _fetch_segment_efforts(
+        db,
+        start_lat=start_lat,
+        start_lon=start_lon,
+        end_lat=end_lat,
+        end_lon=end_lon,
+        tolerance_meters=tolerance_meters,
+        sport=sport,
+        date_from=_parse_date(date_from) if date_from else None,
+        date_to=_parse_date(date_to) if date_to else None,
+        max_effort_seconds=max_effort_seconds,
+        limit=limit,
+    )
     return SegmentEffortsResponse(
         segment=SegmentDefinition(
             start_lat=start_lat,
@@ -978,6 +1017,149 @@ async def list_segment_efforts(
             end_lat=end_lat,
             end_lon=end_lon,
             tolerance_meters=tolerance_meters,
+        ),
+        total=len(items),
+        items=items,
+    )
+
+
+_SEGMENT_COLUMNS = (
+    "id, name, sport, start_latitude, start_longitude, end_latitude, end_longitude, "
+    "distance_meters::double precision AS distance_meters, "
+    "match_tolerance_meters::double precision AS match_tolerance_meters, "
+    "source_activity_id, source_lap_index, source_climb_index, created_at, updated_at"
+)
+
+
+@router.get("/segments", response_model=list[GarminSegment])
+async def list_segments(
+    request: Request,
+    sport: str | None = Query(None, description="Filter by sport type", examples=["cycling"]),
+) -> list[GarminSegment]:
+    """List saved segments (paths), newest first."""
+    db = request.app.state.db
+    where = ""
+    params: list[Any] = []
+    if sport:
+        where = "WHERE sport = $1"
+        params.append(sport)
+    rows = await db.fetch(
+        f"SELECT {_SEGMENT_COLUMNS} FROM public.garmin_segments {where} ORDER BY created_at DESC",
+        *params,
+    )
+    return [GarminSegment(**dict(row)) for row in rows]
+
+
+@router.post("/segments", response_model=GarminSegment, status_code=201)
+async def create_segment(
+    request: Request,
+    body: GarminSegmentCreate,
+    _user: dict = Depends(require_auth),
+) -> GarminSegment:
+    """Save a new segment (path) from a climb, lap, or manual selection (auth required)."""
+    db = request.app.state.db
+    row = await db.fetchrow(
+        "INSERT INTO public.garmin_segments "
+        "(name, sport, start_latitude, start_longitude, end_latitude, end_longitude, "
+        "distance_meters, match_tolerance_meters, source_activity_id, source_lap_index, source_climb_index) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) "
+        f"RETURNING {_SEGMENT_COLUMNS}",
+        body.name,
+        body.sport,
+        body.start_latitude,
+        body.start_longitude,
+        body.end_latitude,
+        body.end_longitude,
+        body.distance_meters,
+        body.match_tolerance_meters,
+        body.source_activity_id,
+        body.source_lap_index,
+        body.source_climb_index,
+    )
+    if not row:
+        raise HTTPException(status_code=500, detail="Failed to create segment")
+    return GarminSegment(**dict(row))
+
+
+@router.get(
+    "/segments/{segment_id}",
+    response_model=GarminSegment,
+    responses={404: {"description": "Segment not found"}},
+)
+async def get_segment(
+    request: Request,
+    segment_id: int = fastapi.Path(description="Saved segment ID"),
+) -> GarminSegment:
+    """Get a single saved segment by ID."""
+    db = request.app.state.db
+    row = await db.fetchrow(
+        f"SELECT {_SEGMENT_COLUMNS} FROM public.garmin_segments WHERE id = $1",
+        segment_id,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Segment not found")
+    return GarminSegment(**dict(row))
+
+
+@router.delete("/segments/{segment_id}", status_code=204, response_class=Response)
+async def delete_segment(
+    request: Request,
+    segment_id: int = fastapi.Path(description="Saved segment ID"),
+    _user: dict = Depends(require_auth),
+) -> Response:
+    """Delete a saved segment (auth required)."""
+    db = request.app.state.db
+    result = await db.execute("DELETE FROM public.garmin_segments WHERE id = $1", segment_id)
+    if result == "DELETE 0":
+        raise HTTPException(status_code=404, detail="Segment not found")
+    return Response(status_code=204)
+
+
+@router.get(
+    "/segments/{segment_id}/efforts",
+    response_model=SegmentEffortsResponse,
+    responses={404: {"description": "Segment not found"}},
+)
+async def get_segment_efforts(
+    request: Request,
+    segment_id: int = fastapi.Path(description="Saved segment ID"),
+    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD) on activity start_time"),
+    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD) on activity start_time"),
+    max_effort_seconds: int = Query(3600, ge=1, le=86400, description="Ignore traversals longer than this"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of efforts to return"),
+) -> SegmentEffortsResponse:
+    """Rank activity efforts over a saved segment (matches the saved start/end corridor)."""
+    db = request.app.state.db
+    seg = await db.fetchrow(
+        "SELECT sport, start_latitude, start_longitude, end_latitude, end_longitude, "
+        "match_tolerance_meters::double precision AS match_tolerance_meters "
+        "FROM public.garmin_segments WHERE id = $1",
+        segment_id,
+    )
+    if not seg:
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    tolerance = float(seg["match_tolerance_meters"])
+    items = await _fetch_segment_efforts(
+        db,
+        start_lat=seg["start_latitude"],
+        start_lon=seg["start_longitude"],
+        end_lat=seg["end_latitude"],
+        end_lon=seg["end_longitude"],
+        tolerance_meters=tolerance,
+        sport=seg["sport"],
+        date_from=_parse_date(date_from) if date_from else None,
+        date_to=_parse_date(date_to) if date_to else None,
+        max_effort_seconds=max_effort_seconds,
+        limit=limit,
+    )
+    return SegmentEffortsResponse(
+        segment=SegmentDefinition(
+            start_lat=seg["start_latitude"],
+            start_lon=seg["start_longitude"],
+            end_lat=seg["end_latitude"],
+            end_lon=seg["end_longitude"],
+            tolerance_meters=tolerance,
         ),
         total=len(items),
         items=items,

@@ -1544,3 +1544,137 @@ async def test_segment_efforts_requires_coordinates(client: AsyncClient, mock_db
     response = await client.get("/api/v1/garmin/segment-efforts?start_lat=40.79")
 
     assert response.status_code == 422
+
+
+def _segment_row(segment_id: int = 1) -> dict:
+    return {
+        "id": segment_id,
+        "name": "Harlem Hill",
+        "sport": "cycling",
+        "start_latitude": 40.79366846,
+        "start_longitude": -73.96104321,
+        "end_latitude": 40.79002409,
+        "end_longitude": -73.96422816,
+        "distance_meters": 508.1,
+        "match_tolerance_meters": 35.0,
+        "source_activity_id": "23493313338",
+        "source_lap_index": None,
+        "source_climb_index": 0,
+        "created_at": datetime(2026, 7, 6, 12, 0, 0),
+        "updated_at": datetime(2026, 7, 6, 12, 0, 0),
+    }
+
+
+@pytest.mark.asyncio
+async def test_create_segment(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = _segment_row(7)
+
+    response = await client.post(
+        "/api/v1/garmin/segments",
+        json={
+            "name": "Harlem Hill",
+            "start_latitude": 40.79366846,
+            "start_longitude": -73.96104321,
+            "end_latitude": 40.79002409,
+            "end_longitude": -73.96422816,
+            "source_activity_id": "23493313338",
+            "source_climb_index": 0,
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["id"] == 7
+    assert body["name"] == "Harlem Hill"
+    assert body["match_tolerance_meters"] == 35.0
+    query, *params = mock_db.fetchrow.await_args.args
+    assert "INSERT INTO public.garmin_segments" in query
+    assert params[0] == "Harlem Hill"
+
+
+@pytest.mark.asyncio
+async def test_list_segments(client: AsyncClient, mock_db):
+    mock_db.fetch.return_value = [_segment_row(1), _segment_row(2)]
+
+    response = await client.get("/api/v1/garmin/segments?sport=cycling")
+
+    assert response.status_code == 200
+    assert len(response.json()) == 2
+    query, *params = mock_db.fetch.await_args.args
+    assert "FROM public.garmin_segments" in query
+    assert "WHERE sport = $1" in query
+    assert "ORDER BY created_at DESC" in query
+    assert params == ["cycling"]
+
+
+@pytest.mark.asyncio
+async def test_get_segment_success(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = _segment_row(3)
+
+    response = await client.get("/api/v1/garmin/segments/3")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == 3
+
+
+@pytest.mark.asyncio
+async def test_get_segment_not_found(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = None
+
+    response = await client.get("/api/v1/garmin/segments/999")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_segment_success(client: AsyncClient, mock_db):
+    mock_db.execute.return_value = "DELETE 1"
+
+    response = await client.delete("/api/v1/garmin/segments/3")
+
+    assert response.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_delete_segment_not_found(client: AsyncClient, mock_db):
+    mock_db.execute.return_value = "DELETE 0"
+
+    response = await client.delete("/api/v1/garmin/segments/999")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_segment_efforts_uses_saved_coords(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = {
+        "sport": "cycling",
+        "start_latitude": 40.79366846,
+        "start_longitude": -73.96104321,
+        "end_latitude": 40.79002409,
+        "end_longitude": -73.96422816,
+        "match_tolerance_meters": 40.0,
+    }
+    mock_db.fetch.return_value = [
+        _segment_effort_row("a-fast", 79.0),
+        _segment_effort_row("a-slow", 130.0),
+    ]
+
+    response = await client.get("/api/v1/garmin/segments/5/efforts")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["segment"]["tolerance_meters"] == 40
+    assert [e["rank"] for e in body["items"]] == [1, 2]
+    efforts_query, *efforts_params = mock_db.fetch.await_args.args
+    assert "ST_DWithin(t.geog, seg.start_pt, seg.tol)" in efforts_query
+    # matching used the saved segment's coordinates and tolerance
+    assert efforts_params[:5] == [-73.96104321, 40.79366846, -73.96422816, 40.79002409, 40.0]
+
+
+@pytest.mark.asyncio
+async def test_get_segment_efforts_not_found(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = None
+
+    response = await client.get("/api/v1/garmin/segments/999/efforts")
+
+    assert response.status_code == 404

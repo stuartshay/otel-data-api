@@ -1,7 +1,7 @@
 """Tests for Garmin endpoints."""
 
 import dataclasses
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import fastapi
 import httpx
@@ -1432,12 +1432,13 @@ async def test_pending_cell_does_not_hide_waypoint_address(client: AsyncClient, 
 
 
 def _segment_effort_row(activity_id: str, elapsed: float) -> dict:
+    effort_start = datetime(2026, 7, 5, 10, 30, 0)
     return {
         "activity_id": activity_id,
         "sport": "cycling",
         "activity_start_time": datetime(2026, 7, 5, 10, 0, 0),
-        "effort_start": datetime(2026, 7, 5, 10, 30, 0),
-        "effort_end": datetime(2026, 7, 5, 10, 30, int(elapsed % 60)),
+        "effort_start": effort_start,
+        "effort_end": effort_start + timedelta(seconds=elapsed),
         "elapsed_seconds": elapsed,
         "distance_km": 0.51,
         "avg_speed_kmh": 18.2,

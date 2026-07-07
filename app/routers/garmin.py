@@ -915,14 +915,23 @@ async def list_segment_efforts(
                    ST_MakePoint($3, $4)::geography AS end_pt,
                    $5::double precision AS tol
         ),
+        filtered_activities AS (
+            SELECT a.activity_id
+            FROM public.garmin_activities a
+            WHERE TRUE{sport_clause}{date_from_clause}{date_to_clause}
+        ),
         starts AS (
             SELECT t.activity_id, t.timestamp AS s_ts
-            FROM public.garmin_track_points t CROSS JOIN seg
+            FROM public.garmin_track_points t
+            JOIN filtered_activities fa ON fa.activity_id = t.activity_id
+            CROSS JOIN seg
             WHERE t.geog IS NOT NULL AND ST_DWithin(t.geog, seg.start_pt, seg.tol)
         ),
         ends AS (
             SELECT t.activity_id, t.timestamp AS e_ts
-            FROM public.garmin_track_points t CROSS JOIN seg
+            FROM public.garmin_track_points t
+            JOIN filtered_activities fa ON fa.activity_id = t.activity_id
+            CROSS JOIN seg
             WHERE t.geog IS NOT NULL AND ST_DWithin(t.geog, seg.end_pt, seg.tol)
         ),
         pairs AS (
@@ -955,7 +964,7 @@ async def list_segment_efforts(
                ROUND(m.avg_hr)::int AS avg_heart_rate, m.max_heart_rate
         FROM metrics m
         JOIN public.garmin_activities a ON a.activity_id = m.activity_id
-        WHERE m.elapsed_seconds <= ${max_effort_idx}{sport_clause}{date_from_clause}{date_to_clause}
+        WHERE m.elapsed_seconds <= ${max_effort_idx}
         ORDER BY m.elapsed_seconds ASC
         LIMIT ${limit_idx}
     """

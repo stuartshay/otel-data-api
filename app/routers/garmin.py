@@ -1038,10 +1038,10 @@ async def list_segments(
 ) -> list[GarminSegment]:
     """List saved segments (paths), newest first."""
     db = request.app.state.db
-    where = ""
+    where = "WHERE garmin_sync_status IS DISTINCT FROM 'delete_pending'"
     params: list[Any] = []
     if sport:
-        where = "WHERE sport = $1"
+        where += " AND sport = $1"
         params.append(sport)
     rows = await db.fetch(
         f"SELECT {_SEGMENT_COLUMNS} FROM public.garmin_segments {where} ORDER BY created_at DESC",
@@ -1093,7 +1093,8 @@ async def get_segment(
     """Get a single saved segment by ID."""
     db = request.app.state.db
     row = await db.fetchrow(
-        f"SELECT {_SEGMENT_COLUMNS} FROM public.garmin_segments WHERE id = $1",
+        f"SELECT {_SEGMENT_COLUMNS} FROM public.garmin_segments "
+        "WHERE id = $1 AND garmin_sync_status IS DISTINCT FROM 'delete_pending'",
         segment_id,
     )
     if not row:
@@ -1107,11 +1108,31 @@ async def delete_segment(
     segment_id: int = fastapi.Path(description="Saved segment ID"),
     _user: dict = Depends(require_auth),
 ) -> Response:
-    """Delete a saved segment (auth required)."""
+    """Delete a saved segment (auth required).
+
+    If the segment has been pushed to Garmin Connect (``garmin_segment_uuid`` is
+    set) it is marked ``delete_pending`` so the garmin-sync agent removes it from
+    Garmin and then deletes the row (end-to-end delete). Segments that were never
+    synced are removed immediately. Either way the segment stops appearing in the
+    read endpoints right away.
+    """
     db = request.app.state.db
-    result = await db.execute("DELETE FROM public.garmin_segments WHERE id = $1", segment_id)
-    if result == "DELETE 0":
+    row = await db.fetchrow(
+        "SELECT garmin_segment_uuid FROM public.garmin_segments "
+        "WHERE id = $1 AND garmin_sync_status IS DISTINCT FROM 'delete_pending'",
+        segment_id,
+    )
+    if row is None:
         raise HTTPException(status_code=404, detail="Segment not found")
+    if row["garmin_segment_uuid"] is not None:
+        # Synced to Garmin: hand off to the agent for end-to-end deletion.
+        await db.execute(
+            "UPDATE public.garmin_segments SET garmin_sync_status = 'delete_pending', updated_at = NOW() WHERE id = $1",
+            segment_id,
+        )
+    else:
+        # Never synced to Garmin: remove immediately.
+        await db.execute("DELETE FROM public.garmin_segments WHERE id = $1", segment_id)
     return Response(status_code=204)
 
 
@@ -1133,7 +1154,7 @@ async def get_segment_efforts(
     seg = await db.fetchrow(
         "SELECT sport, start_latitude, start_longitude, end_latitude, end_longitude, "
         "match_tolerance_meters::double precision AS match_tolerance_meters "
-        "FROM public.garmin_segments WHERE id = $1",
+        "FROM public.garmin_segments WHERE id = $1 AND garmin_sync_status IS DISTINCT FROM 'delete_pending'",
         segment_id,
     )
     if not seg:

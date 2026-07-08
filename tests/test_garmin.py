@@ -1602,7 +1602,8 @@ async def test_list_segments(client: AsyncClient, mock_db):
     assert len(response.json()) == 2
     query, *params = mock_db.fetch.await_args.args
     assert "FROM public.garmin_segments" in query
-    assert "WHERE sport = $1" in query
+    assert "garmin_sync_status <> 'delete_pending'" in query
+    assert "sport = $1" in query
     assert "ORDER BY created_at DESC" in query
     assert params == ["cycling"]
 
@@ -1627,17 +1628,32 @@ async def test_get_segment_not_found(client: AsyncClient, mock_db):
 
 
 @pytest.mark.asyncio
-async def test_delete_segment_success(client: AsyncClient, mock_db):
-    mock_db.execute.return_value = "DELETE 1"
+async def test_delete_segment_never_synced_hard_deletes(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = {"garmin_segment_uuid": None}
 
     response = await client.delete("/api/v1/garmin/segments/3")
 
     assert response.status_code == 204
+    executed = [call.args[0] for call in mock_db.execute.await_args_list]
+    assert any("DELETE FROM public.garmin_segments" in sql for sql in executed)
+    assert not any("delete_pending" in sql for sql in executed)
+
+
+@pytest.mark.asyncio
+async def test_delete_segment_synced_marks_delete_pending(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = {"garmin_segment_uuid": "abc-uuid"}
+
+    response = await client.delete("/api/v1/garmin/segments/1")
+
+    assert response.status_code == 204
+    executed = [call.args[0] for call in mock_db.execute.await_args_list]
+    assert any("delete_pending" in sql for sql in executed)
+    assert not any("DELETE FROM public.garmin_segments" in sql for sql in executed)
 
 
 @pytest.mark.asyncio
 async def test_delete_segment_not_found(client: AsyncClient, mock_db):
-    mock_db.execute.return_value = "DELETE 0"
+    mock_db.fetchrow.return_value = None
 
     response = await client.delete("/api/v1/garmin/segments/999")
 

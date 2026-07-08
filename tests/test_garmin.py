@@ -1602,7 +1602,7 @@ async def test_list_segments(client: AsyncClient, mock_db):
     assert len(response.json()) == 2
     query, *params = mock_db.fetch.await_args.args
     assert "FROM public.garmin_segments" in query
-    assert "garmin_sync_status <> 'delete_pending'" in query
+    assert "garmin_sync_status IS DISTINCT FROM 'delete_pending'" in query
     assert "sport = $1" in query
     assert "ORDER BY created_at DESC" in query
     assert params == ["cycling"]

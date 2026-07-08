@@ -1038,7 +1038,7 @@ async def list_segments(
 ) -> list[GarminSegment]:
     """List saved segments (paths), newest first."""
     db = request.app.state.db
-    where = "WHERE garmin_sync_status <> 'delete_pending'"
+    where = "WHERE garmin_sync_status IS DISTINCT FROM 'delete_pending'"
     params: list[Any] = []
     if sport:
         where += " AND sport = $1"
@@ -1094,7 +1094,7 @@ async def get_segment(
     db = request.app.state.db
     row = await db.fetchrow(
         f"SELECT {_SEGMENT_COLUMNS} FROM public.garmin_segments "
-        "WHERE id = $1 AND garmin_sync_status <> 'delete_pending'",
+        "WHERE id = $1 AND garmin_sync_status IS DISTINCT FROM 'delete_pending'",
         segment_id,
     )
     if not row:
@@ -1119,7 +1119,7 @@ async def delete_segment(
     db = request.app.state.db
     row = await db.fetchrow(
         "SELECT garmin_segment_uuid FROM public.garmin_segments "
-        "WHERE id = $1 AND garmin_sync_status <> 'delete_pending'",
+        "WHERE id = $1 AND garmin_sync_status IS DISTINCT FROM 'delete_pending'",
         segment_id,
     )
     if row is None:
@@ -1154,7 +1154,7 @@ async def get_segment_efforts(
     seg = await db.fetchrow(
         "SELECT sport, start_latitude, start_longitude, end_latitude, end_longitude, "
         "match_tolerance_meters::double precision AS match_tolerance_meters "
-        "FROM public.garmin_segments WHERE id = $1 AND garmin_sync_status <> 'delete_pending'",
+        "FROM public.garmin_segments WHERE id = $1 AND garmin_sync_status IS DISTINCT FROM 'delete_pending'",
         segment_id,
     )
     if not seg:

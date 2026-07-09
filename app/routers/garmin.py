@@ -1030,6 +1030,70 @@ _SEGMENT_COLUMNS = (
     "source_activity_id, source_lap_index, source_climb_index, created_at, updated_at"
 )
 
+# Aliased column list (table alias ``s``) for the read endpoints, which join a
+# LATERAL subquery that recovers the segment route geometry.
+_SEGMENT_SELECT_COLUMNS = (
+    "s.id, s.name, s.sport, s.start_latitude, s.start_longitude, s.end_latitude, s.end_longitude, "
+    "s.distance_meters::double precision AS distance_meters, "
+    "s.match_tolerance_meters::double precision AS match_tolerance_meters, "
+    "s.source_activity_id, s.source_lap_index, s.source_climb_index, s.created_at, s.updated_at, "
+    "r.route"
+)
+
+# Recover each segment's real path from its source activity GPS track: snap the
+# stored start/end to the nearest in-corridor track points (same ST_DWithin
+# corridor used by segment efforts), slice the ordered track between them, and
+# return a PostGIS-simplified array of ordered [latitude, longitude] pairs.
+# Yields NULL route when the segment has no source activity or no matchable
+# corridor, in which case the client falls back to a straight start→end line.
+_SEGMENT_ROUTE_LATERAL = """
+    LEFT JOIN LATERAL (
+        WITH bounds AS (
+            SELECT
+                ST_MakePoint(s.start_longitude, s.start_latitude)::geography AS start_pt,
+                ST_MakePoint(s.end_longitude, s.end_latitude)::geography AS end_pt,
+                GREATEST(s.match_tolerance_meters, 5)::double precision AS tol
+        ),
+        start_ts AS (
+            SELECT MIN(t.timestamp) AS ts
+            FROM public.garmin_track_points t, bounds
+            WHERE t.activity_id = s.source_activity_id
+              AND t.geog IS NOT NULL
+              AND ST_DWithin(t.geog, bounds.start_pt, bounds.tol)
+        ),
+        end_ts AS (
+            SELECT MIN(t.timestamp) AS ts
+            FROM public.garmin_track_points t, bounds, start_ts
+            WHERE t.activity_id = s.source_activity_id
+              AND t.geog IS NOT NULL
+              AND ST_DWithin(t.geog, bounds.end_pt, bounds.tol)
+              AND start_ts.ts IS NOT NULL
+              AND t.timestamp > start_ts.ts
+        ),
+        line AS (
+            SELECT ST_Simplify(
+                       ST_MakeLine(ST_MakePoint(t.longitude, t.latitude) ORDER BY t.timestamp ASC),
+                       0.00005
+                   ) AS geom
+            FROM public.garmin_track_points t, start_ts, end_ts
+            WHERE t.activity_id = s.source_activity_id
+              AND t.latitude IS NOT NULL
+              AND t.longitude IS NOT NULL
+              AND start_ts.ts IS NOT NULL
+              AND end_ts.ts IS NOT NULL
+              AND t.timestamp BETWEEN start_ts.ts AND end_ts.ts
+        )
+        SELECT array_agg(
+                   ARRAY[ST_Y((dp).geom), ST_X((dp).geom)]
+                   ORDER BY (dp).path
+               ) AS route
+        FROM line
+        CROSS JOIN LATERAL ST_DumpPoints(line.geom) AS dp
+        WHERE line.geom IS NOT NULL
+          AND ST_NPoints(line.geom) >= 2
+    ) r ON s.source_activity_id IS NOT NULL
+"""
+
 
 @router.get("/segments", response_model=list[GarminSegment])
 async def list_segments(
@@ -1044,7 +1108,8 @@ async def list_segments(
         where += " AND sport = $1"
         params.append(sport)
     rows = await db.fetch(
-        f"SELECT {_SEGMENT_COLUMNS} FROM public.garmin_segments {where} ORDER BY created_at DESC",
+        f"SELECT {_SEGMENT_SELECT_COLUMNS} FROM public.garmin_segments s "
+        f"{_SEGMENT_ROUTE_LATERAL} {where} ORDER BY created_at DESC",
         *params,
     )
     return [GarminSegment(**dict(row)) for row in rows]
@@ -1093,7 +1158,8 @@ async def get_segment(
     """Get a single saved segment by ID."""
     db = request.app.state.db
     row = await db.fetchrow(
-        f"SELECT {_SEGMENT_COLUMNS} FROM public.garmin_segments "
+        f"SELECT {_SEGMENT_SELECT_COLUMNS} FROM public.garmin_segments s "
+        f"{_SEGMENT_ROUTE_LATERAL} "
         "WHERE id = $1 AND garmin_sync_status IS DISTINCT FROM 'delete_pending'",
         segment_id,
     )

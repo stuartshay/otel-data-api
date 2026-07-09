@@ -1546,7 +1546,7 @@ async def test_segment_efforts_requires_coordinates(client: AsyncClient, mock_db
     assert response.status_code == 422
 
 
-def _segment_row(segment_id: int = 1) -> dict:
+def _segment_row(segment_id: int = 1, route: list[list[float]] | None = None) -> dict:
     return {
         "id": segment_id,
         "name": "Harlem Hill",
@@ -1562,6 +1562,7 @@ def _segment_row(segment_id: int = 1) -> dict:
         "source_climb_index": 0,
         "created_at": datetime(2026, 7, 6, 12, 0, 0),
         "updated_at": datetime(2026, 7, 6, 12, 0, 0),
+        "route": route,
     }
 
 
@@ -1609,6 +1610,37 @@ async def test_list_segments(client: AsyncClient, mock_db):
 
 
 @pytest.mark.asyncio
+async def test_list_segments_returns_route(client: AsyncClient, mock_db):
+    route = [
+        [40.79366846, -73.96104321],
+        [40.79200000, -73.96250000],
+        [40.79002409, -73.96422816],
+    ]
+    mock_db.fetch.return_value = [_segment_row(1, route=route)]
+
+    response = await client.get("/api/v1/garmin/segments")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body[0]["route"] == route
+    query, *_ = mock_db.fetch.await_args.args
+    # Route is recovered server-side via a PostGIS LATERAL corridor slice.
+    assert "LEFT JOIN LATERAL" in query
+    assert "ST_DWithin" in query
+    assert "ST_Simplify" in query
+
+
+@pytest.mark.asyncio
+async def test_list_segments_null_route(client: AsyncClient, mock_db):
+    mock_db.fetch.return_value = [_segment_row(1, route=None)]
+
+    response = await client.get("/api/v1/garmin/segments")
+
+    assert response.status_code == 200
+    assert response.json()[0]["route"] is None
+
+
+@pytest.mark.asyncio
 async def test_get_segment_success(client: AsyncClient, mock_db):
     mock_db.fetchrow.return_value = _segment_row(3)
 
@@ -1616,6 +1648,19 @@ async def test_get_segment_success(client: AsyncClient, mock_db):
 
     assert response.status_code == 200
     assert response.json()["id"] == 3
+
+
+@pytest.mark.asyncio
+async def test_get_segment_returns_route(client: AsyncClient, mock_db):
+    route = [[40.79366846, -73.96104321], [40.79002409, -73.96422816]]
+    mock_db.fetchrow.return_value = _segment_row(3, route=route)
+
+    response = await client.get("/api/v1/garmin/segments/3")
+
+    assert response.status_code == 200
+    assert response.json()["route"] == route
+    query, *_ = mock_db.fetchrow.await_args.args
+    assert "LEFT JOIN LATERAL" in query
 
 
 @pytest.mark.asyncio

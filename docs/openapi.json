@@ -1471,6 +1471,504 @@
         }
       }
     },
+    "/api/v1/garmin/segment-efforts": {
+      "get": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "List Segment Efforts",
+        "description": "Rank activity efforts over an ad-hoc segment defined by start/end coordinates.\n\nMatches raw GPS track points with PostGIS: an activity qualifies when its\nroute passes within ``tolerance_meters`` of the start point and, later in\ntime, within tolerance of the end point (same direction of travel). For each\nactivity the shortest such start\u2192end traversal is used, and efforts are\nranked fastest-first. Stateless (no stored segment) \u2014 the coordinate pair can\nbe sourced from a detected climb or lap.",
+        "operationId": "list_segment_efforts_api_v1_garmin_segment_efforts_get",
+        "parameters": [
+          {
+            "name": "start_lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "description": "Segment start latitude",
+              "examples": [
+                40.79366846
+              ],
+              "title": "Start Lat"
+            },
+            "description": "Segment start latitude"
+          },
+          {
+            "name": "start_lon",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "description": "Segment start longitude",
+              "examples": [
+                -73.96104321
+              ],
+              "title": "Start Lon"
+            },
+            "description": "Segment start longitude"
+          },
+          {
+            "name": "end_lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "description": "Segment end latitude",
+              "examples": [
+                40.79002409
+              ],
+              "title": "End Lat"
+            },
+            "description": "Segment end latitude"
+          },
+          {
+            "name": "end_lon",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "description": "Segment end longitude",
+              "examples": [
+                -73.96422816
+              ],
+              "title": "End Lon"
+            },
+            "description": "Segment end longitude"
+          },
+          {
+            "name": "tolerance_meters",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 5,
+              "description": "Corridor radius around the start/end points in meters",
+              "default": 35,
+              "title": "Tolerance Meters"
+            },
+            "description": "Corridor radius around the start/end points in meters"
+          },
+          {
+            "name": "sport",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by sport type; pass an empty value to include all sports",
+              "default": "cycling",
+              "title": "Sport"
+            },
+            "description": "Filter by sport type; pass an empty value to include all sports"
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter from date (YYYY-MM-DD) on activity start_time",
+              "examples": [
+                "2024-01-01"
+              ],
+              "title": "Date From"
+            },
+            "description": "Filter from date (YYYY-MM-DD) on activity start_time"
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to date (YYYY-MM-DD) on activity start_time",
+              "examples": [
+                "2026-06-30"
+              ],
+              "title": "Date To"
+            },
+            "description": "Filter to date (YYYY-MM-DD) on activity start_time"
+          },
+          {
+            "name": "max_effort_seconds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 86400,
+              "minimum": 1,
+              "description": "Ignore traversals longer than this (filters loop/return mismatches)",
+              "default": 3600,
+              "title": "Max Effort Seconds"
+            },
+            "description": "Ignore traversals longer than this (filters loop/return mismatches)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "Maximum number of efforts to return",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Maximum number of efforts to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SegmentEffortsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garmin/segments": {
+      "get": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "List Segments",
+        "description": "List saved segments (paths), newest first.",
+        "operationId": "list_segments_api_v1_garmin_segments_get",
+        "parameters": [
+          {
+            "name": "sport",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by sport type",
+              "examples": [
+                "cycling"
+              ],
+              "title": "Sport"
+            },
+            "description": "Filter by sport type"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GarminSegment"
+                  },
+                  "title": "Response List Segments Api V1 Garmin Segments Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "Create Segment",
+        "description": "Save a new segment (path) from a climb, lap, or manual selection (auth required).",
+        "operationId": "create_segment_api_v1_garmin_segments_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GarminSegmentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GarminSegment"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garmin/segments/{segment_id}": {
+      "get": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "Get Segment",
+        "description": "Get a single saved segment by ID.",
+        "operationId": "get_segment_api_v1_garmin_segments__segment_id__get",
+        "parameters": [
+          {
+            "name": "segment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "Saved segment ID",
+              "title": "Segment Id"
+            },
+            "description": "Saved segment ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GarminSegment"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Segment not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "Delete Segment",
+        "description": "Delete a saved segment (auth required).\n\nIf the segment has been pushed to Garmin Connect (``garmin_segment_uuid`` is\nset) it is marked ``delete_pending`` so the garmin-sync agent removes it from\nGarmin and then deletes the row (end-to-end delete). Segments that were never\nsynced are removed immediately. Either way the segment stops appearing in the\nread endpoints right away.",
+        "operationId": "delete_segment_api_v1_garmin_segments__segment_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "segment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "Saved segment ID",
+              "title": "Segment Id"
+            },
+            "description": "Saved segment ID"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garmin/segments/{segment_id}/efforts": {
+      "get": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "Get Segment Efforts",
+        "description": "Rank activity efforts over a saved segment (matches the saved start/end corridor).",
+        "operationId": "get_segment_efforts_api_v1_garmin_segments__segment_id__efforts_get",
+        "parameters": [
+          {
+            "name": "segment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "Saved segment ID",
+              "title": "Segment Id"
+            },
+            "description": "Saved segment ID"
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter from date (YYYY-MM-DD) on activity start_time",
+              "title": "Date From"
+            },
+            "description": "Filter from date (YYYY-MM-DD) on activity start_time"
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to date (YYYY-MM-DD) on activity start_time",
+              "title": "Date To"
+            },
+            "description": "Filter to date (YYYY-MM-DD) on activity start_time"
+          },
+          {
+            "name": "max_effort_seconds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 86400,
+              "minimum": 1,
+              "description": "Ignore traversals longer than this",
+              "default": 3600,
+              "title": "Max Effort Seconds"
+            },
+            "description": "Ignore traversals longer than this"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "Maximum number of efforts to return",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Maximum number of efforts to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SegmentEffortsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Segment not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/gps/unified": {
       "get": {
         "tags": [
@@ -5165,6 +5663,278 @@
         "title": "GarminLapsActivity",
         "description": "Activity summary metadata for a batch laps response item."
       },
+      "GarminSegment": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Unique saved segment identifier"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Human-readable segment name"
+          },
+          "sport": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sport",
+            "description": "Sport type (e.g. cycling)"
+          },
+          "start_latitude": {
+            "type": "number",
+            "title": "Start Latitude",
+            "description": "Segment start latitude"
+          },
+          "start_longitude": {
+            "type": "number",
+            "title": "Start Longitude",
+            "description": "Segment start longitude"
+          },
+          "end_latitude": {
+            "type": "number",
+            "title": "End Latitude",
+            "description": "Segment end latitude"
+          },
+          "end_longitude": {
+            "type": "number",
+            "title": "End Longitude",
+            "description": "Segment end longitude"
+          },
+          "distance_meters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance Meters",
+            "description": "Segment distance in meters"
+          },
+          "match_tolerance_meters": {
+            "type": "number",
+            "title": "Match Tolerance Meters",
+            "description": "Corridor radius (m) used to match traversing activities"
+          },
+          "source_activity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Activity Id",
+            "description": "Activity the segment was created from"
+          },
+          "source_lap_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Lap Index",
+            "description": "Lap index the segment was created from"
+          },
+          "source_climb_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Climb Index",
+            "description": "Climb split index the segment was created from"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "UTC creation timestamp"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "UTC last-update timestamp"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "items": {
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "type": "array",
+                  "maxItems": 2,
+                  "minItems": 2
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route",
+            "description": "Ordered [latitude, longitude] pairs tracing the segment path, recovered and simplified from the source activity's GPS track. Null when no source activity track can be matched."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "start_latitude",
+          "start_longitude",
+          "end_latitude",
+          "end_longitude",
+          "match_tolerance_meters"
+        ],
+        "title": "GarminSegment",
+        "description": "A saved named segment (path) for cross-activity effort comparison."
+      },
+      "GarminSegmentCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "description": "Human-readable segment name"
+          },
+          "sport": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sport",
+            "description": "Sport type; defaults to cycling",
+            "default": "cycling"
+          },
+          "start_latitude": {
+            "type": "number",
+            "title": "Start Latitude",
+            "description": "Segment start latitude"
+          },
+          "start_longitude": {
+            "type": "number",
+            "title": "Start Longitude",
+            "description": "Segment start longitude"
+          },
+          "end_latitude": {
+            "type": "number",
+            "title": "End Latitude",
+            "description": "Segment end latitude"
+          },
+          "end_longitude": {
+            "type": "number",
+            "title": "End Longitude",
+            "description": "Segment end longitude"
+          },
+          "distance_meters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance Meters",
+            "description": "Segment distance in meters"
+          },
+          "match_tolerance_meters": {
+            "type": "number",
+            "maximum": 200.0,
+            "minimum": 5.0,
+            "title": "Match Tolerance Meters",
+            "description": "Corridor radius (m) used to match traversing activities",
+            "default": 35
+          },
+          "source_activity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Activity Id",
+            "description": "Activity the segment was created from"
+          },
+          "source_lap_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Lap Index",
+            "description": "Lap index the segment was created from"
+          },
+          "source_climb_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Climb Index",
+            "description": "Climb split index the segment was created from"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "start_latitude",
+          "start_longitude",
+          "end_latitude",
+          "end_longitude"
+        ],
+        "title": "GarminSegmentCreate",
+        "description": "Request body to save a new segment (path)."
+      },
       "GarminSyncResponse": {
         "properties": {
           "status": {
@@ -6993,6 +7763,188 @@
             "radius_meters": 75
           }
         ]
+      },
+      "SegmentDefinition": {
+        "properties": {
+          "start_lat": {
+            "type": "number",
+            "title": "Start Lat",
+            "description": "Segment start latitude"
+          },
+          "start_lon": {
+            "type": "number",
+            "title": "Start Lon",
+            "description": "Segment start longitude"
+          },
+          "end_lat": {
+            "type": "number",
+            "title": "End Lat",
+            "description": "Segment end latitude"
+          },
+          "end_lon": {
+            "type": "number",
+            "title": "End Lon",
+            "description": "Segment end longitude"
+          },
+          "tolerance_meters": {
+            "type": "number",
+            "title": "Tolerance Meters",
+            "description": "Corridor radius around the start/end points in meters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_lat",
+          "start_lon",
+          "end_lat",
+          "end_lon",
+          "tolerance_meters"
+        ],
+        "title": "SegmentDefinition",
+        "description": "The ad-hoc segment queried for efforts (a start\u2192end corridor)."
+      },
+      "SegmentEffort": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank",
+            "description": "1-based rank by elapsed time (1 = fastest)"
+          },
+          "activity_id": {
+            "type": "string",
+            "title": "Activity Id",
+            "description": "Garmin activity identifier"
+          },
+          "sport": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sport",
+            "description": "Sport type (e.g. cycling)"
+          },
+          "activity_start_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activity Start Time",
+            "description": "UTC start time of the parent activity"
+          },
+          "effort_start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Effort Start",
+            "description": "UTC timestamp entering the segment start corridor"
+          },
+          "effort_end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Effort End",
+            "description": "UTC timestamp reaching the segment end corridor"
+          },
+          "elapsed_seconds": {
+            "type": "number",
+            "title": "Elapsed Seconds",
+            "description": "Segment elapsed time in seconds"
+          },
+          "distance_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance Km",
+            "description": "Distance covered across the segment in km"
+          },
+          "avg_speed_kmh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Speed Kmh",
+            "description": "Average speed across the segment in km/h"
+          },
+          "avg_heart_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Heart Rate",
+            "description": "Average heart rate across the segment in bpm"
+          },
+          "max_heart_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Heart Rate",
+            "description": "Maximum heart rate across the segment in bpm"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "activity_id",
+          "effort_start",
+          "effort_end",
+          "elapsed_seconds"
+        ],
+        "title": "SegmentEffort",
+        "description": "A single activity's best traversal of a segment, for cross-activity comparison."
+      },
+      "SegmentEffortsResponse": {
+        "properties": {
+          "segment": {
+            "$ref": "#/components/schemas/SegmentDefinition",
+            "description": "The queried segment definition"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Number of matching efforts returned"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SegmentEffort"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "Efforts ordered fastest-first"
+          }
+        },
+        "type": "object",
+        "required": [
+          "segment",
+          "total",
+          "items"
+        ],
+        "title": "SegmentEffortsResponse",
+        "description": "Ranked efforts for a segment across all matching activities."
       },
       "SportInfo": {
         "properties": {

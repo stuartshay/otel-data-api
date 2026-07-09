@@ -436,6 +436,107 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/garmin/segment-efforts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Segment Efforts
+         * @description Rank activity efforts over an ad-hoc segment defined by start/end coordinates.
+         *
+         *     Matches raw GPS track points with PostGIS: an activity qualifies when its
+         *     route passes within ``tolerance_meters`` of the start point and, later in
+         *     time, within tolerance of the end point (same direction of travel). For each
+         *     activity the shortest such start→end traversal is used, and efforts are
+         *     ranked fastest-first. Stateless (no stored segment) — the coordinate pair can
+         *     be sourced from a detected climb or lap.
+         */
+        get: operations["list_segment_efforts_api_v1_garmin_segment_efforts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/garmin/segments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Segments
+         * @description List saved segments (paths), newest first.
+         */
+        get: operations["list_segments_api_v1_garmin_segments_get"];
+        put?: never;
+        /**
+         * Create Segment
+         * @description Save a new segment (path) from a climb, lap, or manual selection (auth required).
+         */
+        post: operations["create_segment_api_v1_garmin_segments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/garmin/segments/{segment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Segment
+         * @description Get a single saved segment by ID.
+         */
+        get: operations["get_segment_api_v1_garmin_segments__segment_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Segment
+         * @description Delete a saved segment (auth required).
+         *
+         *     If the segment has been pushed to Garmin Connect (``garmin_segment_uuid`` is
+         *     set) it is marked ``delete_pending`` so the garmin-sync agent removes it from
+         *     Garmin and then deletes the row (end-to-end delete). Segments that were never
+         *     synced are removed immediately. Either way the segment stops appearing in the
+         *     read endpoints right away.
+         */
+        delete: operations["delete_segment_api_v1_garmin_segments__segment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/garmin/segments/{segment_id}/efforts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Segment Efforts
+         * @description Rank activity efforts over a saved segment (matches the saved start/end corridor).
+         */
+        get: operations["get_segment_efforts_api_v1_garmin_segments__segment_id__efforts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/gps/unified": {
         parameters: {
             query?: never;
@@ -2028,6 +2129,150 @@ export type components = {
             total_ascent_m?: number | null;
         };
         /**
+         * GarminSegment
+         * @description A saved named segment (path) for cross-activity effort comparison.
+         */
+        GarminSegment: {
+            /**
+             * Id
+             * @description Unique saved segment identifier
+             */
+            id: number;
+            /**
+             * Name
+             * @description Human-readable segment name
+             */
+            name: string;
+            /**
+             * Sport
+             * @description Sport type (e.g. cycling)
+             */
+            sport?: string | null;
+            /**
+             * Start Latitude
+             * @description Segment start latitude
+             */
+            start_latitude: number;
+            /**
+             * Start Longitude
+             * @description Segment start longitude
+             */
+            start_longitude: number;
+            /**
+             * End Latitude
+             * @description Segment end latitude
+             */
+            end_latitude: number;
+            /**
+             * End Longitude
+             * @description Segment end longitude
+             */
+            end_longitude: number;
+            /**
+             * Distance Meters
+             * @description Segment distance in meters
+             */
+            distance_meters?: number | null;
+            /**
+             * Match Tolerance Meters
+             * @description Corridor radius (m) used to match traversing activities
+             */
+            match_tolerance_meters: number;
+            /**
+             * Source Activity Id
+             * @description Activity the segment was created from
+             */
+            source_activity_id?: string | null;
+            /**
+             * Source Lap Index
+             * @description Lap index the segment was created from
+             */
+            source_lap_index?: number | null;
+            /**
+             * Source Climb Index
+             * @description Climb split index the segment was created from
+             */
+            source_climb_index?: number | null;
+            /**
+             * Created At
+             * @description UTC creation timestamp
+             */
+            created_at?: string | null;
+            /**
+             * Updated At
+             * @description UTC last-update timestamp
+             */
+            updated_at?: string | null;
+            /**
+             * Route
+             * @description Ordered [latitude, longitude] pairs tracing the segment path, recovered and simplified from the source activity's GPS track. Null when no source activity track can be matched.
+             */
+            route?: number[][] | null;
+        };
+        /**
+         * GarminSegmentCreate
+         * @description Request body to save a new segment (path).
+         */
+        GarminSegmentCreate: {
+            /**
+             * Name
+             * @description Human-readable segment name
+             */
+            name: string;
+            /**
+             * Sport
+             * @description Sport type; defaults to cycling
+             * @default cycling
+             */
+            sport: string | null;
+            /**
+             * Start Latitude
+             * @description Segment start latitude
+             */
+            start_latitude: number;
+            /**
+             * Start Longitude
+             * @description Segment start longitude
+             */
+            start_longitude: number;
+            /**
+             * End Latitude
+             * @description Segment end latitude
+             */
+            end_latitude: number;
+            /**
+             * End Longitude
+             * @description Segment end longitude
+             */
+            end_longitude: number;
+            /**
+             * Distance Meters
+             * @description Segment distance in meters
+             */
+            distance_meters?: number | null;
+            /**
+             * Match Tolerance Meters
+             * @description Corridor radius (m) used to match traversing activities
+             * @default 35
+             */
+            match_tolerance_meters: number;
+            /**
+             * Source Activity Id
+             * @description Activity the segment was created from
+             */
+            source_activity_id?: string | null;
+            /**
+             * Source Lap Index
+             * @description Lap index the segment was created from
+             */
+            source_lap_index?: number | null;
+            /**
+             * Source Climb Index
+             * @description Climb split index the segment was created from
+             */
+            source_climb_index?: number | null;
+        };
+        /**
          * GarminSyncResponse
          * @description Response payload for Garmin on-demand sync trigger requests.
          * @example {
@@ -3118,6 +3363,118 @@ export type components = {
             description?: string | null;
         };
         /**
+         * SegmentDefinition
+         * @description The ad-hoc segment queried for efforts (a start→end corridor).
+         */
+        SegmentDefinition: {
+            /**
+             * Start Lat
+             * @description Segment start latitude
+             */
+            start_lat: number;
+            /**
+             * Start Lon
+             * @description Segment start longitude
+             */
+            start_lon: number;
+            /**
+             * End Lat
+             * @description Segment end latitude
+             */
+            end_lat: number;
+            /**
+             * End Lon
+             * @description Segment end longitude
+             */
+            end_lon: number;
+            /**
+             * Tolerance Meters
+             * @description Corridor radius around the start/end points in meters
+             */
+            tolerance_meters: number;
+        };
+        /**
+         * SegmentEffort
+         * @description A single activity's best traversal of a segment, for cross-activity comparison.
+         */
+        SegmentEffort: {
+            /**
+             * Rank
+             * @description 1-based rank by elapsed time (1 = fastest)
+             */
+            rank: number;
+            /**
+             * Activity Id
+             * @description Garmin activity identifier
+             */
+            activity_id: string;
+            /**
+             * Sport
+             * @description Sport type (e.g. cycling)
+             */
+            sport?: string | null;
+            /**
+             * Activity Start Time
+             * @description UTC start time of the parent activity
+             */
+            activity_start_time?: string | null;
+            /**
+             * Effort Start
+             * Format: date-time
+             * @description UTC timestamp entering the segment start corridor
+             */
+            effort_start: string;
+            /**
+             * Effort End
+             * Format: date-time
+             * @description UTC timestamp reaching the segment end corridor
+             */
+            effort_end: string;
+            /**
+             * Elapsed Seconds
+             * @description Segment elapsed time in seconds
+             */
+            elapsed_seconds: number;
+            /**
+             * Distance Km
+             * @description Distance covered across the segment in km
+             */
+            distance_km?: number | null;
+            /**
+             * Avg Speed Kmh
+             * @description Average speed across the segment in km/h
+             */
+            avg_speed_kmh?: number | null;
+            /**
+             * Avg Heart Rate
+             * @description Average heart rate across the segment in bpm
+             */
+            avg_heart_rate?: number | null;
+            /**
+             * Max Heart Rate
+             * @description Maximum heart rate across the segment in bpm
+             */
+            max_heart_rate?: number | null;
+        };
+        /**
+         * SegmentEffortsResponse
+         * @description Ranked efforts for a segment across all matching activities.
+         */
+        SegmentEffortsResponse: {
+            /** @description The queried segment definition */
+            segment: components["schemas"]["SegmentDefinition"];
+            /**
+             * Total
+             * @description Number of matching efforts returned
+             */
+            total: number;
+            /**
+             * Items
+             * @description Efforts ordered fastest-first
+             */
+            items: components["schemas"]["SegmentEffort"][];
+        };
+        /**
          * SportInfo
          * @description Sport type with its activity count.
          * @example {
@@ -4009,6 +4366,238 @@ export interface operations {
                 };
             };
             /** @description Activity not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_segment_efforts_api_v1_garmin_segment_efforts_get: {
+        parameters: {
+            query: {
+                /** @description Segment start latitude */
+                start_lat: number;
+                /** @description Segment start longitude */
+                start_lon: number;
+                /** @description Segment end latitude */
+                end_lat: number;
+                /** @description Segment end longitude */
+                end_lon: number;
+                /** @description Corridor radius around the start/end points in meters */
+                tolerance_meters?: number;
+                /** @description Filter by sport type; pass an empty value to include all sports */
+                sport?: string | null;
+                /** @description Filter from date (YYYY-MM-DD) on activity start_time */
+                date_from?: string | null;
+                /** @description Filter to date (YYYY-MM-DD) on activity start_time */
+                date_to?: string | null;
+                /** @description Ignore traversals longer than this (filters loop/return mismatches) */
+                max_effort_seconds?: number;
+                /** @description Maximum number of efforts to return */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SegmentEffortsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_segments_api_v1_garmin_segments_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by sport type */
+                sport?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminSegment"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_segment_api_v1_garmin_segments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GarminSegmentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminSegment"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_segment_api_v1_garmin_segments__segment_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Saved segment ID */
+                segment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminSegment"];
+                };
+            };
+            /** @description Segment not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_segment_api_v1_garmin_segments__segment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Saved segment ID */
+                segment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_segment_efforts_api_v1_garmin_segments__segment_id__efforts_get: {
+        parameters: {
+            query?: {
+                /** @description Filter from date (YYYY-MM-DD) on activity start_time */
+                date_from?: string | null;
+                /** @description Filter to date (YYYY-MM-DD) on activity start_time */
+                date_to?: string | null;
+                /** @description Ignore traversals longer than this */
+                max_effort_seconds?: number;
+                /** @description Maximum number of efforts to return */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Saved segment ID */
+                segment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SegmentEffortsResponse"];
+                };
+            };
+            /** @description Segment not found */
             404: {
                 headers: {
                     [name: string]: unknown;

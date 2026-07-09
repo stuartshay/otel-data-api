@@ -564,7 +564,7 @@ class GarminSegment(BaseModel):
     source_climb_index: int | None = Field(default=None, description="Climb split index the segment was created from")
     created_at: datetime | None = Field(default=None, description="UTC creation timestamp")
     updated_at: datetime | None = Field(default=None, description="UTC last-update timestamp")
-    route: list[list[float]] | None = Field(
+    route: list[tuple[float, float]] | None = Field(
         default=None,
         description=(
             "Ordered [latitude, longitude] pairs tracing the segment path, recovered and "

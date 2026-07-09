@@ -2207,7 +2207,10 @@ export type components = {
              * Route
              * @description Ordered [latitude, longitude] pairs tracing the segment path, recovered and simplified from the source activity's GPS track. Null when no source activity track can be matched.
              */
-            route?: number[][] | null;
+            route?: [
+                number,
+                number
+            ][] | null;
         };
         /**
          * GarminSegmentCreate

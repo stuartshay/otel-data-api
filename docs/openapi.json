@@ -5790,10 +5790,17 @@
             "anyOf": [
               {
                 "items": {
-                  "items": {
-                    "type": "number"
-                  },
-                  "type": "array"
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "type": "array",
+                  "maxItems": 2,
+                  "minItems": 2
                 },
                 "type": "array"
               },

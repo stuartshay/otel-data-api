@@ -35,7 +35,11 @@ def _parse_date(value: str) -> date:
         raise HTTPException(status_code=422, detail=f"Invalid date format: {value!r}. Expected YYYY-MM-DD.") from None
 
 
-@router.get("", response_model=PaginatedResponse[Location])
+@router.get(
+    "",
+    response_model=PaginatedResponse[Location],
+    responses={422: {"description": "Invalid date format"}},
+)
 async def list_locations(
     request: Request,
     device_id: str | None = Query(None, description="Filter by device ID", examples=["iphone_stuart"]),
@@ -113,7 +117,11 @@ async def list_devices(request: Request) -> list[DeviceInfo]:
     return [DeviceInfo(device_id=row["device_id"]) for row in rows]
 
 
-@router.get("/date-range", response_model=LocationDateRange)
+@router.get(
+    "/date-range",
+    response_model=LocationDateRange,
+    responses={404: {"description": "No location data found"}},
+)
 async def location_date_range(request: Request) -> LocationDateRange:
     """Get the earliest and latest location timestamps."""
     db = request.app.state.db
@@ -123,7 +131,11 @@ async def location_date_range(request: Request) -> LocationDateRange:
     return LocationDateRange(min_date=row["min_date"], max_date=row["max_date"])
 
 
-@router.get("/count", response_model=LocationCount)
+@router.get(
+    "/count",
+    response_model=LocationCount,
+    responses={422: {"description": "Invalid date format"}},
+)
 async def location_count(
     request: Request,
     date: str | None = Query(None, description="Filter by date (YYYY-MM-DD)", examples=["2026-02-12"]),
@@ -151,7 +163,11 @@ async def location_count(
     return LocationCount(count=count, date=date, device_id=device_id)
 
 
-@router.get("/{location_id}", response_model=LocationDetail)
+@router.get(
+    "/{location_id}",
+    response_model=LocationDetail,
+    responses={404: {"description": "Location not found"}},
+)
 async def get_location(
     request: Request,
     location_id: int = fastapi.Path(description="Unique location record ID"),

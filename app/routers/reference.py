@@ -23,7 +23,11 @@ async def list_reference_locations(request: Request) -> list[ReferenceLocation]:
     return [ReferenceLocation(**dict(row)) for row in rows]
 
 
-@router.get("/{location_id}", response_model=ReferenceLocation)
+@router.get(
+    "/{location_id}",
+    response_model=ReferenceLocation,
+    responses={404: {"description": "Reference location not found"}},
+)
 async def get_reference_location(
     request: Request,
     location_id: int = fastapi.Path(description="Unique reference location ID"),
@@ -40,7 +44,12 @@ async def get_reference_location(
     return ReferenceLocation(**dict(row))
 
 
-@router.post("", response_model=ReferenceLocation, status_code=201)
+@router.post(
+    "",
+    response_model=ReferenceLocation,
+    status_code=201,
+    responses={500: {"description": "Failed to create reference location"}},
+)
 async def create_reference_location(
     request: Request,
     body: ReferenceLocationCreate,
@@ -63,7 +72,14 @@ async def create_reference_location(
     return ReferenceLocation(**dict(row))
 
 
-@router.put("/{location_id}", response_model=ReferenceLocation)
+@router.put(
+    "/{location_id}",
+    response_model=ReferenceLocation,
+    responses={
+        400: {"description": "No fields to update"},
+        404: {"description": "Reference location not found"},
+    },
+)
 async def update_reference_location(
     request: Request,
     location_id: int = fastapi.Path(description="Unique reference location ID"),
@@ -100,7 +116,12 @@ async def update_reference_location(
     return ReferenceLocation(**dict(row))
 
 
-@router.delete("/{location_id}", status_code=204, response_class=Response)
+@router.delete(
+    "/{location_id}",
+    status_code=204,
+    response_class=Response,
+    responses={404: {"description": "Reference location not found"}},
+)
 async def delete_reference_location(
     request: Request,
     location_id: int = fastapi.Path(description="Unique reference location ID"),

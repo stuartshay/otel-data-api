@@ -195,7 +195,11 @@ async def trigger_sync(
     )
 
 
-@router.get("/date-range", response_model=GarminDateRange)
+@router.get(
+    "/date-range",
+    response_model=GarminDateRange,
+    responses={404: {"description": "No Garmin activity data found"}},
+)
 async def garmin_date_range(request: Request) -> GarminDateRange:
     """Get the earliest and latest Garmin activity timestamps."""
     db = request.app.state.db
@@ -207,7 +211,11 @@ async def garmin_date_range(request: Request) -> GarminDateRange:
     return GarminDateRange(min_date=row["min_date"], max_date=row["max_date"])
 
 
-@router.get("/activities", response_model=PaginatedResponse[GarminActivity])
+@router.get(
+    "/activities",
+    response_model=PaginatedResponse[GarminActivity],
+    responses={422: {"description": "Invalid date format"}},
+)
 async def list_activities(
     request: Request,
     sport: str | None = Query(None, description="Filter by sport type", examples=["cycling"]),
@@ -665,7 +673,11 @@ async def list_activity_laps(
     return [GarminActivityLap(**dict(row)) for row in rows]
 
 
-@router.get("/laps", response_model=PaginatedResponse[GarminActivityLapsGroup])
+@router.get(
+    "/laps",
+    response_model=PaginatedResponse[GarminActivityLapsGroup],
+    responses={422: {"description": "Invalid date format"}},
+)
 async def list_laps(
     request: Request,
     sport: str | None = Query(None, description="Filter by sport type", examples=["cycling"]),
@@ -964,7 +976,11 @@ async def _fetch_segment_efforts(
     return [SegmentEffort(rank=i + 1, **dict(row)) for i, row in enumerate(rows)]
 
 
-@router.get("/segment-efforts", response_model=SegmentEffortsResponse)
+@router.get(
+    "/segment-efforts",
+    response_model=SegmentEffortsResponse,
+    responses={422: {"description": "Invalid date format"}},
+)
 async def list_segment_efforts(
     request: Request,
     start_lat: float = Query(..., description="Segment start latitude", examples=[40.79366846]),
@@ -1115,7 +1131,12 @@ async def list_segments(
     return [GarminSegment(**dict(row)) for row in rows]
 
 
-@router.post("/segments", response_model=GarminSegment, status_code=201)
+@router.post(
+    "/segments",
+    response_model=GarminSegment,
+    status_code=201,
+    responses={500: {"description": "Failed to create segment"}},
+)
 async def create_segment(
     request: Request,
     body: GarminSegmentCreate,
@@ -1168,7 +1189,12 @@ async def get_segment(
     return GarminSegment(**dict(row))
 
 
-@router.delete("/segments/{segment_id}", status_code=204, response_class=Response)
+@router.delete(
+    "/segments/{segment_id}",
+    status_code=204,
+    response_class=Response,
+    responses={404: {"description": "Segment not found"}},
+)
 async def delete_segment(
     request: Request,
     segment_id: int = fastapi.Path(description="Saved segment ID"),

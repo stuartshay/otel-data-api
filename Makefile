@@ -1,8 +1,9 @@
 # =============================================================================
 # otel-data-api Makefile
 # =============================================================================
+# cspell:ignore Dsonar Qube
 
-.PHONY: help setup install dev start stop restart clean lint format test docker-build docker-run docker-push all verify db-test db-tables dependencies openapi
+.PHONY: help setup install dev start stop restart clean lint format test sonar sonar-scan sonar-check-token sonar-coverage docker-build docker-run docker-push all verify db-test db-tables dependencies openapi
 
 .DEFAULT_GOAL := help
 
@@ -16,6 +17,30 @@ PYTEST_CACHE_DIR ?= /tmp/.pytest_cache
 PYTEST ?= pytest
 # Use -o to override pytest ini option for cache_dir (works across pytest versions)
 PYTEST_COMMON_OPTS := -o cache_dir=$(PYTEST_CACHE_DIR)
+SONAR_TOKEN_FROM_ENV := $(SONAR_TOKEN)
+
+ifneq (,$(wildcard .env))
+include .env
+endif
+
+ifneq (,$(wildcard .env.local))
+include .env.local
+endif
+
+ifneq ($(SONAR_TOKEN_FROM_ENV),)
+SONAR_TOKEN := $(SONAR_TOKEN_FROM_ENV)
+endif
+
+SONAR_HOST_URL ?= https://sonar.lab.informationcart.com
+SONAR_PROJECT_KEY ?= otel-data-api
+SONAR_PROJECT_NAME ?= otel-data-api
+SONAR_SOURCES ?= app
+SONAR_TESTS ?= tests
+SONAR_EXCLUSIONS ?= venv/**,.venv/**,output/**,htmlcov/**,dist/**,build/**
+SONAR_COVERAGE_REPORT ?= output/coverage.xml
+SONAR_PYTHON_VERSION ?= 3.12
+SONAR_SCANNER ?= $(if $(wildcard .tools/sonar-scanner/bin/sonar-scanner),.tools/sonar-scanner/bin/sonar-scanner,sonar-scanner)
+export SONAR_HOST_URL SONAR_PROJECT_KEY SONAR_PROJECT_NAME SONAR_TOKEN
 
 # Colors
 RED := \033[0;31m
@@ -26,7 +51,7 @@ NC := \033[0m
 help: ## Show this help message
 	@echo "$(GREEN)otel-data-api Makefile Commands$(NC)"
 	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
+	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 
 # =============================================================================
@@ -137,6 +162,36 @@ format-check: ## Check formatting
 
 type-check: ## Run mypy type checking
 	@. $(VENV_DIR)/bin/activate && mypy app/
+
+sonar: sonar-scan ## Run SonarQube analysis
+
+sonar-check-token: ## Validate SonarQube token configuration
+	@if [ -z "$${SONAR_TOKEN:-}" ]; then \
+		echo "$(RED)✗ SONAR_TOKEN is required. Add it to .env, .env.local, or export it before running make sonar.$(NC)"; \
+		exit 1; \
+	fi
+	@command -v "$(SONAR_SCANNER)" >/dev/null 2>&1 || { \
+		echo "$(RED)✗ sonar-scanner is required. Run ./setup.sh or install the SonarScanner CLI before running make sonar.$(NC)"; \
+		exit 1; \
+	}
+
+sonar-coverage: ## Generate coverage for SonarQube
+	@echo "$(YELLOW)Generating SonarQube coverage...$(NC)"
+	@mkdir -p output
+	@. $(VENV_DIR)/bin/activate && $(PYTEST) $(PYTEST_COMMON_OPTS) --cov=app --cov-report=xml:$(SONAR_COVERAGE_REPORT) tests/
+	@echo "$(GREEN)✓ Coverage report: $(SONAR_COVERAGE_REPORT)$(NC)"
+
+sonar-scan: sonar-check-token sonar-coverage ## Run SonarQube scanner CLI
+	$(SONAR_SCANNER) \
+		-Dsonar.host.url="$(SONAR_HOST_URL)" \
+		-Dsonar.token="$${SONAR_TOKEN}" \
+		-Dsonar.projectKey="$(SONAR_PROJECT_KEY)" \
+		-Dsonar.projectName="$(SONAR_PROJECT_NAME)" \
+		-Dsonar.sources="$(SONAR_SOURCES)" \
+		-Dsonar.tests="$(SONAR_TESTS)" \
+		-Dsonar.exclusions="$(SONAR_EXCLUSIONS)" \
+		-Dsonar.python.coverage.reportPaths="$(SONAR_COVERAGE_REPORT)" \
+		-Dsonar.python.version="$(SONAR_PYTHON_VERSION)"
 
 # =============================================================================
 # Testing

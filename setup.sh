@@ -16,6 +16,78 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+SONAR_SCANNER_VERSION="${SONAR_SCANNER_VERSION:-8.0.1.6346}"
+SONAR_SCANNER_DIR="${SCRIPT_DIR}/.tools/sonar-scanner"
+
+ensure_env_entry() {
+    local key="$1"
+    local value="$2"
+
+    if grep -q "^${key}=" .env; then
+        echo -e "${YELLOW}${key} already configured${NC}"
+    else
+        printf '%s=%s\n' "$key" "$value" >> .env
+        echo -e "${GREEN}✓ Added ${key} to .env${NC}"
+    fi
+}
+
+install_sonar_scanner() {
+    if command -v sonar-scanner &> /dev/null; then
+        SONAR_SCANNER_PATH="$(command -v sonar-scanner)"
+        echo -e "${GREEN}✓ SonarScanner CLI found: ${SONAR_SCANNER_PATH}${NC}"
+        return
+    fi
+
+    if [[ -x "${SONAR_SCANNER_DIR}/bin/sonar-scanner" ]]; then
+        echo -e "${GREEN}✓ SonarScanner CLI already installed: ${SONAR_SCANNER_DIR}${NC}"
+        return
+    fi
+
+    local architecture
+    local platform
+    architecture="$(uname -m)"
+    case "$architecture" in
+        x86_64 | amd64)
+            platform="linux-x64"
+            ;;
+        aarch64 | arm64)
+            platform="linux-aarch64"
+            ;;
+        *)
+            echo -e "${YELLOW}⚠ Unsupported SonarScanner architecture: ${architecture}${NC}"
+            echo -e "${YELLOW}  Install sonar-scanner manually before running make sonar.${NC}"
+            return
+            ;;
+    esac
+
+    if ! command -v curl &> /dev/null; then
+        echo -e "${YELLOW}⚠ curl is required to install SonarScanner CLI${NC}"
+        return
+    fi
+
+    if ! command -v unzip &> /dev/null; then
+        echo -e "${YELLOW}⚠ unzip is required to install SonarScanner CLI${NC}"
+        return
+    fi
+
+    local scanner_url
+    local download_path
+    local extract_dir
+    scanner_url="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-${platform}.zip"
+    download_path="$(mktemp)"
+    extract_dir="$(mktemp -d)"
+
+    echo -e "${YELLOW}Installing SonarScanner CLI ${SONAR_SCANNER_VERSION}...${NC}"
+    curl -fsSL "$scanner_url" -o "$download_path"
+    unzip -q "$download_path" -d "$extract_dir"
+    rm -rf "$SONAR_SCANNER_DIR"
+    mkdir -p "$(dirname "$SONAR_SCANNER_DIR")"
+    mv "${extract_dir}/sonar-scanner-${SONAR_SCANNER_VERSION}-${platform}" "$SONAR_SCANNER_DIR"
+    rm -f "$download_path"
+    rm -rf "$extract_dir"
+    echo -e "${GREEN}✓ SonarScanner CLI installed: ${SONAR_SCANNER_DIR}${NC}"
+}
+
 # Check Python version
 echo -e "${BLUE}Step 1: Checking Python version...${NC}"
 if command -v python3 &> /dev/null; then
@@ -39,6 +111,7 @@ fi
 # Install dependencies
 echo ""
 echo -e "${BLUE}Step 3: Installing dependencies...${NC}"
+# shellcheck source=/dev/null
 source venv/bin/activate
 pip install --upgrade pip -q
 pip install -r requirements.txt -q
@@ -90,9 +163,13 @@ else
     echo -e "${YELLOW}⚠ Docker not installed (optional)${NC}"
 fi
 
+echo ""
+echo -e "${BLUE}Step 7: Setting up SonarScanner CLI...${NC}"
+install_sonar_scanner
+
 # Create .env template
 echo ""
-echo -e "${BLUE}Step 7: Checking environment configuration...${NC}"
+echo -e "${BLUE}Step 8: Checking environment configuration...${NC}"
 if [[ ! -f ".env" ]]; then
     cat > .env << 'EOF'
 # OTel Data API Configuration
@@ -125,21 +202,32 @@ COGNITO_CLIENT_ID=
 
 # CORS
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+
+# SonarQube
+SONAR_HOST_URL=https://sonar.lab.informationcart.com
+SONAR_PROJECT_KEY=otel-data-api
+SONAR_PROJECT_NAME=otel-data-api
+SONAR_TOKEN=
 EOF
     echo -e "${GREEN}✓ Template .env created${NC}"
 else
     echo -e "${YELLOW}.env file already exists${NC}"
 fi
 
+ensure_env_entry "SONAR_HOST_URL" "https://sonar.lab.informationcart.com"
+ensure_env_entry "SONAR_PROJECT_KEY" "otel-data-api"
+ensure_env_entry "SONAR_PROJECT_NAME" "otel-data-api"
+ensure_env_entry "SONAR_TOKEN" ""
+
 # Verify setup
 echo ""
-echo -e "${BLUE}Step 8: Verifying setup...${NC}"
+echo -e "${BLUE}Step 9: Verifying setup...${NC}"
 python -c "import fastapi; import asyncpg; print('✓ Core imports successful')"
 echo -e "${GREEN}✓ All imports verified${NC}"
 
 # VS Code settings
 echo ""
-echo -e "${BLUE}Step 9: Configuring VS Code settings...${NC}"
+echo -e "${BLUE}Step 10: Configuring VS Code settings...${NC}"
 mkdir -p .vscode
 cat > .vscode/settings.json << EOF
 {
@@ -179,6 +267,7 @@ echo "  1. Activate venv:  source venv/bin/activate"
 echo "  2. Run server:     make dev"
 echo "  3. View docs:      http://localhost:8080/docs"
 echo "  4. Health check:   curl http://localhost:8080/health"
+echo "  5. Run Sonar:      make sonar"
 echo ""
 echo "Before committing:"
 echo "  pre-commit run -a"

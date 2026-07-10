@@ -69,6 +69,10 @@ node_modules/
 # Cache
 .cache/
 
+# SonarQube
+.scannerwork/
+.tools/
+
 # Project specific
 reports/
 tmp/

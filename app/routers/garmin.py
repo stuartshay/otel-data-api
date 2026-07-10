@@ -119,7 +119,6 @@ def _build_sync_params(
 
 @router.post(
     "/sync",
-    response_model=GarminSyncResponse,
     status_code=202,
     responses={
         400: {"model": GarminSyncResponse, "description": "Invalid sync trigger parameters"},
@@ -222,7 +221,6 @@ async def trigger_sync(
 
 @router.get(
     "/date-range",
-    response_model=GarminDateRange,
     responses={404: {"description": "No Garmin activity data found"}},
 )
 async def garmin_date_range(request: Request) -> GarminDateRange:
@@ -238,7 +236,6 @@ async def garmin_date_range(request: Request) -> GarminDateRange:
 
 @router.get(
     "/activities",
-    response_model=PaginatedResponse[GarminActivity],
     responses={422: {"description": "Invalid date format"}},
 )
 async def list_activities(
@@ -318,7 +315,7 @@ async def list_activities(
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
 
 
-@router.get("/sports", response_model=list[SportInfo])
+@router.get("/sports")
 async def list_sports(request: Request) -> list[SportInfo]:
     """List distinct sport types with activity counts."""
     db = request.app.state.db
@@ -329,7 +326,7 @@ async def list_sports(request: Request) -> list[SportInfo]:
     return [SportInfo(**dict(row)) for row in rows]
 
 
-@router.get("/device-counts", response_model=list[GarminDeviceCount])
+@router.get("/device-counts")
 async def list_device_counts(request: Request) -> list[GarminDeviceCount]:
     """List Garmin recording device labels with activity counts.
 
@@ -351,7 +348,6 @@ async def list_device_counts(request: Request) -> list[GarminDeviceCount]:
 
 @router.get(
     "/activity-totals",
-    response_model=list[GarminActivityTotal],
     responses={422: {"description": "Invalid query parameter"}},
 )
 async def list_activity_totals(
@@ -411,7 +407,6 @@ async def list_activity_totals(
 
 @router.get(
     "/activities/{activity_id}",
-    response_model=GarminActivity,
     responses={404: {"description": ACTIVITY_NOT_FOUND}},
 )
 async def get_activity(
@@ -435,7 +430,6 @@ async def get_activity(
 
 @router.patch(
     "/activities/{activity_id}",
-    response_model=GarminActivity,
     responses={
         **AUTH_RESPONSES,
         400: {"description": "No fields to update"},
@@ -479,7 +473,6 @@ async def patch_activity(
 
 @router.get(
     "/activities/{activity_id}/tracks",
-    response_model=PaginatedResponse[GarminTrackPoint],
     responses={404: {"description": ACTIVITY_NOT_FOUND}},
 )
 async def list_track_points(
@@ -603,7 +596,6 @@ async def list_track_points(
 
 @router.get(
     "/activities/{activity_id}/chart-data",
-    response_model=list[GarminChartPoint],
     responses={404: {"description": ACTIVITY_NOT_FOUND}},
 )
 async def get_chart_data(
@@ -635,7 +627,6 @@ async def get_chart_data(
 
 @router.get(
     "/activities/{activity_id}/climbs",
-    response_model=list[GarminActivityClimb],
     responses={404: {"description": ACTIVITY_NOT_FOUND}},
 )
 async def list_activity_climbs(
@@ -670,7 +661,6 @@ async def list_activity_climbs(
 
 @router.get(
     "/activities/{activity_id}/laps",
-    response_model=list[GarminActivityLap],
     responses={404: {"description": ACTIVITY_NOT_FOUND}},
 )
 async def list_activity_laps(
@@ -700,7 +690,6 @@ async def list_activity_laps(
 
 @router.get(
     "/laps",
-    response_model=PaginatedResponse[GarminActivityLapsGroup],
     responses={422: {"description": "Invalid date format"}},
 )
 async def list_laps(
@@ -851,7 +840,6 @@ def _row_to_track_point(row: Mapping[str, Any]) -> GarminTrackPoint:
 
 @router.get(
     "/activities/{activity_id}/addresses",
-    response_model=list[GarminActivityAddress],
     responses={404: {"description": ACTIVITY_NOT_FOUND}},
 )
 async def list_activity_addresses(
@@ -1003,7 +991,6 @@ async def _fetch_segment_efforts(
 
 @router.get(
     "/segment-efforts",
-    response_model=SegmentEffortsResponse,
     responses={422: {"description": "Invalid date format"}},
 )
 async def list_segment_efforts(
@@ -1136,7 +1123,7 @@ _SEGMENT_ROUTE_LATERAL = """
 """
 
 
-@router.get("/segments", response_model=list[GarminSegment])
+@router.get("/segments")
 async def list_segments(
     request: Request,
     sport: str | None = Query(None, description=DESC_FILTER_BY_SPORT, examples=["cycling"]),
@@ -1158,7 +1145,6 @@ async def list_segments(
 
 @router.post(
     "/segments",
-    response_model=GarminSegment,
     status_code=201,
     responses={500: {"description": "Failed to create segment"}},
 )
@@ -1194,7 +1180,6 @@ async def create_segment(
 
 @router.get(
     "/segments/{segment_id}",
-    response_model=GarminSegment,
     responses={404: {"description": SEGMENT_NOT_FOUND}},
 )
 async def get_segment(
@@ -1255,7 +1240,6 @@ async def delete_segment(
 
 @router.get(
     "/segments/{segment_id}/efforts",
-    response_model=SegmentEffortsResponse,
     responses={404: {"description": SEGMENT_NOT_FOUND}},
 )
 async def get_segment_efforts(

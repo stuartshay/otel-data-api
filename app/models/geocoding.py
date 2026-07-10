@@ -9,21 +9,35 @@ from pydantic import BaseModel, Field
 
 WaypointKind = Literal["start", "end", "waypoint"]
 
+# Shared field-description constants (reused across address models to avoid
+# duplicating the same literal in multiple Field(...) definitions).
+DESC_DISPLAY_ADDRESS = "Full formatted address label from Pelias"
+DESC_STREET = "Street name"
+DESC_HOUSENUMBER = "House or building number"
+DESC_NEIGHBOURHOOD = "Neighbourhood name"
+DESC_LOCALITY = "City or town"
+DESC_REGION = "State or province"
+DESC_COUNTRY = "Country name"
+DESC_POSTALCODE = "Postal or ZIP code"
+DESC_CONFIDENCE = "Pelias confidence score (0-1)"
+DESC_STATUS = "Geocoding status: success, no_coverage, error, pending"
+DESC_GEOCODED_AT = "UTC timestamp when geocoding was performed"
+
 
 class GeocodedAddress(BaseModel):
     """Reverse-geocoded address components from Pelias."""
 
-    display_address: str | None = Field(default=None, description="Full formatted address label from Pelias")
-    street: str | None = Field(default=None, description="Street name")
-    housenumber: str | None = Field(default=None, description="House or building number")
-    neighbourhood: str | None = Field(default=None, description="Neighbourhood name")
-    locality: str | None = Field(default=None, description="City or town")
-    region: str | None = Field(default=None, description="State or province")
-    country: str | None = Field(default=None, description="Country name")
-    postalcode: str | None = Field(default=None, description="Postal or ZIP code")
-    confidence: float | None = Field(default=None, description="Pelias confidence score (0-1)")
-    status: str = Field(description="Geocoding status: success, no_coverage, error, pending")
-    geocoded_at: datetime | None = Field(default=None, description="UTC timestamp when geocoding was performed")
+    display_address: str | None = Field(default=None, description=DESC_DISPLAY_ADDRESS)
+    street: str | None = Field(default=None, description=DESC_STREET)
+    housenumber: str | None = Field(default=None, description=DESC_HOUSENUMBER)
+    neighbourhood: str | None = Field(default=None, description=DESC_NEIGHBOURHOOD)
+    locality: str | None = Field(default=None, description=DESC_LOCALITY)
+    region: str | None = Field(default=None, description=DESC_REGION)
+    country: str | None = Field(default=None, description=DESC_COUNTRY)
+    postalcode: str | None = Field(default=None, description=DESC_POSTALCODE)
+    confidence: float | None = Field(default=None, description=DESC_CONFIDENCE)
+    status: str = Field(description=DESC_STATUS)
+    geocoded_at: datetime | None = Field(default=None, description=DESC_GEOCODED_AT)
 
     model_config = {
         "json_schema_extra": {
@@ -169,31 +183,31 @@ class GarminActivityAddress(BaseModel):
     timestamp: datetime = Field(description="UTC timestamp of the track point this address was derived from")
     latitude: float = Field(description="GPS latitude in decimal degrees (WGS 84)")
     longitude: float = Field(description="GPS longitude in decimal degrees (WGS 84)")
-    display_address: str | None = Field(default=None, description="Full formatted address label from Pelias")
-    street: str | None = Field(default=None, description="Street name")
-    housenumber: str | None = Field(default=None, description="House or building number")
-    neighbourhood: str | None = Field(default=None, description="Neighbourhood name")
-    locality: str | None = Field(default=None, description="City or town")
-    region: str | None = Field(default=None, description="State or province")
-    country: str | None = Field(default=None, description="Country name")
-    postalcode: str | None = Field(default=None, description="Postal or ZIP code")
-    confidence: float | None = Field(default=None, description="Pelias confidence score (0-1)")
-    status: str = Field(description="Geocoding status: success, no_coverage, error, pending")
-    geocoded_at: datetime | None = Field(default=None, description="UTC timestamp when geocoding was performed")
+    display_address: str | None = Field(default=None, description=DESC_DISPLAY_ADDRESS)
+    street: str | None = Field(default=None, description=DESC_STREET)
+    housenumber: str | None = Field(default=None, description=DESC_HOUSENUMBER)
+    neighbourhood: str | None = Field(default=None, description=DESC_NEIGHBOURHOOD)
+    locality: str | None = Field(default=None, description=DESC_LOCALITY)
+    region: str | None = Field(default=None, description=DESC_REGION)
+    country: str | None = Field(default=None, description=DESC_COUNTRY)
+    postalcode: str | None = Field(default=None, description=DESC_POSTALCODE)
+    confidence: float | None = Field(default=None, description=DESC_CONFIDENCE)
+    status: str = Field(description=DESC_STATUS)
+    geocoded_at: datetime | None = Field(default=None, description=DESC_GEOCODED_AT)
 
 
 class GeocodedAddressSummary(BaseModel):
     """Compact address summary embedded in track-point payloads."""
 
-    display_address: str | None = Field(default=None, description="Full formatted address label from Pelias")
-    street: str | None = Field(default=None, description="Street name")
-    housenumber: str | None = Field(default=None, description="House or building number")
-    neighbourhood: str | None = Field(default=None, description="Neighbourhood name")
-    locality: str | None = Field(default=None, description="City or town")
-    region: str | None = Field(default=None, description="State or province")
-    country: str | None = Field(default=None, description="Country name")
-    postalcode: str | None = Field(default=None, description="Postal or ZIP code")
-    confidence: float | None = Field(default=None, description="Pelias confidence score (0-1)")
+    display_address: str | None = Field(default=None, description=DESC_DISPLAY_ADDRESS)
+    street: str | None = Field(default=None, description=DESC_STREET)
+    housenumber: str | None = Field(default=None, description=DESC_HOUSENUMBER)
+    neighbourhood: str | None = Field(default=None, description=DESC_NEIGHBOURHOOD)
+    locality: str | None = Field(default=None, description=DESC_LOCALITY)
+    region: str | None = Field(default=None, description=DESC_REGION)
+    country: str | None = Field(default=None, description=DESC_COUNTRY)
+    postalcode: str | None = Field(default=None, description=DESC_POSTALCODE)
+    confidence: float | None = Field(default=None, description=DESC_CONFIDENCE)
     waypoint_kind: WaypointKind | None = Field(default=None, description="Role of this waypoint (Garmin only)")
-    status: str = Field(description="Geocoding status: success, no_coverage, error, pending")
-    geocoded_at: datetime | None = Field(default=None, description="UTC timestamp when geocoding was performed")
+    status: str = Field(description=DESC_STATUS)
+    geocoded_at: datetime | None = Field(default=None, description=DESC_GEOCODED_AT)

@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Generic, TypeVar
-
 from pydantic import BaseModel, Field
 
-T = TypeVar("T")
 
-
-class PaginatedResponse(BaseModel, Generic[T]):
+class PaginatedResponse[T](BaseModel):
     """Wrapper for paginated list responses."""
 
     items: list[T] = Field(description="List of items in the current page")

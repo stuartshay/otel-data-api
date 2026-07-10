@@ -85,14 +85,6 @@ ACTIVITY_BY_ID_SELECT = (
 )
 
 
-def _parse_date(value: str) -> date:
-    """Parse a YYYY-MM-DD string to a datetime.date object for asyncpg."""
-    try:
-        return date.fromisoformat(value)
-    except ValueError:
-        raise HTTPException(status_code=422, detail=f"Invalid date format: {value!r}. Expected YYYY-MM-DD.") from None
-
-
 def _coerce_sync_payload(payload: dict) -> GarminSyncResponse:
     """Normalize proxied sync payloads."""
     if not isinstance(payload, dict):
@@ -252,8 +244,8 @@ async def garmin_date_range(request: Request) -> GarminDateRange:
 async def list_activities(
     request: Request,
     sport: str | None = Query(None, description=DESC_FILTER_BY_SPORT, examples=["cycling"]),
-    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2025-11-01"]),
-    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2025-11-30"]),
+    date_from: date | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2025-11-01"]),
+    date_to: date | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2025-11-30"]),
     limit: int = Query(50, ge=1, le=1000, description="Maximum number of activities to return per page"),
     offset: int = Query(0, ge=0, description="Number of activities to skip for pagination"),
     sort: str = Query(
@@ -285,12 +277,12 @@ async def list_activities(
 
     if date_from:
         conditions.append(f"start_time >= ${idx}::date")
-        params.append(_parse_date(date_from))
+        params.append(date_from)
         idx += 1
 
     if date_to:
         conditions.append(f"start_time < (${idx}::date + INTERVAL '1 day')")
-        params.append(_parse_date(date_to))
+        params.append(date_to)
         idx += 1
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
@@ -368,8 +360,8 @@ async def list_activity_totals(
         ..., description="Time bucket for aggregation: week, month, or year"
     ),
     sport: str | None = Query(None, description="Filter to a single sport (e.g. cycling)"),
-    date_from: str | None = Query(None, description="Inclusive lower bound on start_time (YYYY-MM-DD, UTC)"),
-    date_to: str | None = Query(None, description="Inclusive upper bound on start_time (YYYY-MM-DD, UTC)"),
+    date_from: date | None = Query(None, description="Inclusive lower bound on start_time (YYYY-MM-DD, UTC)"),
+    date_to: date | None = Query(None, description="Inclusive upper bound on start_time (YYYY-MM-DD, UTC)"),
 ) -> list[GarminActivityTotal]:
     """Aggregate Garmin activities into period totals (week / month / year).
 
@@ -392,12 +384,12 @@ async def list_activity_totals(
 
     if date_from:
         conditions.append(f"start_time >= ${idx}::date")
-        params.append(_parse_date(date_from))
+        params.append(date_from)
         idx += 1
 
     if date_to:
         conditions.append(f"start_time < (${idx}::date + INTERVAL '1 day')")
-        params.append(_parse_date(date_to))
+        params.append(date_to)
         idx += 1
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
@@ -714,8 +706,8 @@ async def list_activity_laps(
 async def list_laps(
     request: Request,
     sport: str | None = Query(None, description=DESC_FILTER_BY_SPORT, examples=["cycling"]),
-    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2026-01-01"]),
-    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-06-30"]),
+    date_from: date | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2026-01-01"]),
+    date_to: date | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-06-30"]),
     limit: int = Query(50, ge=1, le=500, description="Maximum number of activities to return per page"),
     offset: int = Query(0, ge=0, description="Number of activities to skip for pagination"),
 ) -> PaginatedResponse[GarminActivityLapsGroup]:
@@ -738,12 +730,12 @@ async def list_laps(
 
     if date_from:
         conditions.append(f"a.start_time >= ${idx}::date")
-        params.append(_parse_date(date_from))
+        params.append(date_from)
         idx += 1
 
     if date_to:
         conditions.append(f"a.start_time < (${idx}::date + INTERVAL '1 day')")
-        params.append(_parse_date(date_to))
+        params.append(date_to)
         idx += 1
 
     where = f"WHERE {' AND '.join(conditions)}"
@@ -1024,10 +1016,10 @@ async def list_segment_efforts(
         35, ge=5, le=200, description="Corridor radius around the start/end points in meters"
     ),
     sport: str | None = Query("cycling", description="Filter by sport type; pass an empty value to include all sports"),
-    date_from: str | None = Query(
+    date_from: date | None = Query(
         None, description="Filter from date (YYYY-MM-DD) on activity start_time", examples=["2024-01-01"]
     ),
-    date_to: str | None = Query(
+    date_to: date | None = Query(
         None, description="Filter to date (YYYY-MM-DD) on activity start_time", examples=["2026-06-30"]
     ),
     max_effort_seconds: int = Query(
@@ -1054,8 +1046,8 @@ async def list_segment_efforts(
         end_lon=end_lon,
         tolerance_meters=tolerance_meters,
         sport=sport,
-        date_from=_parse_date(date_from) if date_from else None,
-        date_to=_parse_date(date_to) if date_to else None,
+        date_from=date_from,
+        date_to=date_to,
         max_effort_seconds=max_effort_seconds,
         limit=limit,
     )
@@ -1269,8 +1261,8 @@ async def delete_segment(
 async def get_segment_efforts(
     request: Request,
     segment_id: int = fastapi.Path(description=DESC_SAVED_SEGMENT_ID),
-    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD) on activity start_time"),
-    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD) on activity start_time"),
+    date_from: date | None = Query(None, description="Filter from date (YYYY-MM-DD) on activity start_time"),
+    date_to: date | None = Query(None, description="Filter to date (YYYY-MM-DD) on activity start_time"),
     max_effort_seconds: int = Query(3600, ge=1, le=86400, description="Ignore traversals longer than this"),
     limit: int = Query(100, ge=1, le=500, description="Maximum number of efforts to return"),
 ) -> SegmentEffortsResponse:
@@ -1294,8 +1286,8 @@ async def get_segment_efforts(
         end_lon=seg["end_longitude"],
         tolerance_meters=tolerance,
         sport=seg["sport"],
-        date_from=_parse_date(date_from) if date_from else None,
-        date_to=_parse_date(date_to) if date_to else None,
+        date_from=date_from,
+        date_to=date_to,
         max_effort_seconds=max_effort_seconds,
         limit=limit,
     )

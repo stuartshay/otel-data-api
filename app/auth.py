@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
+import json
 from typing import Any
 
 import httpx
@@ -19,6 +22,9 @@ _jwks_cache: dict[str, Any] = {}
 _cognito_issuer: str = ""
 _cognito_client_id: str = ""
 _oauth2_enabled: bool = False
+_JWT_HEADER_SEGMENTS = 3
+_JWT_ALGORITHM = "RS256"
+_JWT_INVALID_HEADER_DETAIL = "Invalid token header"
 
 
 def configure_auth(issuer: str, client_id: str, enabled: bool) -> None:
@@ -43,10 +49,50 @@ async def _get_jwks() -> dict[str, Any]:
     return _jwks_cache
 
 
+def _decode_token_header(token: str) -> dict[str, Any]:
+    """Decode and validate the JWT header before signature verification.
+
+    The header is not trusted for authentication decisions; it is only used to
+    select the matching JWKS key. The token signature, audience, and issuer are
+    still verified by ``jwt.decode`` after the key is selected.
+    """
+    parts = token.split(".")
+    if len(parts) != _JWT_HEADER_SEGMENTS:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=_JWT_INVALID_HEADER_DETAIL,
+        )
+
+    header_segment = parts[0]
+    padding = "=" * (-len(header_segment) % 4)
+    try:
+        header_bytes = base64.urlsafe_b64decode(f"{header_segment}{padding}")
+        header = json.loads(header_bytes.decode("utf-8"))
+    except (binascii.Error, json.JSONDecodeError, UnicodeDecodeError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=_JWT_INVALID_HEADER_DETAIL,
+        ) from e
+
+    if not isinstance(header, dict):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=_JWT_INVALID_HEADER_DETAIL,
+        )
+
+    if header.get("alg") != _JWT_ALGORITHM or not isinstance(header.get("kid"), str):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=_JWT_INVALID_HEADER_DETAIL,
+        )
+
+    return header
+
+
 def _get_signing_key(token: str, jwks_data: dict[str, Any]) -> dict[str, Any]:
     """Find the signing key for the given token from JWKS."""
-    unverified_header: dict[str, Any] = jwt.get_unverified_header(token)
-    kid = unverified_header.get("kid")
+    token_header = _decode_token_header(token)
+    kid = token_header["kid"]
     for key in jwks_data.get("keys", []):
         if key.get("kid") == kid:
             return dict(key)
@@ -78,7 +124,7 @@ async def get_current_user(
         claims = jwt.decode(
             token,
             public_key.to_pem().decode("utf-8"),
-            algorithms=["RS256"],
+            algorithms=[_JWT_ALGORITHM],
             audience=_cognito_client_id,
             issuer=_cognito_issuer,
         )

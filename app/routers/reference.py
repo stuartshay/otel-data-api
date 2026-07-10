@@ -11,6 +11,10 @@ from app.models.reference import ReferenceLocation, ReferenceLocationCreate, Ref
 
 router = APIRouter(prefix="/api/v1/reference-locations", tags=["Reference Locations"])
 
+# Shared string constants (avoid duplicating the same literal across handlers).
+DESC_LOCATION_ID = "Unique reference location ID"
+LOCATION_NOT_FOUND = "Reference location not found"
+
 
 @router.get("", response_model=list[ReferenceLocation])
 async def list_reference_locations(request: Request) -> list[ReferenceLocation]:
@@ -26,7 +30,7 @@ async def list_reference_locations(request: Request) -> list[ReferenceLocation]:
 @router.get("/{location_id}", response_model=ReferenceLocation)
 async def get_reference_location(
     request: Request,
-    location_id: int = fastapi.Path(description="Unique reference location ID"),
+    location_id: int = fastapi.Path(description=DESC_LOCATION_ID),
 ) -> ReferenceLocation:
     """Get a single reference location by ID."""
     db = request.app.state.db
@@ -36,7 +40,7 @@ async def get_reference_location(
         location_id,
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Reference location not found")
+        raise HTTPException(status_code=404, detail=LOCATION_NOT_FOUND)
     return ReferenceLocation(**dict(row))
 
 
@@ -66,7 +70,7 @@ async def create_reference_location(
 @router.put("/{location_id}", response_model=ReferenceLocation)
 async def update_reference_location(
     request: Request,
-    location_id: int = fastapi.Path(description="Unique reference location ID"),
+    location_id: int = fastapi.Path(description=DESC_LOCATION_ID),
     body: ReferenceLocationUpdate = fastapi.Body(...),
     _user: dict = Depends(require_auth),
 ) -> ReferenceLocation:
@@ -96,19 +100,19 @@ async def update_reference_location(
         *params,
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Reference location not found")
+        raise HTTPException(status_code=404, detail=LOCATION_NOT_FOUND)
     return ReferenceLocation(**dict(row))
 
 
 @router.delete("/{location_id}", status_code=204, response_class=Response)
 async def delete_reference_location(
     request: Request,
-    location_id: int = fastapi.Path(description="Unique reference location ID"),
+    location_id: int = fastapi.Path(description=DESC_LOCATION_ID),
     _user: dict = Depends(require_auth),
 ) -> Response:
     """Delete a reference location (auth required)."""
     db = request.app.state.db
     result = await db.execute("DELETE FROM public.reference_locations WHERE id = $1", location_id)
     if result == "DELETE 0":
-        raise HTTPException(status_code=404, detail="Reference location not found")
+        raise HTTPException(status_code=404, detail=LOCATION_NOT_FOUND)
     return Response(status_code=204)

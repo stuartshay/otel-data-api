@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
@@ -31,23 +31,33 @@ def _parse_date(value: str) -> date:
 )
 async def list_unified_gps(
     request: Request,
-    source: str | None = Query(None, description="Filter by source: owntracks or garmin", examples=["owntracks"]),
-    date_from: str | None = Query(
-        None,
-        description="Filter from date (YYYY-MM-DD). Defaults to 90 days ago when both date_from and date_to are omitted.",
-        examples=["2026-02-01"],
-    ),
-    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]),
-    limit: int = Query(100, ge=1, le=5000, description="Maximum number of GPS points to return per page"),
-    offset: int = Query(0, ge=0, description="Number of GPS points to skip for pagination"),
-    order: Literal["asc", "desc"] = Query(
-        "desc", description="Sort direction: asc (oldest first) or desc (newest first)"
-    ),
-    exclude_stationary: bool = Query(False, description="Exclude stationary points where speed_kmh = 0"),
-    deduplicate: bool = Query(
-        False,
-        description="Remove points with duplicate coordinates (rounded to ~11m precision)",
-    ),
+    source: Annotated[
+        str | None,
+        Query(description="Filter by source: owntracks or garmin", examples=["owntracks"]),
+    ] = None,
+    date_from: Annotated[
+        str | None,
+        Query(
+            description="Filter from date (YYYY-MM-DD). "
+            "Defaults to 90 days ago when both date_from and date_to are omitted.",
+            examples=["2026-02-01"],
+        ),
+    ] = None,
+    date_to: Annotated[
+        str | None,
+        Query(description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]),
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=5000, description="Maximum number of GPS points to return per page")] = 100,
+    offset: Annotated[int, Query(ge=0, description="Number of GPS points to skip for pagination")] = 0,
+    order: Annotated[
+        Literal["asc", "desc"],
+        Query(description="Sort direction: asc (oldest first) or desc (newest first)"),
+    ] = "desc",
+    exclude_stationary: Annotated[bool, Query(description="Exclude stationary points where speed_kmh = 0")] = False,
+    deduplicate: Annotated[
+        bool,
+        Query(description="Remove points with duplicate coordinates (rounded to ~11m precision)"),
+    ] = False,
 ) -> PaginatedResponse[UnifiedGpsPoint]:
     """Query the unified_gps_points view combining OwnTracks + Garmin data.
 
@@ -138,14 +148,20 @@ async def list_unified_gps(
 )
 async def daily_summary(
     request: Request,
-    date_from: str | None = Query(
-        None,
-        description="Filter from date (YYYY-MM-DD). Defaults to 90 days ago when both date_from and date_to are omitted.",
-        examples=["2026-02-01"],
-    ),
-    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]),
-    limit: int = Query(30, ge=1, le=365, description="Maximum number of daily summaries to return per page"),
-    offset: int = Query(0, ge=0, description="Number of daily summaries to skip for pagination"),
+    date_from: Annotated[
+        str | None,
+        Query(
+            description="Filter from date (YYYY-MM-DD). "
+            "Defaults to 90 days ago when both date_from and date_to are omitted.",
+            examples=["2026-02-01"],
+        ),
+    ] = None,
+    date_to: Annotated[
+        str | None,
+        Query(description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]),
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=365, description="Maximum number of daily summaries to return per page")] = 30,
+    offset: Annotated[int, Query(ge=0, description="Number of daily summaries to skip for pagination")] = 0,
 ) -> PaginatedResponse[DailyActivitySummary]:
     """Query the daily_activity_summary view for aggregated daily stats.
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import date
-from typing import Literal
+from typing import Annotated, Literal
 
 import fastapi
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -41,18 +41,25 @@ def _parse_date(value: str) -> date:
 )
 async def list_locations(
     request: Request,
-    device_id: str | None = Query(None, description="Filter by device ID", examples=["iphone_stuart"]),
-    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2026-02-01"]),
-    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]),
-    limit: int = Query(50, ge=1, le=1000, description="Maximum number of locations to return per page"),
-    offset: int = Query(0, ge=0, description="Number of locations to skip for pagination"),
-    sort: str = Query(
-        "created_at",
-        description="Sort column (id, device_id, timestamp, created_at, battery, accuracy)",
-    ),
-    order: Literal["asc", "desc"] = Query(
-        "desc", description="Sort direction: asc (oldest first) or desc (newest first)"
-    ),
+    device_id: Annotated[str | None, Query(description="Filter by device ID", examples=["iphone_stuart"])] = None,
+    date_from: Annotated[
+        str | None,
+        Query(description="Filter from date (YYYY-MM-DD)", examples=["2026-02-01"]),
+    ] = None,
+    date_to: Annotated[
+        str | None,
+        Query(description="Filter to date (YYYY-MM-DD)", examples=["2026-02-12"]),
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=1000, description="Maximum number of locations to return per page")] = 50,
+    offset: Annotated[int, Query(ge=0, description="Number of locations to skip for pagination")] = 0,
+    sort: Annotated[
+        str,
+        Query(description="Sort column (id, device_id, timestamp, created_at, battery, accuracy)"),
+    ] = "created_at",
+    order: Annotated[
+        Literal["asc", "desc"],
+        Query(description="Sort direction: asc (oldest first) or desc (newest first)"),
+    ] = "desc",
 ) -> PaginatedResponse[Location]:
     """List OwnTracks locations with filtering and pagination.
 
@@ -135,8 +142,11 @@ async def location_date_range(request: Request) -> LocationDateRange:
 )
 async def location_count(
     request: Request,
-    date: str | None = Query(None, description="Filter by date (YYYY-MM-DD)", examples=["2026-02-12"]),
-    device_id: str | None = Query(None, description="Filter by device ID", examples=["iphone_stuart"]),
+    date: Annotated[
+        str | None,
+        Query(description="Filter by date (YYYY-MM-DD)", examples=["2026-02-12"]),
+    ] = None,
+    device_id: Annotated[str | None, Query(description="Filter by device ID", examples=["iphone_stuart"])] = None,
 ) -> LocationCount:
     """Get total location count with optional filters."""
     db = request.app.state.db
@@ -166,7 +176,7 @@ async def location_count(
 )
 async def get_location(
     request: Request,
-    location_id: int = fastapi.Path(description="Unique location record ID"),
+    location_id: Annotated[int, fastapi.Path(description="Unique location record ID")],
 ) -> LocationDetail:
     """Get a single location by ID, including raw payload."""
     db = request.app.state.db

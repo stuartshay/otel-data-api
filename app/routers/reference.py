@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import fastapi
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
@@ -39,7 +41,7 @@ async def list_reference_locations(request: Request) -> list[ReferenceLocation]:
 )
 async def get_reference_location(
     request: Request,
-    location_id: int = fastapi.Path(description=DESC_LOCATION_ID),
+    location_id: Annotated[int, fastapi.Path(description=DESC_LOCATION_ID)],
 ) -> ReferenceLocation:
     """Get a single reference location by ID."""
     db = request.app.state.db
@@ -61,7 +63,7 @@ async def get_reference_location(
 async def create_reference_location(
     request: Request,
     body: ReferenceLocationCreate,
-    _user: dict = Depends(require_auth),
+    _user: Annotated[dict, Depends(require_auth)],
 ) -> ReferenceLocation:
     """Create a new reference location (auth required)."""
     db = request.app.state.db
@@ -90,9 +92,9 @@ async def create_reference_location(
 )
 async def update_reference_location(
     request: Request,
-    location_id: int = fastapi.Path(description=DESC_LOCATION_ID),
-    body: ReferenceLocationUpdate = fastapi.Body(...),
-    _user: dict = Depends(require_auth),
+    location_id: Annotated[int, fastapi.Path(description=DESC_LOCATION_ID)],
+    body: Annotated[ReferenceLocationUpdate, fastapi.Body()],
+    _user: Annotated[dict, Depends(require_auth)],
 ) -> ReferenceLocation:
     """Update a reference location (auth required)."""
     db = request.app.state.db
@@ -132,8 +134,8 @@ async def update_reference_location(
 )
 async def delete_reference_location(
     request: Request,
-    location_id: int = fastapi.Path(description=DESC_LOCATION_ID),
-    _user: dict = Depends(require_auth),
+    location_id: Annotated[int, fastapi.Path(description=DESC_LOCATION_ID)],
+    _user: Annotated[dict, Depends(require_auth)],
 ) -> Response:
     """Delete a reference location (auth required)."""
     db = request.app.state.db

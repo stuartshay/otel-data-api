@@ -6,7 +6,7 @@ import asyncio
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Annotated, Any
 
 import httpx
 import structlog
@@ -271,9 +271,9 @@ async def pelias_health(request: Request) -> PeliasHealth:
 @router.post("/trigger")
 async def trigger_geocoding(
     request: Request,
-    batch_size: int = Query(100, ge=1, le=500, description="Number of locations to geocode in this batch"),
-    retry_failed: bool = Query(False, description="Re-process records with statuses no_coverage or error"),
-    _user: dict = Depends(require_auth),
+    _user: Annotated[dict, Depends(require_auth)],
+    batch_size: Annotated[int, Query(ge=1, le=500, description="Number of locations to geocode in this batch")] = 100,
+    retry_failed: Annotated[bool, Query(description="Re-process records with statuses no_coverage or error")] = False,
 ) -> GeocodingTriggerResponse:
     """Trigger batch reverse-geocoding of OwnTracks location records (auth required)."""
     return await _trigger_geocoding_impl(request, batch_size, retry_failed)
@@ -282,8 +282,8 @@ async def trigger_geocoding(
 @internal_router.post("/trigger")
 async def internal_trigger_geocoding(
     request: Request,
-    batch_size: int = Query(100, ge=1, le=1000, description="Number of locations to geocode in this batch"),
-    retry_failed: bool = Query(False, description="Re-process records with statuses no_coverage or error"),
+    batch_size: Annotated[int, Query(ge=1, le=1000, description="Number of locations to geocode in this batch")] = 100,
+    retry_failed: Annotated[bool, Query(description="Re-process records with statuses no_coverage or error")] = False,
 ) -> GeocodingTriggerResponse:
     """Trigger batch OwnTracks reverse-geocoding (internal, no auth)."""
     return await _trigger_geocoding_impl(request, batch_size, retry_failed)
@@ -416,17 +416,18 @@ async def _process_location_inner(
 @internal_router.post("/trigger/garmin")
 async def internal_trigger_garmin_geocoding(
     request: Request,
-    batch_size: int = Query(10, ge=1, le=100, description="Number of Garmin activities to process in this batch"),
-    waypoint_spacing_km: float = Query(
-        DEFAULT_GARMIN_WAYPOINT_SPACING_KM,
-        ge=0.1,
-        le=50.0,
-        description="Approximate spacing between mid-route waypoints in kilometres",
-    ),
-    retry_failed: bool = Query(
-        False,
-        description="Re-process activities with at least one waypoint in statuses no_coverage or error",
-    ),
+    batch_size: Annotated[
+        int,
+        Query(ge=1, le=100, description="Number of Garmin activities to process in this batch"),
+    ] = 10,
+    waypoint_spacing_km: Annotated[
+        float,
+        Query(ge=0.1, le=50.0, description="Approximate spacing between mid-route waypoints in kilometres"),
+    ] = DEFAULT_GARMIN_WAYPOINT_SPACING_KM,
+    retry_failed: Annotated[
+        bool,
+        Query(description="Re-process activities with at least one waypoint in statuses no_coverage or error"),
+    ] = False,
 ) -> GeocodingTriggerResponse:
     """Trigger batch reverse-geocoding of Garmin activity waypoints (internal, no auth).
 
@@ -439,18 +440,19 @@ async def internal_trigger_garmin_geocoding(
 @router.post("/trigger/garmin")
 async def trigger_garmin_geocoding(
     request: Request,
-    batch_size: int = Query(10, ge=1, le=100, description="Number of Garmin activities to process in this batch"),
-    waypoint_spacing_km: float = Query(
-        DEFAULT_GARMIN_WAYPOINT_SPACING_KM,
-        ge=0.1,
-        le=50.0,
-        description="Approximate spacing between mid-route waypoints in kilometres",
-    ),
-    retry_failed: bool = Query(
-        False,
-        description="Re-process activities with at least one waypoint in statuses no_coverage or error",
-    ),
-    _user: dict = Depends(require_auth),
+    _user: Annotated[dict, Depends(require_auth)],
+    batch_size: Annotated[
+        int,
+        Query(ge=1, le=100, description="Number of Garmin activities to process in this batch"),
+    ] = 10,
+    waypoint_spacing_km: Annotated[
+        float,
+        Query(ge=0.1, le=50.0, description="Approximate spacing between mid-route waypoints in kilometres"),
+    ] = DEFAULT_GARMIN_WAYPOINT_SPACING_KM,
+    retry_failed: Annotated[
+        bool,
+        Query(description="Re-process activities with at least one waypoint in statuses no_coverage or error"),
+    ] = False,
 ) -> GeocodingTriggerResponse:
     """Trigger batch reverse-geocoding of Garmin activity waypoints (auth required)."""
     return await _trigger_garmin_geocoding_impl(request, batch_size, waypoint_spacing_km, retry_failed)
@@ -1108,11 +1110,13 @@ _CELL_CONFLICT = "ON CONFLICT (lat_4dp, lon_4dp)"
 @internal_router.post("/trigger/garmin-dense")
 async def internal_trigger_garmin_dense(
     request: Request,
-    batch_size: int = Query(100, ge=1, le=1000, description="Number of dense cells to process in this batch"),
-    retry_failed: bool = Query(
-        False,
-        description="Re-process cells whose status is no_coverage, error, or pending",
-    ),
+    batch_size: Annotated[
+        int, Query(ge=1, le=1000, description="Number of dense cells to process in this batch")
+    ] = 100,
+    retry_failed: Annotated[
+        bool,
+        Query(description="Re-process cells whose status is no_coverage, error, or pending"),
+    ] = False,
 ) -> GeocodingTriggerResponse:
     """Trigger batch reverse-geocoding of distinct 4dp GPS cells (internal, no auth)."""
     return await _trigger_garmin_dense_impl(request, batch_size, retry_failed)
@@ -1121,12 +1125,12 @@ async def internal_trigger_garmin_dense(
 @router.post("/trigger/garmin-dense")
 async def trigger_garmin_dense(
     request: Request,
-    batch_size: int = Query(100, ge=1, le=500, description="Number of dense cells to process in this batch"),
-    retry_failed: bool = Query(
-        False,
-        description="Re-process cells whose status is no_coverage, error, or pending",
-    ),
-    _user: dict = Depends(require_auth),
+    _user: Annotated[dict, Depends(require_auth)],
+    batch_size: Annotated[int, Query(ge=1, le=500, description="Number of dense cells to process in this batch")] = 100,
+    retry_failed: Annotated[
+        bool,
+        Query(description="Re-process cells whose status is no_coverage, error, or pending"),
+    ] = False,
 ) -> GeocodingTriggerResponse:
     """Trigger batch reverse-geocoding of distinct 4dp GPS cells (auth required)."""
     return await _trigger_garmin_dense_impl(request, batch_size, retry_failed)

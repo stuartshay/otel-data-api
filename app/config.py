@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+DEFAULT_DB_HOST = "localhost"
+
 
 @dataclass(frozen=True)
 class Config:
@@ -17,7 +19,7 @@ class Config:
     port: int = 8080
 
     # Database (PgBouncer)
-    db_host: str = "192.168.1.175"
+    db_host: str = DEFAULT_DB_HOST
     db_port: int = 6432
     db_name: str = "owntracks"
     db_user: str | None = None
@@ -78,7 +80,7 @@ class Config:
         return cls(
             port=int(os.getenv("PORT", "8080")),
             # Database
-            db_host=os.getenv("PGBOUNCER_HOST", "192.168.1.175"),
+            db_host=os.getenv("PGBOUNCER_HOST", DEFAULT_DB_HOST),
             db_port=int(os.getenv("PGBOUNCER_PORT", "6432")),
             db_name=os.getenv("POSTGRES_DB", "owntracks"),
             db_user=os.getenv("POSTGRES_USER"),

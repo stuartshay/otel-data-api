@@ -46,6 +46,12 @@ DESC_SAVED_SEGMENT_ID = "Saved segment ID"
 ACTIVITY_NOT_FOUND = "Activity not found"
 SEGMENT_NOT_FOUND = "Segment not found"
 INVALID_SYNC_RESPONSE = "Invalid response from Garmin sync service"
+
+# Auth-protected endpoints raise these via require_auth -> get_current_user().
+AUTH_RESPONSES: dict = {
+    401: {"description": "Authentication required or token invalid"},
+    503: {"description": "Authentication service unavailable"},
+}
 SQL_ACTIVITY_EXISTS = "SELECT 1 FROM public.garmin_activities WHERE activity_id = $1"
 logger = structlog.get_logger(__name__)
 
@@ -421,8 +427,8 @@ async def get_activity(
     "/activities/{activity_id}",
     response_model=GarminActivity,
     responses={
+        **AUTH_RESPONSES,
         400: {"description": "No fields to update"},
-        401: {"description": "Authentication required"},
         404: {"description": ACTIVITY_NOT_FOUND},
     },
 )
@@ -1202,7 +1208,7 @@ async def get_segment(
     "/segments/{segment_id}",
     status_code=204,
     response_class=Response,
-    responses={404: {"description": "Segment not found"}},
+    responses={**AUTH_RESPONSES, 404: {"description": SEGMENT_NOT_FOUND}},
 )
 async def delete_segment(
     request: Request,

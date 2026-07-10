@@ -15,6 +15,12 @@ router = APIRouter(prefix="/api/v1/reference-locations", tags=["Reference Locati
 DESC_LOCATION_ID = "Unique reference location ID"
 LOCATION_NOT_FOUND = "Reference location not found"
 
+# Auth-protected endpoints raise these via require_auth -> get_current_user().
+AUTH_RESPONSES: dict = {
+    401: {"description": "Authentication required or token invalid"},
+    503: {"description": "Authentication service unavailable"},
+}
+
 
 @router.get("", response_model=list[ReferenceLocation])
 async def list_reference_locations(request: Request) -> list[ReferenceLocation]:
@@ -52,7 +58,7 @@ async def get_reference_location(
     "",
     response_model=ReferenceLocation,
     status_code=201,
-    responses={500: {"description": "Failed to create reference location"}},
+    responses={**AUTH_RESPONSES, 500: {"description": "Failed to create reference location"}},
 )
 async def create_reference_location(
     request: Request,
@@ -80,6 +86,7 @@ async def create_reference_location(
     "/{location_id}",
     response_model=ReferenceLocation,
     responses={
+        **AUTH_RESPONSES,
         400: {"description": "No fields to update"},
         404: {"description": "Reference location not found"},
     },
@@ -124,7 +131,7 @@ async def update_reference_location(
     "/{location_id}",
     status_code=204,
     response_class=Response,
-    responses={404: {"description": "Reference location not found"}},
+    responses={**AUTH_RESPONSES, 404: {"description": "Reference location not found"}},
 )
 async def delete_reference_location(
     request: Request,

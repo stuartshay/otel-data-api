@@ -72,18 +72,30 @@ install_sonar_scanner() {
 
     local scanner_url
     local download_path
+    local checksum_path
     local extract_dir
+    local expected_sha
     scanner_url="https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}-${platform}.zip"
     download_path="$(mktemp)"
+    checksum_path="$(mktemp)"
     extract_dir="$(mktemp -d)"
 
     echo -e "${YELLOW}Installing SonarScanner CLI ${SONAR_SCANNER_VERSION}...${NC}"
     curl -fsSL "$scanner_url" -o "$download_path"
+    if command -v sha256sum &> /dev/null; then
+        curl -fsSL "${scanner_url}.sha256" -o "$checksum_path"
+        expected_sha="$(cut -d ' ' -f1 "$checksum_path")"
+        echo "${expected_sha}  ${download_path}" | sha256sum -c -
+        echo -e "${GREEN}✓ SonarScanner CLI checksum verified${NC}"
+    else
+        echo -e "${YELLOW}⚠ sha256sum not found - skipping SonarScanner checksum verification${NC}"
+    fi
     unzip -q "$download_path" -d "$extract_dir"
     rm -rf "$SONAR_SCANNER_DIR"
     mkdir -p "$(dirname "$SONAR_SCANNER_DIR")"
     mv "${extract_dir}/sonar-scanner-${SONAR_SCANNER_VERSION}-${platform}" "$SONAR_SCANNER_DIR"
     rm -f "$download_path"
+    rm -f "$checksum_path"
     rm -rf "$extract_dir"
     echo -e "${GREEN}✓ SonarScanner CLI installed: ${SONAR_SCANNER_DIR}${NC}"
 }

@@ -38,7 +38,7 @@ SONAR_SOURCES ?= app
 SONAR_TESTS ?= tests
 SONAR_EXCLUSIONS ?= venv/**,.venv/**,output/**,htmlcov/**,dist/**,build/**
 SONAR_COVERAGE_REPORT ?= output/coverage.xml
-SONAR_PYTHON_VERSION ?= 3.12
+SONAR_PYTHON_VERSION ?= 3.14
 SONAR_SCANNER ?= $(if $(wildcard .tools/sonar-scanner/bin/sonar-scanner),.tools/sonar-scanner/bin/sonar-scanner,sonar-scanner)
 export SONAR_HOST_URL SONAR_PROJECT_KEY SONAR_PROJECT_NAME SONAR_TOKEN
 
@@ -184,7 +184,6 @@ sonar-coverage: ## Generate coverage for SonarQube
 sonar-scan: sonar-check-token sonar-coverage ## Run SonarQube scanner CLI
 	$(SONAR_SCANNER) \
 		-Dsonar.host.url="$(SONAR_HOST_URL)" \
-		-Dsonar.token="$${SONAR_TOKEN}" \
 		-Dsonar.projectKey="$(SONAR_PROJECT_KEY)" \
 		-Dsonar.projectName="$(SONAR_PROJECT_NAME)" \
 		-Dsonar.sources="$(SONAR_SOURCES)" \

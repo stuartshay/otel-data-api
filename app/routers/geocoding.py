@@ -241,7 +241,7 @@ async def pelias_health(request: Request) -> PeliasHealth:
         if 200 <= resp.status_code < 300:
             try:
                 body = resp.json()
-            except (ValueError, json.JSONDecodeError) as e:
+            except ValueError as e:
                 detail = f"invalid JSON response: {e}"
             else:
                 features = len(body.get("features", []))

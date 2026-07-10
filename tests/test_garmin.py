@@ -176,11 +176,13 @@ async def test_list_activities_filters_and_invalid_sort_falls_back(client: Async
 
 @pytest.mark.asyncio
 async def test_list_activities_invalid_date(client: AsyncClient, mock_db):
-    """Invalid date_from returns 422 with a descriptive error."""
+    """Invalid date_from returns FastAPI query validation error."""
     response = await client.get("/api/v1/garmin/activities?date_from=not-a-date")
 
     assert response.status_code == 422
-    assert "Invalid date format" in response.json()["detail"]
+    detail = response.json()["detail"][0]
+    assert detail["loc"] == ["query", "date_from"]
+    assert "valid date" in detail["msg"]
 
 
 @pytest.mark.asyncio
@@ -285,7 +287,9 @@ async def test_activity_totals_invalid_date(client: AsyncClient, mock_db):
     response = await client.get("/api/v1/garmin/activity-totals?period=month&date_from=not-a-date")
 
     assert response.status_code == 422
-    assert "Invalid date format" in response.json()["detail"]
+    detail = response.json()["detail"][0]
+    assert detail["loc"] == ["query", "date_from"]
+    assert "valid date" in detail["msg"]
 
 
 @pytest.mark.asyncio
@@ -1536,7 +1540,9 @@ async def test_segment_efforts_invalid_date(client: AsyncClient, mock_db):
     )
 
     assert response.status_code == 422
-    assert "Invalid date format" in response.json()["detail"]
+    detail = response.json()["detail"][0]
+    assert detail["loc"] == ["query", "date_from"]
+    assert "valid date" in detail["msg"]
 
 
 @pytest.mark.asyncio

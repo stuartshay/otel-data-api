@@ -27,7 +27,6 @@ def _parse_date(value: str) -> date:
 
 @router.get(
     "/unified",
-    response_model=PaginatedResponse[UnifiedGpsPoint],
     responses={422: {"description": "Invalid date format"}},
 )
 async def list_unified_gps(
@@ -135,7 +134,6 @@ async def list_unified_gps(
 
 @router.get(
     "/daily-summary",
-    response_model=PaginatedResponse[DailyActivitySummary],
     responses={422: {"description": "Invalid date format"}},
 )
 async def daily_summary(
@@ -201,7 +199,6 @@ async def daily_summary(
 
 @router.get(
     "/daily-summary/date-range",
-    response_model=DailySummaryDateRange,
     responses={404: {"description": "No daily summary data found"}},
 )
 async def daily_summary_date_range(request: Request) -> DailySummaryDateRange:

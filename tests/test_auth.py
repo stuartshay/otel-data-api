@@ -188,7 +188,7 @@ async def test_get_current_user_rejects_unexpected_jwt_algorithm(monkeypatch: py
 async def test_require_auth_enforces_auth_flag():
     auth.configure_auth("https://issuer", "client123", True)
     with pytest.raises(HTTPException):
-        await auth.require_auth(None)
+        auth.require_auth(None)
 
     auth.configure_auth("https://issuer", "client123", False)
-    assert await auth.require_auth(None) == {}
+    assert auth.require_auth(None) == {}

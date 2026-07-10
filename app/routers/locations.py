@@ -37,7 +37,6 @@ def _parse_date(value: str) -> date:
 
 @router.get(
     "",
-    response_model=PaginatedResponse[Location],
     responses={422: {"description": "Invalid date format"}},
 )
 async def list_locations(
@@ -109,7 +108,7 @@ async def list_locations(
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
 
 
-@router.get("/devices", response_model=list[DeviceInfo])
+@router.get("/devices")
 async def list_devices(request: Request) -> list[DeviceInfo]:
     """List all distinct device IDs."""
     db = request.app.state.db
@@ -119,7 +118,6 @@ async def list_devices(request: Request) -> list[DeviceInfo]:
 
 @router.get(
     "/date-range",
-    response_model=LocationDateRange,
     responses={404: {"description": "No location data found"}},
 )
 async def location_date_range(request: Request) -> LocationDateRange:
@@ -133,7 +131,6 @@ async def location_date_range(request: Request) -> LocationDateRange:
 
 @router.get(
     "/count",
-    response_model=LocationCount,
     responses={422: {"description": "Invalid date format"}},
 )
 async def location_count(
@@ -165,7 +162,6 @@ async def location_count(
 
 @router.get(
     "/{location_id}",
-    response_model=LocationDetail,
     responses={404: {"description": "Location not found"}},
 )
 async def get_location(

@@ -158,7 +158,7 @@ async def get_current_user(
         raise _authentication_service_unavailable() from e
 
 
-async def require_auth(
+def require_auth(
     user: dict[str, Any] | None = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Dependency that requires valid authentication when OAuth2 is enabled."""

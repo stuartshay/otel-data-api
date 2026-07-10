@@ -22,7 +22,7 @@ AUTH_RESPONSES: dict = {
 }
 
 
-@router.get("", response_model=list[ReferenceLocation])
+@router.get("")
 async def list_reference_locations(request: Request) -> list[ReferenceLocation]:
     """List all reference locations."""
     db = request.app.state.db
@@ -35,7 +35,6 @@ async def list_reference_locations(request: Request) -> list[ReferenceLocation]:
 
 @router.get(
     "/{location_id}",
-    response_model=ReferenceLocation,
     responses={404: {"description": "Reference location not found"}},
 )
 async def get_reference_location(
@@ -56,7 +55,6 @@ async def get_reference_location(
 
 @router.post(
     "",
-    response_model=ReferenceLocation,
     status_code=201,
     responses={**AUTH_RESPONSES, 500: {"description": "Failed to create reference location"}},
 )
@@ -84,7 +82,6 @@ async def create_reference_location(
 
 @router.put(
     "/{location_id}",
-    response_model=ReferenceLocation,
     responses={
         **AUTH_RESPONSES,
         400: {"description": "No fields to update"},

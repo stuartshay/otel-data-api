@@ -165,23 +165,26 @@ async def _compute_geocoding_status(db: Any) -> GeocodingStatus:
         round((covered_track_points / total_track_points * 100), 2) if total_track_points else 0.0
     )
 
+    # Note: every count below is already a non-null integer — dict.get() uses a
+    # 0 default, COUNT(*) never returns NULL, and the mv_metrics values are
+    # guarded above — so no additional ``or 0`` fallbacks are needed.
     by_source = GeocodingStatusBySource(
         owntracks=GeocodingSourceStatus(
-            success=ot_success or 0,
-            pending=ot_pending or 0,
-            no_coverage=ot_no_coverage or 0,
-            errors=ot_errors or 0,
-            total=geocoded or 0,
+            success=ot_success,
+            pending=ot_pending,
+            no_coverage=ot_no_coverage,
+            errors=ot_errors,
+            total=geocoded,
         ),
         garmin=GeocodingSourceStatus(
-            success=g_success or 0,
-            pending=g_pending or 0,
-            no_coverage=g_no_coverage or 0,
-            errors=g_errors or 0,
+            success=g_success,
+            pending=g_pending,
+            no_coverage=g_no_coverage,
+            errors=g_errors,
             total=g_total_rows,
         ),
-        garmin_activities_total=activities_total or 0,
-        garmin_activities_geocoded=activities_geocoded or 0,
+        garmin_activities_total=activities_total,
+        garmin_activities_geocoded=activities_geocoded,
         garmin_coverage_percent=garmin_coverage_percent,
         garmin_waypoint_success_percent=garmin_waypoint_success_percent,
     )
@@ -195,12 +198,12 @@ async def _compute_geocoding_status(db: Any) -> GeocodingStatus:
         errors=ot_errors,
         coverage_percent=coverage_percent,
         by_source=by_source,
-        dense_cells_total=dense_total_cells or 0,
+        dense_cells_total=dense_total_cells,
         dense_cells_geocoded=dense_geocoded,
-        dense_cells_success=dense_success or 0,
-        dense_cells_pending=dense_pending or 0,
-        dense_cells_no_coverage=dense_no_coverage or 0,
-        dense_cells_errors=dense_errors or 0,
+        dense_cells_success=dense_success,
+        dense_cells_pending=dense_pending,
+        dense_cells_no_coverage=dense_no_coverage,
+        dense_cells_errors=dense_errors,
         dense_point_coverage_percent=dense_point_coverage_percent,
     )
 
@@ -834,6 +837,34 @@ async def _find_nearby_address(db: Any, lat: float, lon: float) -> dict[str, Any
     return {key: value for key, value in dict(nearest).items() if key != "_dist"}
 
 
+def _interpret_pelias_response(resp: httpx.Response) -> dict[str, Any] | None:
+    """Interpret a single Pelias HTTP response.
+
+    Returns the parsed JSON dict on a 2xx success, or ``None`` on a permanent
+    failure (invalid JSON body on a 2xx, or a 4xx client error). Raises
+    ``httpx.HTTPStatusError`` for 5xx (and any other non-2xx/4xx) responses so
+    the caller treats them as transient and retries.
+    """
+    status_code = resp.status_code
+    if 200 <= status_code < 300:
+        try:
+            data: dict[str, Any] = resp.json()
+            return data
+        except ValueError:
+            logger.warning("Pelias returned non-JSON body", exc_info=True)
+            # Treat invalid JSON on 2xx as permanent—no point retrying.
+            return None
+    if 400 <= status_code < 500:
+        logger.warning(
+            "Pelias permanent client error",
+            status_code=status_code,
+            body_preview=resp.text[:200],
+        )
+        return None
+    # 5xx and anything else (e.g. 1xx/3xx) — treat as transient.
+    raise httpx.HTTPStatusError(f"Pelias status {status_code}", request=resp.request, response=resp)
+
+
 async def _call_pelias(
     client: httpx.AsyncClient,
     pelias_base_url: str,
@@ -859,42 +890,16 @@ async def _call_pelias(
                 f"{pelias_base_url}{PELIAS_REVERSE_PATH}",
                 params={"point.lat": lat, "point.lon": lon, "size": 1},
             )
-        except httpx.TimeoutException as e:
-            last_err = e
-            logger.warning("Pelias timeout (attempt %d/%d)", attempt + 1, PELIAS_MAX_ATTEMPTS, exc_info=True)
-        except httpx.TransportError as e:
+            # Permanent outcomes (2xx success/invalid-JSON, 4xx) return directly;
+            # transient outcomes (5xx/other) raise HTTPStatusError, handled below.
+            return _interpret_pelias_response(resp)
+        except (httpx.TimeoutException, httpx.TransportError, httpx.HTTPStatusError) as e:
             last_err = e
             logger.warning(
-                "Pelias transport error (attempt %d/%d)",
+                "Pelias request failed (attempt %d/%d)",
                 attempt + 1,
                 PELIAS_MAX_ATTEMPTS,
                 exc_info=True,
-            )
-        else:
-            status_code = resp.status_code
-            if 200 <= status_code < 300:
-                try:
-                    data: dict[str, Any] = resp.json()
-                    return data
-                except (ValueError, json.JSONDecodeError) as e:
-                    logger.warning("Pelias returned non-JSON body", exc_info=True)
-                    last_err = e
-                    # Treat invalid JSON on 2xx as permanent—no point retrying.
-                    return None
-            if 400 <= status_code < 500:
-                logger.warning(
-                    "Pelias permanent client error",
-                    status_code=status_code,
-                    body_preview=resp.text[:200],
-                )
-                return None
-            # 5xx and anything else (e.g. 1xx/3xx) — treat as transient.
-            last_err = httpx.HTTPStatusError(f"Pelias status {status_code}", request=resp.request, response=resp)
-            logger.warning(
-                "Pelias server error (attempt %d/%d, status=%d)",
-                attempt + 1,
-                PELIAS_MAX_ATTEMPTS,
-                status_code,
             )
 
         if attempt < PELIAS_MAX_ATTEMPTS - 1:

@@ -103,6 +103,28 @@ def _coerce_sync_payload(payload: dict) -> GarminSyncResponse:
     return GarminSyncResponse(**payload)
 
 
+def _build_sync_params(
+    lookback: int | None,
+    window_hours: int | None,
+    resync_existing: bool | None,
+    activity_id: list[str] | None,
+    activity_ids: list[str] | None,
+) -> dict[str, Any]:
+    """Build the query params forwarded to the in-cluster garmin-sync service."""
+    params: dict[str, Any] = {}
+    if lookback is not None:
+        params["lookback"] = lookback
+    if window_hours is not None:
+        params["window_hours"] = window_hours
+    if resync_existing is not None:
+        params["resync_existing"] = "true" if resync_existing else "false"
+    if activity_id:
+        params["activity_id"] = activity_id
+    if activity_ids:
+        params["activity_ids"] = activity_ids
+    return params
+
+
 @router.post(
     "/sync",
     response_model=GarminSyncResponse,
@@ -154,17 +176,13 @@ async def trigger_sync(
 
     config = request.app.state.config
     base_url = config.garmin_sync_base_url.rstrip("/")
-    params: dict[str, Any] = {}
-    if lookback is not None:
-        params["lookback"] = lookback
-    if window_hours is not None:
-        params["window_hours"] = window_hours
-    if resync_existing is not None:
-        params["resync_existing"] = "true" if resync_existing else "false"
-    if activity_id:
-        params["activity_id"] = activity_id
-    if activity_ids:
-        params["activity_ids"] = activity_ids
+    params = _build_sync_params(
+        lookback=lookback,
+        window_hours=window_hours,
+        resync_existing=resync_existing,
+        activity_id=activity_id,
+        activity_ids=activity_ids,
+    )
 
     logger.info("garmin_sync_trigger", sync_id=sync_id, params=params)
 

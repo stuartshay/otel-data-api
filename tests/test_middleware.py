@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from httpx import AsyncClient
 
+from app.middleware import _log_request, _request_log_kwargs
+
 
 @pytest.mark.asyncio
 async def test_trace_headers_from_otel(client: AsyncClient):
@@ -89,3 +91,57 @@ async def test_non_health_endpoint_produces_log(client: AsyncClient):
             mock_logger.info.call_args_list + mock_logger.warning.call_args_list + mock_logger.error.call_args_list
         )
         assert any(c.args[0] == "HTTP request" for c in all_calls if c.args)
+
+
+def test_log_request_uses_status_code_severity():
+    """Request log helper maps response status codes to expected levels."""
+    log_kwargs = {"http.method": "GET"}
+
+    with patch("app.middleware.logger") as mock_logger:
+        _log_request(200, log_kwargs)
+        _log_request(404, log_kwargs)
+        _log_request(500, log_kwargs)
+
+    mock_logger.info.assert_called_once_with("HTTP request", **log_kwargs)
+    mock_logger.warning.assert_called_once_with("HTTP request", **log_kwargs)
+    mock_logger.error.assert_called_once_with("HTTP request", **log_kwargs)
+
+
+def test_request_log_kwargs_includes_trace_and_query_params():
+    """Request log field helper includes trace context and query params."""
+    request = MagicMock()
+    request.method = "GET"
+    request.url.path = "/api/v1/locations/status"
+    request.url.__str__.return_value = "https://api.example.test/api/v1/locations/status?device_id=phone"
+    request.query_params = {"device_id": "phone"}
+    request.client.host = "127.0.0.1"
+
+    response = MagicMock()
+    response.status_code = 200
+
+    log_kwargs = _request_log_kwargs(request, response, 12.345, "trace-1", "span-1", True)
+
+    assert log_kwargs["http.url"] == "https://api.example.test/api/v1/locations/status?device_id=phone"
+    assert log_kwargs["http.query_params"] == {"device_id": "phone"}
+    assert log_kwargs["trace.id"] == "trace-1"
+    assert log_kwargs["span.id"] == "span-1"
+    assert log_kwargs["duration_ms"] == 12.35
+
+
+def test_request_log_kwargs_omits_query_params_when_disabled():
+    """Request log field helper omits query params when configured off."""
+    request = MagicMock()
+    request.method = "GET"
+    request.url.scheme = "https"
+    request.url.netloc = "api.example.test"
+    request.url.path = "/api/v1/locations/status"
+    request.query_params = {"device_id": "phone"}
+    request.client.host = "127.0.0.1"
+
+    response = MagicMock()
+    response.status_code = 200
+
+    log_kwargs = _request_log_kwargs(request, response, 1.0, None, None, False)
+
+    assert log_kwargs["http.url"] == "https://api.example.test/api/v1/locations/status"
+    assert "http.query_params" not in log_kwargs

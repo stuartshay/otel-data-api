@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping
 from datetime import date
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import fastapi
 import httpx
@@ -131,28 +131,26 @@ def _build_sync_params(
 async def trigger_sync(
     request: Request,
     response: Response,
-    lookback: int | None = Query(
-        None,
-        ge=0,
-        description="Optional activity lookback override. Non-negative integer.",
-    ),
-    window_hours: int | None = Query(
-        None,
-        ge=1,
-        description="Optional sync window in hours. Positive integer.",
-    ),
-    resync_existing: bool | None = Query(
-        None,
-        description="Whether to re-sync activities that already exist in the database.",
-    ),
-    activity_id: list[str] | None = Query(
-        None,
-        description="Optional Garmin activity_id filter (repeatable).",
-    ),
-    activity_ids: list[str] | None = Query(
-        None,
-        description="Optional Garmin activity_ids filter (repeatable).",
-    ),
+    lookback: Annotated[
+        int | None,
+        Query(ge=0, description="Optional activity lookback override. Non-negative integer."),
+    ] = None,
+    window_hours: Annotated[
+        int | None,
+        Query(ge=1, description="Optional sync window in hours. Positive integer."),
+    ] = None,
+    resync_existing: Annotated[
+        bool | None,
+        Query(description="Whether to re-sync activities that already exist in the database."),
+    ] = None,
+    activity_id: Annotated[
+        list[str] | None,
+        Query(description="Optional Garmin activity_id filter (repeatable)."),
+    ] = None,
+    activity_ids: Annotated[
+        list[str] | None,
+        Query(description="Optional Garmin activity_ids filter (repeatable)."),
+    ] = None,
 ) -> GarminSyncResponse:
     """Trigger an on-demand Garmin sync via the in-cluster garmin-sync service."""
     sync_id = request.headers.get("X-Garmin-Sync-Id") or str(uuid.uuid4())
@@ -240,18 +238,25 @@ async def garmin_date_range(request: Request) -> GarminDateRange:
 )
 async def list_activities(
     request: Request,
-    sport: str | None = Query(None, description=DESC_FILTER_BY_SPORT, examples=["cycling"]),
-    date_from: date | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2025-11-01"]),
-    date_to: date | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2025-11-30"]),
-    limit: int = Query(50, ge=1, le=1000, description="Maximum number of activities to return per page"),
-    offset: int = Query(0, ge=0, description="Number of activities to skip for pagination"),
-    sort: str = Query(
-        "start_time",
-        description="Sort column (start_time, distance_km, duration_seconds, sport, created_at)",
-    ),
-    order: Literal["asc", "desc"] = Query(
-        "desc", description="Sort direction: asc (oldest first) or desc (newest first)"
-    ),
+    sport: Annotated[str | None, Query(description=DESC_FILTER_BY_SPORT, examples=["cycling"])] = None,
+    date_from: Annotated[
+        date | None,
+        Query(description="Filter from date (YYYY-MM-DD)", examples=["2025-11-01"]),
+    ] = None,
+    date_to: Annotated[
+        date | None,
+        Query(description="Filter to date (YYYY-MM-DD)", examples=["2025-11-30"]),
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=1000, description="Maximum number of activities to return per page")] = 50,
+    offset: Annotated[int, Query(ge=0, description="Number of activities to skip for pagination")] = 0,
+    sort: Annotated[
+        str,
+        Query(description="Sort column (start_time, distance_km, duration_seconds, sport, created_at)"),
+    ] = "start_time",
+    order: Annotated[
+        Literal["asc", "desc"],
+        Query(description="Sort direction: asc (oldest first) or desc (newest first)"),
+    ] = "desc",
 ) -> PaginatedResponse[GarminActivity]:
     """List Garmin activities with filtering and pagination.
 
@@ -352,12 +357,19 @@ async def list_device_counts(request: Request) -> list[GarminDeviceCount]:
 )
 async def list_activity_totals(
     request: Request,
-    period: Literal["week", "month", "year"] = Query(
-        ..., description="Time bucket for aggregation: week, month, or year"
-    ),
-    sport: str | None = Query(None, description="Filter to a single sport (e.g. cycling)"),
-    date_from: date | None = Query(None, description="Inclusive lower bound on start_time (YYYY-MM-DD, UTC)"),
-    date_to: date | None = Query(None, description="Inclusive upper bound on start_time (YYYY-MM-DD, UTC)"),
+    period: Annotated[
+        Literal["week", "month", "year"],
+        Query(description="Time bucket for aggregation: week, month, or year"),
+    ],
+    sport: Annotated[str | None, Query(description="Filter to a single sport (e.g. cycling)")] = None,
+    date_from: Annotated[
+        date | None,
+        Query(description="Inclusive lower bound on start_time (YYYY-MM-DD, UTC)"),
+    ] = None,
+    date_to: Annotated[
+        date | None,
+        Query(description="Inclusive upper bound on start_time (YYYY-MM-DD, UTC)"),
+    ] = None,
 ) -> list[GarminActivityTotal]:
     """Aggregate Garmin activities into period totals (week / month / year).
 
@@ -411,7 +423,7 @@ async def list_activity_totals(
 )
 async def get_activity(
     request: Request,
-    activity_id: str = fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"]),
+    activity_id: Annotated[str, fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"])],
 ) -> GarminActivity:
     """Get a single Garmin activity by ID with track point count."""
     db = request.app.state.db
@@ -438,9 +450,9 @@ async def get_activity(
 )
 async def patch_activity(
     request: Request,
-    body: GarminActivityManualUpdate = fastapi.Body(...),
-    activity_id: str = fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"]),
-    _user: dict = Depends(require_auth),
+    body: Annotated[GarminActivityManualUpdate, fastapi.Body()],
+    activity_id: Annotated[str, fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"])],
+    _user: Annotated[dict, Depends(require_auth)],
 ) -> GarminActivity:
     """Manually patch Garmin activity fields (auth required when OAuth2 is enabled)."""
     db = request.app.state.db
@@ -477,24 +489,27 @@ async def patch_activity(
 )
 async def list_track_points(
     request: Request,
-    activity_id: str = fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"]),
-    limit: int = Query(500, ge=1, le=25000, description="Maximum number of track points to return per page"),
-    offset: int = Query(0, ge=0, description="Number of track points to skip for pagination"),
-    sort: str = Query(
-        "timestamp",
-        description="Sort column (timestamp, altitude, speed_kmh, heart_rate, created_at)",
-    ),
-    order: Literal["asc", "desc"] = Query(
-        "asc", description="Sort direction: asc (earliest first) or desc (latest first)"
-    ),
-    simplify: float | None = Query(
-        None,
-        ge=0.000001,
-        le=0.01,
-        description="Douglas-Peucker simplification tolerance in degrees. "
-        "When set, returns the full route simplified via PostGIS ST_Simplify, "
-        "ignoring limit/offset. Recommended: 0.00001 (~1m), 0.00005 (~5m).",
-    ),
+    activity_id: Annotated[str, fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"])],
+    limit: Annotated[int, Query(ge=1, le=25000, description="Maximum number of track points to return per page")] = 500,
+    offset: Annotated[int, Query(ge=0, description="Number of track points to skip for pagination")] = 0,
+    sort: Annotated[
+        str,
+        Query(description="Sort column (timestamp, altitude, speed_kmh, heart_rate, created_at)"),
+    ] = "timestamp",
+    order: Annotated[
+        Literal["asc", "desc"],
+        Query(description="Sort direction: asc (earliest first) or desc (latest first)"),
+    ] = "asc",
+    simplify: Annotated[
+        float | None,
+        Query(
+            ge=0.000001,
+            le=0.01,
+            description="Douglas-Peucker simplification tolerance in degrees. "
+            "When set, returns the full route simplified via PostGIS ST_Simplify, "
+            "ignoring limit/offset. Recommended: 0.00001 (~1m), 0.00005 (~5m).",
+        ),
+    ] = None,
 ) -> PaginatedResponse[GarminTrackPoint]:
     """List track points for a specific activity.
 
@@ -600,7 +615,7 @@ async def list_track_points(
 )
 async def get_chart_data(
     request: Request,
-    activity_id: str = fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"]),
+    activity_id: Annotated[str, fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"])],
 ) -> list[GarminChartPoint]:
     """Return all track points for chart rendering (no pagination).
 
@@ -631,7 +646,7 @@ async def get_chart_data(
 )
 async def list_activity_climbs(
     request: Request,
-    activity_id: str = fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"]),
+    activity_id: Annotated[str, fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"])],
 ) -> list[GarminActivityClimb]:
     """Return Garmin-native ClimbPro typed splits for an activity."""
     db = request.app.state.db
@@ -665,7 +680,7 @@ async def list_activity_climbs(
 )
 async def list_activity_laps(
     request: Request,
-    activity_id: str = fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"]),
+    activity_id: Annotated[str, fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"])],
 ) -> list[GarminActivityLap]:
     """Return Garmin-native or derived laps for an activity."""
     db = request.app.state.db
@@ -694,11 +709,17 @@ async def list_activity_laps(
 )
 async def list_laps(
     request: Request,
-    sport: str | None = Query(None, description=DESC_FILTER_BY_SPORT, examples=["cycling"]),
-    date_from: date | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2026-01-01"]),
-    date_to: date | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-06-30"]),
-    limit: int = Query(50, ge=1, le=500, description="Maximum number of activities to return per page"),
-    offset: int = Query(0, ge=0, description="Number of activities to skip for pagination"),
+    sport: Annotated[str | None, Query(description=DESC_FILTER_BY_SPORT, examples=["cycling"])] = None,
+    date_from: Annotated[
+        date | None,
+        Query(description="Filter from date (YYYY-MM-DD)", examples=["2026-01-01"]),
+    ] = None,
+    date_to: Annotated[
+        date | None,
+        Query(description="Filter to date (YYYY-MM-DD)", examples=["2026-06-30"]),
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=500, description="Maximum number of activities to return per page")] = 50,
+    offset: Annotated[int, Query(ge=0, description="Number of activities to skip for pagination")] = 0,
 ) -> PaginatedResponse[GarminActivityLapsGroup]:
     """Batch laps across activities for cross-activity comparison.
 
@@ -844,7 +865,7 @@ def _row_to_track_point(row: Mapping[str, Any]) -> GarminTrackPoint:
 )
 async def list_activity_addresses(
     request: Request,
-    activity_id: str = fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"]),
+    activity_id: Annotated[str, fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"])],
 ) -> list[GarminActivityAddress]:
     """Return all reverse-geocoded addresses for a Garmin activity, in timestamp order.
 
@@ -995,24 +1016,31 @@ async def _fetch_segment_efforts(
 )
 async def list_segment_efforts(
     request: Request,
-    start_lat: float = Query(..., description="Segment start latitude", examples=[40.79366846]),
-    start_lon: float = Query(..., description="Segment start longitude", examples=[-73.96104321]),
-    end_lat: float = Query(..., description="Segment end latitude", examples=[40.79002409]),
-    end_lon: float = Query(..., description="Segment end longitude", examples=[-73.96422816]),
-    tolerance_meters: int = Query(
-        35, ge=5, le=200, description="Corridor radius around the start/end points in meters"
-    ),
-    sport: str | None = Query("cycling", description="Filter by sport type; pass an empty value to include all sports"),
-    date_from: date | None = Query(
-        None, description="Filter from date (YYYY-MM-DD) on activity start_time", examples=["2024-01-01"]
-    ),
-    date_to: date | None = Query(
-        None, description="Filter to date (YYYY-MM-DD) on activity start_time", examples=["2026-06-30"]
-    ),
-    max_effort_seconds: int = Query(
-        3600, ge=1, le=86400, description="Ignore traversals longer than this (filters loop/return mismatches)"
-    ),
-    limit: int = Query(100, ge=1, le=500, description="Maximum number of efforts to return"),
+    start_lat: Annotated[float, Query(description="Segment start latitude", examples=[40.79366846])],
+    start_lon: Annotated[float, Query(description="Segment start longitude", examples=[-73.96104321])],
+    end_lat: Annotated[float, Query(description="Segment end latitude", examples=[40.79002409])],
+    end_lon: Annotated[float, Query(description="Segment end longitude", examples=[-73.96422816])],
+    tolerance_meters: Annotated[
+        int,
+        Query(ge=5, le=200, description="Corridor radius around the start/end points in meters"),
+    ] = 35,
+    sport: Annotated[
+        str | None,
+        Query(description="Filter by sport type; pass an empty value to include all sports"),
+    ] = "cycling",
+    date_from: Annotated[
+        date | None,
+        Query(description="Filter from date (YYYY-MM-DD) on activity start_time", examples=["2024-01-01"]),
+    ] = None,
+    date_to: Annotated[
+        date | None,
+        Query(description="Filter to date (YYYY-MM-DD) on activity start_time", examples=["2026-06-30"]),
+    ] = None,
+    max_effort_seconds: Annotated[
+        int,
+        Query(ge=1, le=86400, description="Ignore traversals longer than this (filters loop/return mismatches)"),
+    ] = 3600,
+    limit: Annotated[int, Query(ge=1, le=500, description="Maximum number of efforts to return")] = 100,
 ) -> SegmentEffortsResponse:
     """Rank activity efforts over an ad-hoc segment defined by start/end coordinates.
 
@@ -1126,7 +1154,7 @@ _SEGMENT_ROUTE_LATERAL = """
 @router.get("/segments")
 async def list_segments(
     request: Request,
-    sport: str | None = Query(None, description=DESC_FILTER_BY_SPORT, examples=["cycling"]),
+    sport: Annotated[str | None, Query(description=DESC_FILTER_BY_SPORT, examples=["cycling"])] = None,
 ) -> list[GarminSegment]:
     """List saved segments (paths), newest first."""
     db = request.app.state.db
@@ -1151,7 +1179,7 @@ async def list_segments(
 async def create_segment(
     request: Request,
     body: GarminSegmentCreate,
-    _user: dict = Depends(require_auth),
+    _user: Annotated[dict, Depends(require_auth)],
 ) -> GarminSegment:
     """Save a new segment (path) from a climb, lap, or manual selection (auth required)."""
     db = request.app.state.db
@@ -1184,7 +1212,7 @@ async def create_segment(
 )
 async def get_segment(
     request: Request,
-    segment_id: int = fastapi.Path(description=DESC_SAVED_SEGMENT_ID),
+    segment_id: Annotated[int, fastapi.Path(description=DESC_SAVED_SEGMENT_ID)],
 ) -> GarminSegment:
     """Get a single saved segment by ID."""
     db = request.app.state.db
@@ -1207,8 +1235,8 @@ async def get_segment(
 )
 async def delete_segment(
     request: Request,
-    segment_id: int = fastapi.Path(description=DESC_SAVED_SEGMENT_ID),
-    _user: dict = Depends(require_auth),
+    segment_id: Annotated[int, fastapi.Path(description=DESC_SAVED_SEGMENT_ID)],
+    _user: Annotated[dict, Depends(require_auth)],
 ) -> Response:
     """Delete a saved segment (auth required).
 
@@ -1244,11 +1272,20 @@ async def delete_segment(
 )
 async def get_segment_efforts(
     request: Request,
-    segment_id: int = fastapi.Path(description=DESC_SAVED_SEGMENT_ID),
-    date_from: date | None = Query(None, description="Filter from date (YYYY-MM-DD) on activity start_time"),
-    date_to: date | None = Query(None, description="Filter to date (YYYY-MM-DD) on activity start_time"),
-    max_effort_seconds: int = Query(3600, ge=1, le=86400, description="Ignore traversals longer than this"),
-    limit: int = Query(100, ge=1, le=500, description="Maximum number of efforts to return"),
+    segment_id: Annotated[int, fastapi.Path(description=DESC_SAVED_SEGMENT_ID)],
+    date_from: Annotated[
+        date | None,
+        Query(description="Filter from date (YYYY-MM-DD) on activity start_time"),
+    ] = None,
+    date_to: Annotated[
+        date | None,
+        Query(description="Filter to date (YYYY-MM-DD) on activity start_time"),
+    ] = None,
+    max_effort_seconds: Annotated[
+        int,
+        Query(ge=1, le=86400, description="Ignore traversals longer than this"),
+    ] = 3600,
+    limit: Annotated[int, Query(ge=1, le=500, description="Maximum number of efforts to return")] = 100,
 ) -> SegmentEffortsResponse:
     """Rank activity efforts over a saved segment (matches the saved start/end corridor)."""
     db = request.app.state.db

@@ -11,12 +11,22 @@ from pydantic import BaseModel, Field
 
 from app.models.geocoding import GeocodedAddressSummary
 
+# Shared field-description constants (reused across models to avoid duplicating
+# the same literal in multiple Field(...) definitions).
+DESC_DEVICE_MANUFACTURER = "Device manufacturer (e.g. garmin)"
+DESC_PARENT_ACTIVITY_ID = "Parent Garmin activity identifier"
+DESC_SPORT_TYPE = "Sport type (e.g. cycling)"
+DESC_SEGMENT_START_LAT = "Segment start latitude"
+DESC_SEGMENT_START_LON = "Segment start longitude"
+DESC_SEGMENT_END_LAT = "Segment end latitude"
+DESC_SEGMENT_END_LON = "Segment end longitude"
+
 
 class GarminDevice(BaseModel):
     """Recording device metadata for a Garmin activity."""
 
     device_id: int | None = Field(default=None, description="Recording device serial number")
-    manufacturer: str | None = Field(default=None, description="Device manufacturer (e.g. garmin)")
+    manufacturer: str | None = Field(default=None, description=DESC_DEVICE_MANUFACTURER)
     garmin_product: int | None = Field(
         default=None, description="Raw Garmin product enum id from the FIT file (e.g. 4061)"
     )
@@ -63,7 +73,7 @@ class GarminActivity(BaseModel):
     total_descent_m: int | None = Field(default=None, description="Total elevation loss in meters")
     total_distance: float | None = Field(default=None, description="Raw total distance in meters from FIT file")
     avg_pace: float | None = Field(default=None, description="Average pace in minutes per kilometre")
-    device_manufacturer: str | None = Field(default=None, description="Device manufacturer (e.g. garmin)")
+    device_manufacturer: str | None = Field(default=None, description=DESC_DEVICE_MANUFACTURER)
     avg_temperature_c: int | None = Field(default=None, description="Average ambient temperature in degrees C")
     min_temperature_c: int | None = Field(default=None, description="Minimum ambient temperature in degrees C")
     max_temperature_c: int | None = Field(default=None, description="Maximum ambient temperature in degrees C")
@@ -163,7 +173,7 @@ class GarminTrackPoint(BaseModel):
     """Individual GPS track point within a Garmin activity."""
 
     id: int = Field(description="Unique track point record identifier")
-    activity_id: str = Field(description="Parent Garmin activity identifier")
+    activity_id: str = Field(description=DESC_PARENT_ACTIVITY_ID)
     latitude: float = Field(description="GPS latitude in decimal degrees (WGS 84)")
     longitude: float = Field(description="GPS longitude in decimal degrees (WGS 84)")
     timestamp: datetime = Field(description="UTC timestamp of the track point recording")
@@ -259,7 +269,7 @@ class GarminActivityClimb(BaseModel):
     """Garmin-native ClimbPro typed split for an activity."""
 
     id: int = Field(description="Unique climb row identifier")
-    activity_id: str = Field(description="Parent Garmin activity identifier")
+    activity_id: str = Field(description=DESC_PARENT_ACTIVITY_ID)
     source_split_index: int = Field(description="Zero-based Garmin typed split order")
     message_index: int | None = Field(default=None, description="Garmin message index")
     split_type: str | None = Field(default=None, description="Garmin split type label when provided")
@@ -306,7 +316,7 @@ class GarminActivityLap(BaseModel):
     """Garmin-native or derived activity lap row."""
 
     id: int = Field(description="Unique lap row identifier")
-    activity_id: str = Field(description="Parent Garmin activity identifier")
+    activity_id: str = Field(description=DESC_PARENT_ACTIVITY_ID)
     lap_index: int = Field(description="One-based lap order within the activity")
     start_time: datetime | None = Field(default=None, description="UTC lap start time")
     end_time: datetime | None = Field(default=None, description="UTC lap end time")
@@ -330,7 +340,7 @@ class GarminLapsActivity(BaseModel):
     """Activity summary metadata for a batch laps response item."""
 
     activity_id: str = Field(description="Garmin activity identifier")
-    sport: str | None = Field(default=None, description="Sport type (e.g. cycling)")
+    sport: str | None = Field(default=None, description=DESC_SPORT_TYPE)
     sub_sport: str | None = Field(default=None, description="Sub-sport type (e.g. road)")
     start_time: datetime | None = Field(default=None, description="UTC activity start time")
     distance_km: float | None = Field(default=None, description="Total activity distance in kilometers")
@@ -486,7 +496,7 @@ class GarminActivityManualUpdate(BaseModel):
     total_descent_m: int | None = Field(default=None, description="Total elevation loss in meters")
     total_distance: float | None = Field(default=None, description="Raw total distance in meters from FIT file")
     avg_pace: float | None = Field(default=None, description="Average pace in minutes per kilometre")
-    device_manufacturer: str | None = Field(default=None, description="Device manufacturer (e.g. garmin)")
+    device_manufacturer: str | None = Field(default=None, description=DESC_DEVICE_MANUFACTURER)
     avg_temperature_c: int | None = Field(default=None, description="Average ambient temperature in degrees C")
     min_temperature_c: int | None = Field(default=None, description="Minimum ambient temperature in degrees C")
     max_temperature_c: int | None = Field(default=None, description="Maximum ambient temperature in degrees C")
@@ -516,10 +526,10 @@ class GarminActivityManualUpdate(BaseModel):
 class SegmentDefinition(BaseModel):
     """The ad-hoc segment queried for efforts (a start→end corridor)."""
 
-    start_lat: float = Field(description="Segment start latitude")
-    start_lon: float = Field(description="Segment start longitude")
-    end_lat: float = Field(description="Segment end latitude")
-    end_lon: float = Field(description="Segment end longitude")
+    start_lat: float = Field(description=DESC_SEGMENT_START_LAT)
+    start_lon: float = Field(description=DESC_SEGMENT_START_LON)
+    end_lat: float = Field(description=DESC_SEGMENT_END_LAT)
+    end_lon: float = Field(description=DESC_SEGMENT_END_LON)
     tolerance_meters: float = Field(description="Corridor radius around the start/end points in meters")
 
 
@@ -528,7 +538,7 @@ class SegmentEffort(BaseModel):
 
     rank: int = Field(description="1-based rank by elapsed time (1 = fastest)")
     activity_id: str = Field(description="Garmin activity identifier")
-    sport: str | None = Field(default=None, description="Sport type (e.g. cycling)")
+    sport: str | None = Field(default=None, description=DESC_SPORT_TYPE)
     activity_start_time: datetime | None = Field(default=None, description="UTC start time of the parent activity")
     effort_start: datetime = Field(description="UTC timestamp entering the segment start corridor")
     effort_end: datetime = Field(description="UTC timestamp reaching the segment end corridor")
@@ -552,11 +562,11 @@ class GarminSegment(BaseModel):
 
     id: int = Field(description="Unique saved segment identifier")
     name: str = Field(description="Human-readable segment name")
-    sport: str | None = Field(default=None, description="Sport type (e.g. cycling)")
-    start_latitude: float = Field(description="Segment start latitude")
-    start_longitude: float = Field(description="Segment start longitude")
-    end_latitude: float = Field(description="Segment end latitude")
-    end_longitude: float = Field(description="Segment end longitude")
+    sport: str | None = Field(default=None, description=DESC_SPORT_TYPE)
+    start_latitude: float = Field(description=DESC_SEGMENT_START_LAT)
+    start_longitude: float = Field(description=DESC_SEGMENT_START_LON)
+    end_latitude: float = Field(description=DESC_SEGMENT_END_LAT)
+    end_longitude: float = Field(description=DESC_SEGMENT_END_LON)
     distance_meters: float | None = Field(default=None, description="Segment distance in meters")
     match_tolerance_meters: float = Field(description="Corridor radius (m) used to match traversing activities")
     source_activity_id: str | None = Field(default=None, description="Activity the segment was created from")
@@ -579,10 +589,10 @@ class GarminSegmentCreate(BaseModel):
 
     name: str = Field(min_length=1, max_length=200, description="Human-readable segment name")
     sport: str | None = Field(default="cycling", description="Sport type; defaults to cycling")
-    start_latitude: float = Field(description="Segment start latitude")
-    start_longitude: float = Field(description="Segment start longitude")
-    end_latitude: float = Field(description="Segment end latitude")
-    end_longitude: float = Field(description="Segment end longitude")
+    start_latitude: float = Field(description=DESC_SEGMENT_START_LAT)
+    start_longitude: float = Field(description=DESC_SEGMENT_START_LON)
+    end_latitude: float = Field(description=DESC_SEGMENT_END_LAT)
+    end_longitude: float = Field(description=DESC_SEGMENT_END_LON)
     distance_meters: float | None = Field(default=None, description="Segment distance in meters")
     match_tolerance_meters: float = Field(
         default=35, ge=5, le=200, description="Corridor radius (m) used to match traversing activities"

@@ -25,6 +25,7 @@ _oauth2_enabled: bool = False
 _JWT_HEADER_SEGMENTS = 3
 _JWT_ALGORITHM = "RS256"
 _JWT_INVALID_HEADER_DETAIL = "Invalid token header"
+_AUTH_SERVICE_UNAVAILABLE_DETAIL = "Authentication service unavailable"
 
 
 def configure_auth(issuer: str, client_id: str, enabled: bool) -> None:
@@ -89,11 +90,23 @@ def _decode_token_header(token: str) -> dict[str, Any]:
     return header
 
 
-def _get_signing_key(token: str, jwks_data: dict[str, Any]) -> dict[str, Any]:
+def _authentication_service_unavailable() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=_AUTH_SERVICE_UNAVAILABLE_DETAIL,
+    )
+
+
+def _get_signing_key(token_header: dict[str, Any], jwks_data: dict[str, Any]) -> dict[str, Any]:
     """Find the signing key for the given token from JWKS."""
-    token_header = _decode_token_header(token)
     kid = token_header["kid"]
-    for key in jwks_data.get("keys", []):
+    keys = jwks_data.get("keys")
+    if not isinstance(keys, list):
+        raise _authentication_service_unavailable()
+
+    for key in keys:
+        if not isinstance(key, dict):
+            raise _authentication_service_unavailable()
         if key.get("kid") == kid:
             return dict(key)
     raise HTTPException(
@@ -117,8 +130,9 @@ async def get_current_user(
 
     token = credentials.credentials
     try:
+        token_header = _decode_token_header(token)
         jwks_data = await _get_jwks()
-        signing_key = _get_signing_key(token, jwks_data)
+        signing_key = _get_signing_key(token_header, jwks_data)
         public_key = jwk.construct(signing_key)
 
         claims = jwt.decode(
@@ -137,10 +151,7 @@ async def get_current_user(
         ) from e
     except httpx.HTTPError as e:
         logger.error("Failed to fetch JWKS: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service unavailable",
-        ) from e
+        raise _authentication_service_unavailable() from e
 
 
 async def require_auth(

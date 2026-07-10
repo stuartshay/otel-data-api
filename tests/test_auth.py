@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import json
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -10,6 +12,11 @@ from fastapi import HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app import auth
+
+
+def _token_with_header(header: dict[str, object]) -> str:
+    encoded_header = base64.urlsafe_b64encode(json.dumps(header).encode("utf-8")).decode("ascii").rstrip("=")
+    return f"{encoded_header}.payload.signature"
 
 
 @pytest.fixture(autouse=True)
@@ -40,9 +47,10 @@ async def test_get_current_user_requires_header_when_enabled():
 async def test_get_current_user_missing_signing_key(monkeypatch: pytest.MonkeyPatch):
     auth.configure_auth("https://issuer", "client123", True)
 
-    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="token")
+    credentials = HTTPAuthorizationCredentials(
+        scheme="Bearer", credentials=_token_with_header({"alg": "RS256", "kid": "missing"})
+    )
     monkeypatch.setattr(auth, "_get_jwks", AsyncMock(return_value={"keys": [{"kid": "other"}]}))
-    monkeypatch.setattr(auth.jwt, "get_unverified_header", lambda _token: {"kid": "missing"})
 
     with pytest.raises(HTTPException) as exc:
         await auth.get_current_user(credentials)
@@ -55,9 +63,9 @@ async def test_get_current_user_missing_signing_key(monkeypatch: pytest.MonkeyPa
 async def test_get_current_user_success(monkeypatch: pytest.MonkeyPatch):
     auth.configure_auth("https://issuer", "client123", True)
 
-    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="token-abc")
+    token = _token_with_header({"alg": "RS256", "kid": "kid1"})
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
     monkeypatch.setattr(auth, "_get_jwks", AsyncMock(return_value={"keys": [{"kid": "kid1"}]}))
-    monkeypatch.setattr(auth.jwt, "get_unverified_header", lambda _token: {"kid": "kid1"})
 
     class DummyKey:
         def to_pem(self) -> bytes:
@@ -70,7 +78,7 @@ async def test_get_current_user_success(monkeypatch: pytest.MonkeyPatch):
     claims = await auth.get_current_user(credentials)
 
     decode_mock.assert_called_once_with(
-        "token-abc",
+        token,
         "pem-key",
         algorithms=["RS256"],
         audience="client123",
@@ -82,16 +90,98 @@ async def test_get_current_user_success(monkeypatch: pytest.MonkeyPatch):
 @pytest.mark.asyncio
 async def test_get_current_user_jwks_failure(monkeypatch: pytest.MonkeyPatch):
     auth.configure_auth("https://issuer", "client123", True)
-    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="token-abc")
+    credentials = HTTPAuthorizationCredentials(
+        scheme="Bearer",
+        credentials=_token_with_header({"alg": "RS256", "kid": "kid1"}),
+    )
 
     monkeypatch.setattr(auth, "_get_jwks", AsyncMock(side_effect=httpx.HTTPError("offline")))
-    monkeypatch.setattr(auth.jwt, "get_unverified_header", lambda _token: {"kid": "kid1"})
 
     with pytest.raises(HTTPException) as exc:
         await auth.get_current_user(credentials)
 
     assert exc.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
     assert exc.value.detail == "Authentication service unavailable"
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_invalid_jwks_shape_returns_503(monkeypatch: pytest.MonkeyPatch):
+    auth.configure_auth("https://issuer", "client123", True)
+    credentials = HTTPAuthorizationCredentials(
+        scheme="Bearer",
+        credentials=_token_with_header({"alg": "RS256", "kid": "kid1"}),
+    )
+    monkeypatch.setattr(auth, "_get_jwks", AsyncMock(return_value={"keys": ["not-a-key"]}))
+
+    with pytest.raises(HTTPException) as exc:
+        await auth.get_current_user(credentials)
+
+    assert exc.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert exc.value.detail == "Authentication service unavailable"
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_invalid_jwks_top_level_shape_returns_503(monkeypatch: pytest.MonkeyPatch):
+    auth.configure_auth("https://issuer", "client123", True)
+    credentials = HTTPAuthorizationCredentials(
+        scheme="Bearer",
+        credentials=_token_with_header({"alg": "RS256", "kid": "kid1"}),
+    )
+    monkeypatch.setattr(auth, "_get_jwks", AsyncMock(return_value=[]))
+
+    with pytest.raises(HTTPException) as exc:
+        await auth.get_current_user(credentials)
+
+    assert exc.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert exc.value.detail == "Authentication service unavailable"
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_rejects_malformed_jwt_header(monkeypatch: pytest.MonkeyPatch):
+    auth.configure_auth("https://issuer", "client123", True)
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="not-a-jwt")
+    get_jwks = AsyncMock(return_value={"keys": [{"kid": "kid1"}]})
+    monkeypatch.setattr(auth, "_get_jwks", get_jwks)
+
+    with pytest.raises(HTTPException) as exc:
+        await auth.get_current_user(credentials)
+
+    assert exc.value.status_code == status.HTTP_401_UNAUTHORIZED
+    assert exc.value.detail == "Invalid token header"
+    get_jwks.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_rejects_non_ascii_jwt_header(monkeypatch: pytest.MonkeyPatch):
+    auth.configure_auth("https://issuer", "client123", True)
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="é.payload.signature")
+    get_jwks = AsyncMock(return_value={"keys": [{"kid": "kid1"}]})
+    monkeypatch.setattr(auth, "_get_jwks", get_jwks)
+
+    with pytest.raises(HTTPException) as exc:
+        await auth.get_current_user(credentials)
+
+    assert exc.value.status_code == status.HTTP_401_UNAUTHORIZED
+    assert exc.value.detail == "Invalid token header"
+    get_jwks.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_rejects_unexpected_jwt_algorithm(monkeypatch: pytest.MonkeyPatch):
+    auth.configure_auth("https://issuer", "client123", True)
+    credentials = HTTPAuthorizationCredentials(
+        scheme="Bearer",
+        credentials=_token_with_header({"alg": "none", "kid": "kid1"}),
+    )
+    get_jwks = AsyncMock(return_value={"keys": [{"kid": "kid1"}]})
+    monkeypatch.setattr(auth, "_get_jwks", get_jwks)
+
+    with pytest.raises(HTTPException) as exc:
+        await auth.get_current_user(credentials)
+
+    assert exc.value.status_code == status.HTTP_401_UNAUTHORIZED
+    assert exc.value.detail == "Invalid token header"
+    get_jwks.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
+import json
 from typing import Any
 
 import httpx
@@ -19,6 +22,10 @@ _jwks_cache: dict[str, Any] = {}
 _cognito_issuer: str = ""
 _cognito_client_id: str = ""
 _oauth2_enabled: bool = False
+_JWT_HEADER_SEGMENTS = 3
+_JWT_ALGORITHM = "RS256"
+_JWT_INVALID_HEADER_DETAIL = "Invalid token header"
+_AUTH_SERVICE_UNAVAILABLE_DETAIL = "Authentication service unavailable"
 
 
 def configure_auth(issuer: str, client_id: str, enabled: bool) -> None:
@@ -43,11 +50,67 @@ async def _get_jwks() -> dict[str, Any]:
     return _jwks_cache
 
 
-def _get_signing_key(token: str, jwks_data: dict[str, Any]) -> dict[str, Any]:
+def _decode_token_header(token: str) -> dict[str, Any]:
+    """Decode and validate the JWT header before signature verification.
+
+    The header is not trusted for authentication decisions; it is only used to
+    select the matching JWKS key. The token signature, audience, and issuer are
+    still verified by ``jwt.decode`` after the key is selected.
+    """
+    parts = token.split(".")
+    if len(parts) != _JWT_HEADER_SEGMENTS:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=_JWT_INVALID_HEADER_DETAIL,
+        )
+
+    header_segment = parts[0]
+    padding = "=" * (-len(header_segment) % 4)
+    try:
+        header_input = f"{header_segment}{padding}".encode("ascii")
+        header_bytes = base64.urlsafe_b64decode(header_input)
+        header = json.loads(header_bytes.decode("utf-8"))
+    except (binascii.Error, json.JSONDecodeError, UnicodeDecodeError, UnicodeEncodeError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=_JWT_INVALID_HEADER_DETAIL,
+        ) from e
+
+    if not isinstance(header, dict):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=_JWT_INVALID_HEADER_DETAIL,
+        )
+
+    if header.get("alg") != _JWT_ALGORITHM or not isinstance(header.get("kid"), str):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=_JWT_INVALID_HEADER_DETAIL,
+        )
+
+    return header
+
+
+def _authentication_service_unavailable() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=_AUTH_SERVICE_UNAVAILABLE_DETAIL,
+    )
+
+
+def _get_signing_key(token_header: dict[str, Any], jwks_data: dict[str, Any]) -> dict[str, Any]:
     """Find the signing key for the given token from JWKS."""
-    unverified_header: dict[str, Any] = jwt.get_unverified_header(token)
-    kid = unverified_header.get("kid")
-    for key in jwks_data.get("keys", []):
+    kid = token_header["kid"]
+    if not isinstance(jwks_data, dict):
+        raise _authentication_service_unavailable()
+
+    keys = jwks_data.get("keys")
+    if not isinstance(keys, list):
+        raise _authentication_service_unavailable()
+
+    for key in keys:
+        if not isinstance(key, dict):
+            raise _authentication_service_unavailable()
         if key.get("kid") == kid:
             return dict(key)
     raise HTTPException(
@@ -71,14 +134,15 @@ async def get_current_user(
 
     token = credentials.credentials
     try:
+        token_header = _decode_token_header(token)
         jwks_data = await _get_jwks()
-        signing_key = _get_signing_key(token, jwks_data)
+        signing_key = _get_signing_key(token_header, jwks_data)
         public_key = jwk.construct(signing_key)
 
         claims = jwt.decode(
             token,
             public_key.to_pem().decode("utf-8"),
-            algorithms=["RS256"],
+            algorithms=[_JWT_ALGORITHM],
             audience=_cognito_client_id,
             issuer=_cognito_issuer,
         )
@@ -91,10 +155,7 @@ async def get_current_user(
         ) from e
     except httpx.HTTPError as e:
         logger.error("Failed to fetch JWKS: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service unavailable",
-        ) from e
+        raise _authentication_service_unavailable() from e
 
 
 async def require_auth(

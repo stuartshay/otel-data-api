@@ -75,7 +75,7 @@ class PeliasTransientError(Exception):
     """Raised by ``_call_pelias`` after all retry attempts have failed transiently."""
 
 
-@router.get("/status", response_model=GeocodingStatus)
+@router.get("/status")
 async def geocoding_status(request: Request) -> GeocodingStatus:
     """Get geocoding coverage statistics for both OwnTracks and Garmin sources.
 
@@ -213,7 +213,7 @@ async def _compute_geocoding_status(db: Any) -> GeocodingStatus:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/pelias-health", response_model=PeliasHealth)
+@router.get("/pelias-health")
 async def pelias_health(request: Request) -> PeliasHealth:
     """Probe the upstream Pelias reverse-geocoder with a known-good coordinate.
 
@@ -268,7 +268,7 @@ async def pelias_health(request: Request) -> PeliasHealth:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/trigger", response_model=GeocodingTriggerResponse)
+@router.post("/trigger")
 async def trigger_geocoding(
     request: Request,
     batch_size: int = Query(100, ge=1, le=500, description="Number of locations to geocode in this batch"),
@@ -279,7 +279,7 @@ async def trigger_geocoding(
     return await _trigger_geocoding_impl(request, batch_size, retry_failed)
 
 
-@internal_router.post("/trigger", response_model=GeocodingTriggerResponse)
+@internal_router.post("/trigger")
 async def internal_trigger_geocoding(
     request: Request,
     batch_size: int = Query(100, ge=1, le=1000, description="Number of locations to geocode in this batch"),
@@ -413,7 +413,7 @@ async def _process_location_inner(
 # ---------------------------------------------------------------------------
 
 
-@internal_router.post("/trigger/garmin", response_model=GeocodingTriggerResponse)
+@internal_router.post("/trigger/garmin")
 async def internal_trigger_garmin_geocoding(
     request: Request,
     batch_size: int = Query(10, ge=1, le=100, description="Number of Garmin activities to process in this batch"),
@@ -436,7 +436,7 @@ async def internal_trigger_garmin_geocoding(
     return await _trigger_garmin_geocoding_impl(request, batch_size, waypoint_spacing_km, retry_failed)
 
 
-@router.post("/trigger/garmin", response_model=GeocodingTriggerResponse)
+@router.post("/trigger/garmin")
 async def trigger_garmin_geocoding(
     request: Request,
     batch_size: int = Query(10, ge=1, le=100, description="Number of Garmin activities to process in this batch"),
@@ -1105,7 +1105,7 @@ async def _upsert_garmin_status(
 _CELL_CONFLICT = "ON CONFLICT (lat_4dp, lon_4dp)"
 
 
-@internal_router.post("/trigger/garmin-dense", response_model=GeocodingTriggerResponse)
+@internal_router.post("/trigger/garmin-dense")
 async def internal_trigger_garmin_dense(
     request: Request,
     batch_size: int = Query(100, ge=1, le=1000, description="Number of dense cells to process in this batch"),
@@ -1118,7 +1118,7 @@ async def internal_trigger_garmin_dense(
     return await _trigger_garmin_dense_impl(request, batch_size, retry_failed)
 
 
-@router.post("/trigger/garmin-dense", response_model=GeocodingTriggerResponse)
+@router.post("/trigger/garmin-dense")
 async def trigger_garmin_dense(
     request: Request,
     batch_size: int = Query(100, ge=1, le=500, description="Number of dense cells to process in this batch"),

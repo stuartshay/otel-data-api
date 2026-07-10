@@ -38,6 +38,15 @@ from app.models.garmin import (
 from app.models.geocoding import GarminActivityAddress, GeocodedAddressSummary
 
 router = APIRouter(prefix="/api/v1/garmin", tags=["Garmin"])
+
+# Shared string constants (avoid duplicating the same literal across handlers).
+DESC_ACTIVITY_ID = "Garmin activity ID"
+DESC_FILTER_BY_SPORT = "Filter by sport type"
+DESC_SAVED_SEGMENT_ID = "Saved segment ID"
+ACTIVITY_NOT_FOUND = "Activity not found"
+SEGMENT_NOT_FOUND = "Segment not found"
+INVALID_SYNC_RESPONSE = "Invalid response from Garmin sync service"
+SQL_ACTIVITY_EXISTS = "SELECT 1 FROM public.garmin_activities WHERE activity_id = $1"
 logger = structlog.get_logger(__name__)
 
 ACTIVITY_SORT_WHITELIST = {"start_time", "distance_km", "duration_seconds", "sport", "created_at"}
@@ -171,17 +180,17 @@ async def trigger_sync(
         payload = upstream_response.json()
     except ValueError:
         response.status_code = 502
-        return GarminSyncResponse(status="error", message="Invalid response from Garmin sync service")
+        return GarminSyncResponse(status="error", message=INVALID_SYNC_RESPONSE)
 
     if upstream_response.status_code in {202, 409, 400}:
         try:
             sync_response = _coerce_sync_payload(payload)
         except ValidationError:
             response.status_code = 502
-            return GarminSyncResponse(status="error", message="Invalid response from Garmin sync service")
+            return GarminSyncResponse(status="error", message=INVALID_SYNC_RESPONSE)
         except ValueError:
             response.status_code = 502
-            return GarminSyncResponse(status="error", message="Invalid response from Garmin sync service")
+            return GarminSyncResponse(status="error", message=INVALID_SYNC_RESPONSE)
         response.status_code = upstream_response.status_code
         return sync_response
     if upstream_response.status_code >= 500:
@@ -210,7 +219,7 @@ async def garmin_date_range(request: Request) -> GarminDateRange:
 @router.get("/activities", response_model=PaginatedResponse[GarminActivity])
 async def list_activities(
     request: Request,
-    sport: str | None = Query(None, description="Filter by sport type", examples=["cycling"]),
+    sport: str | None = Query(None, description=DESC_FILTER_BY_SPORT, examples=["cycling"]),
     date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2025-11-01"]),
     date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2025-11-30"]),
     limit: int = Query(50, ge=1, le=1000, description="Maximum number of activities to return per page"),
@@ -379,17 +388,17 @@ async def list_activity_totals(
 @router.get(
     "/activities/{activity_id}",
     response_model=GarminActivity,
-    responses={404: {"description": "Activity not found"}},
+    responses={404: {"description": ACTIVITY_NOT_FOUND}},
 )
 async def get_activity(
     request: Request,
-    activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
+    activity_id: str = fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"]),
 ) -> GarminActivity:
     """Get a single Garmin activity by ID with track point count."""
     db = request.app.state.db
     row = await db.fetchrow(ACTIVITY_BY_ID_SELECT, activity_id)
     if not row:
-        raise HTTPException(status_code=404, detail="Activity not found")
+        raise HTTPException(status_code=404, detail=ACTIVITY_NOT_FOUND)
     activity = GarminActivity.from_row(row)
     if request.app.state.config.log_garmin_activity_detail:
         logger.info(
@@ -406,13 +415,13 @@ async def get_activity(
     responses={
         400: {"description": "No fields to update"},
         401: {"description": "Authentication required"},
-        404: {"description": "Activity not found"},
+        404: {"description": ACTIVITY_NOT_FOUND},
     },
 )
 async def patch_activity(
     request: Request,
     body: GarminActivityManualUpdate = fastapi.Body(...),
-    activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
+    activity_id: str = fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"]),
     _user: dict = Depends(require_auth),
 ) -> GarminActivity:
     """Manually patch Garmin activity fields (auth required when OAuth2 is enabled)."""
@@ -436,22 +445,22 @@ async def patch_activity(
         *params,
     )
     if not updated:
-        raise HTTPException(status_code=404, detail="Activity not found")
+        raise HTTPException(status_code=404, detail=ACTIVITY_NOT_FOUND)
 
     row = await db.fetchrow(ACTIVITY_BY_ID_SELECT, activity_id)
     if not row:
-        raise HTTPException(status_code=404, detail="Activity not found")
+        raise HTTPException(status_code=404, detail=ACTIVITY_NOT_FOUND)
     return GarminActivity.from_row(row)
 
 
 @router.get(
     "/activities/{activity_id}/tracks",
     response_model=PaginatedResponse[GarminTrackPoint],
-    responses={404: {"description": "Activity not found"}},
+    responses={404: {"description": ACTIVITY_NOT_FOUND}},
 )
 async def list_track_points(
     request: Request,
-    activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
+    activity_id: str = fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"]),
     limit: int = Query(500, ge=1, le=25000, description="Maximum number of track points to return per page"),
     offset: int = Query(0, ge=0, description="Number of track points to skip for pagination"),
     sort: str = Query(
@@ -482,9 +491,9 @@ async def list_track_points(
         sort = "timestamp"
 
     # Verify activity exists
-    exists = await db.fetchval("SELECT 1 FROM public.garmin_activities WHERE activity_id = $1", activity_id)
+    exists = await db.fetchval(SQL_ACTIVITY_EXISTS, activity_id)
     if not exists:
-        raise HTTPException(status_code=404, detail="Activity not found")
+        raise HTTPException(status_code=404, detail=ACTIVITY_NOT_FOUND)
 
     total = await db.fetchval(
         "SELECT COUNT(*) FROM public.garmin_track_points WHERE activity_id = $1",
@@ -571,11 +580,11 @@ async def list_track_points(
 @router.get(
     "/activities/{activity_id}/chart-data",
     response_model=list[GarminChartPoint],
-    responses={404: {"description": "Activity not found"}},
+    responses={404: {"description": ACTIVITY_NOT_FOUND}},
 )
 async def get_chart_data(
     request: Request,
-    activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
+    activity_id: str = fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"]),
 ) -> list[GarminChartPoint]:
     """Return all track points for chart rendering (no pagination).
 
@@ -585,9 +594,9 @@ async def get_chart_data(
     """
     db = request.app.state.db
 
-    exists = await db.fetchval("SELECT 1 FROM public.garmin_activities WHERE activity_id = $1", activity_id)
+    exists = await db.fetchval(SQL_ACTIVITY_EXISTS, activity_id)
     if not exists:
-        raise HTTPException(status_code=404, detail="Activity not found")
+        raise HTTPException(status_code=404, detail=ACTIVITY_NOT_FOUND)
 
     rows = await db.fetch(
         "SELECT latitude, longitude, timestamp, altitude, "
@@ -603,18 +612,18 @@ async def get_chart_data(
 @router.get(
     "/activities/{activity_id}/climbs",
     response_model=list[GarminActivityClimb],
-    responses={404: {"description": "Activity not found"}},
+    responses={404: {"description": ACTIVITY_NOT_FOUND}},
 )
 async def list_activity_climbs(
     request: Request,
-    activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
+    activity_id: str = fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"]),
 ) -> list[GarminActivityClimb]:
     """Return Garmin-native ClimbPro typed splits for an activity."""
     db = request.app.state.db
 
-    exists = await db.fetchval("SELECT 1 FROM public.garmin_activities WHERE activity_id = $1", activity_id)
+    exists = await db.fetchval(SQL_ACTIVITY_EXISTS, activity_id)
     if not exists:
-        raise HTTPException(status_code=404, detail="Activity not found")
+        raise HTTPException(status_code=404, detail=ACTIVITY_NOT_FOUND)
 
     rows = await db.fetch(
         "SELECT id, activity_id, source_split_index, message_index, split_type, "
@@ -638,18 +647,18 @@ async def list_activity_climbs(
 @router.get(
     "/activities/{activity_id}/laps",
     response_model=list[GarminActivityLap],
-    responses={404: {"description": "Activity not found"}},
+    responses={404: {"description": ACTIVITY_NOT_FOUND}},
 )
 async def list_activity_laps(
     request: Request,
-    activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
+    activity_id: str = fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"]),
 ) -> list[GarminActivityLap]:
     """Return Garmin-native or derived laps for an activity."""
     db = request.app.state.db
 
-    exists = await db.fetchval("SELECT 1 FROM public.garmin_activities WHERE activity_id = $1", activity_id)
+    exists = await db.fetchval(SQL_ACTIVITY_EXISTS, activity_id)
     if not exists:
-        raise HTTPException(status_code=404, detail="Activity not found")
+        raise HTTPException(status_code=404, detail=ACTIVITY_NOT_FOUND)
 
     rows = await db.fetch(
         "SELECT id, activity_id, lap_index, start_time, end_time, "
@@ -668,7 +677,7 @@ async def list_activity_laps(
 @router.get("/laps", response_model=PaginatedResponse[GarminActivityLapsGroup])
 async def list_laps(
     request: Request,
-    sport: str | None = Query(None, description="Filter by sport type", examples=["cycling"]),
+    sport: str | None = Query(None, description=DESC_FILTER_BY_SPORT, examples=["cycling"]),
     date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)", examples=["2026-01-01"]),
     date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)", examples=["2026-06-30"]),
     limit: int = Query(50, ge=1, le=500, description="Maximum number of activities to return per page"),
@@ -815,11 +824,11 @@ def _row_to_track_point(row: Mapping[str, Any]) -> GarminTrackPoint:
 @router.get(
     "/activities/{activity_id}/addresses",
     response_model=list[GarminActivityAddress],
-    responses={404: {"description": "Activity not found"}},
+    responses={404: {"description": ACTIVITY_NOT_FOUND}},
 )
 async def list_activity_addresses(
     request: Request,
-    activity_id: str = fastapi.Path(description="Garmin activity ID", examples=["20932993811"]),
+    activity_id: str = fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"]),
 ) -> list[GarminActivityAddress]:
     """Return all reverse-geocoded addresses for a Garmin activity, in timestamp order.
 
@@ -828,9 +837,9 @@ async def list_activity_addresses(
     """
     db = request.app.state.db
 
-    exists = await db.fetchval("SELECT 1 FROM public.garmin_activities WHERE activity_id = $1", activity_id)
+    exists = await db.fetchval(SQL_ACTIVITY_EXISTS, activity_id)
     if not exists:
-        raise HTTPException(status_code=404, detail="Activity not found")
+        raise HTTPException(status_code=404, detail=ACTIVITY_NOT_FOUND)
 
     rows = await db.fetch(
         "SELECT ga.garmin_track_point_id AS track_point_id, "
@@ -1098,7 +1107,7 @@ _SEGMENT_ROUTE_LATERAL = """
 @router.get("/segments", response_model=list[GarminSegment])
 async def list_segments(
     request: Request,
-    sport: str | None = Query(None, description="Filter by sport type", examples=["cycling"]),
+    sport: str | None = Query(None, description=DESC_FILTER_BY_SPORT, examples=["cycling"]),
 ) -> list[GarminSegment]:
     """List saved segments (paths), newest first."""
     db = request.app.state.db
@@ -1149,11 +1158,11 @@ async def create_segment(
 @router.get(
     "/segments/{segment_id}",
     response_model=GarminSegment,
-    responses={404: {"description": "Segment not found"}},
+    responses={404: {"description": SEGMENT_NOT_FOUND}},
 )
 async def get_segment(
     request: Request,
-    segment_id: int = fastapi.Path(description="Saved segment ID"),
+    segment_id: int = fastapi.Path(description=DESC_SAVED_SEGMENT_ID),
 ) -> GarminSegment:
     """Get a single saved segment by ID."""
     db = request.app.state.db
@@ -1164,14 +1173,14 @@ async def get_segment(
         segment_id,
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Segment not found")
+        raise HTTPException(status_code=404, detail=SEGMENT_NOT_FOUND)
     return GarminSegment(**dict(row))
 
 
 @router.delete("/segments/{segment_id}", status_code=204, response_class=Response)
 async def delete_segment(
     request: Request,
-    segment_id: int = fastapi.Path(description="Saved segment ID"),
+    segment_id: int = fastapi.Path(description=DESC_SAVED_SEGMENT_ID),
     _user: dict = Depends(require_auth),
 ) -> Response:
     """Delete a saved segment (auth required).
@@ -1189,7 +1198,7 @@ async def delete_segment(
         segment_id,
     )
     if row is None:
-        raise HTTPException(status_code=404, detail="Segment not found")
+        raise HTTPException(status_code=404, detail=SEGMENT_NOT_FOUND)
     if row["garmin_segment_uuid"] is not None:
         # Synced to Garmin: hand off to the agent for end-to-end deletion.
         await db.execute(
@@ -1205,11 +1214,11 @@ async def delete_segment(
 @router.get(
     "/segments/{segment_id}/efforts",
     response_model=SegmentEffortsResponse,
-    responses={404: {"description": "Segment not found"}},
+    responses={404: {"description": SEGMENT_NOT_FOUND}},
 )
 async def get_segment_efforts(
     request: Request,
-    segment_id: int = fastapi.Path(description="Saved segment ID"),
+    segment_id: int = fastapi.Path(description=DESC_SAVED_SEGMENT_ID),
     date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD) on activity start_time"),
     date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD) on activity start_time"),
     max_effort_seconds: int = Query(3600, ge=1, le=86400, description="Ignore traversals longer than this"),
@@ -1224,7 +1233,7 @@ async def get_segment_efforts(
         segment_id,
     )
     if not seg:
-        raise HTTPException(status_code=404, detail="Segment not found")
+        raise HTTPException(status_code=404, detail=SEGMENT_NOT_FOUND)
 
     tolerance = float(seg["match_tolerance_meters"])
     items = await _fetch_segment_efforts(

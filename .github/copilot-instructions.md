@@ -71,6 +71,22 @@ git fetch origin master && git rebase origin/master
 This is especially important after squash merges, which cause develop to
 diverge from master.
 
+### Responding to PR Review Comments
+
+⚠️ **ALWAYS reply to each addressed PR review comment.**
+
+When making changes in response to GitHub PR review comments:
+
+1. Implement the requested code or documentation change.
+2. Run the relevant validation commands.
+3. Push the fix commit.
+4. Reply directly on every addressed review thread with:
+   - what changed,
+   - the commit SHA, and
+   - the validation commands that passed.
+5. Do not rely only on pushing code; leave the thread response so reviewers can
+   audit how each comment was handled.
+
 ### After Deployment (Required)
 
 ⚠️ **ALWAYS verify linked issue acceptance criteria after cluster deployment**

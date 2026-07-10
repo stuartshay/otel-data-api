@@ -67,9 +67,10 @@ def _decode_token_header(token: str) -> dict[str, Any]:
     header_segment = parts[0]
     padding = "=" * (-len(header_segment) % 4)
     try:
-        header_bytes = base64.urlsafe_b64decode(f"{header_segment}{padding}")
+        header_input = f"{header_segment}{padding}".encode("ascii")
+        header_bytes = base64.urlsafe_b64decode(header_input)
         header = json.loads(header_bytes.decode("utf-8"))
-    except (binascii.Error, json.JSONDecodeError, UnicodeDecodeError) as e:
+    except (binascii.Error, json.JSONDecodeError, UnicodeDecodeError, UnicodeEncodeError) as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=_JWT_INVALID_HEADER_DETAIL,
@@ -100,6 +101,9 @@ def _authentication_service_unavailable() -> HTTPException:
 def _get_signing_key(token_header: dict[str, Any], jwks_data: dict[str, Any]) -> dict[str, Any]:
     """Find the signing key for the given token from JWKS."""
     kid = token_header["kid"]
+    if not isinstance(jwks_data, dict):
+        raise _authentication_service_unavailable()
+
     keys = jwks_data.get("keys")
     if not isinstance(keys, list):
         raise _authentication_service_unavailable()

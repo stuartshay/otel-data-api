@@ -10,7 +10,7 @@ from app.models.spatial import DistanceResult, NearbyPoint, WithinReferenceResul
 router = APIRouter(prefix="/api/v1/spatial", tags=["Spatial"])
 
 
-@router.get("/nearby", response_model=list[NearbyPoint])
+@router.get("/nearby")
 async def find_nearby(
     request: Request,
     lat: float = Query(..., description="Latitude of center point", examples=[40.7362]),
@@ -56,7 +56,7 @@ async def find_nearby(
     return [NearbyPoint(**dict(row)) for row in rows]
 
 
-@router.get("/distance", response_model=DistanceResult)
+@router.get("/distance")
 async def calculate_distance(
     request: Request,
     from_lat: float = Query(..., description="From latitude (e.g. NYC)", examples=[40.7128]),
@@ -87,7 +87,6 @@ async def calculate_distance(
 
 @router.get(
     "/within-reference/{name}",
-    response_model=WithinReferenceResult,
     responses={404: {"description": "Reference location not found"}},
 )
 async def within_reference(

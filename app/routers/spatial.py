@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import fastapi
 from fastapi import APIRouter, HTTPException, Query, Request
 
@@ -13,11 +15,14 @@ router = APIRouter(prefix="/api/v1/spatial", tags=["Spatial"])
 @router.get("/nearby")
 async def find_nearby(
     request: Request,
-    lat: float = Query(..., description="Latitude of center point", examples=[40.7362]),
-    lon: float = Query(..., description="Longitude of center point", examples=[-74.0394]),
-    radius_meters: int = Query(1000, ge=1, le=100000, description="Search radius in meters"),
-    source: str | None = Query(None, description="Filter by source: owntracks or garmin", examples=["owntracks"]),
-    limit: int = Query(100, ge=1, le=5000, description="Maximum number of nearby points to return"),
+    lat: Annotated[float, Query(description="Latitude of center point", examples=[40.7362])],
+    lon: Annotated[float, Query(description="Longitude of center point", examples=[-74.0394])],
+    radius_meters: Annotated[int, Query(ge=1, le=100000, description="Search radius in meters")] = 1000,
+    source: Annotated[
+        str | None,
+        Query(description="Filter by source: owntracks or garmin", examples=["owntracks"]),
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=5000, description="Maximum number of nearby points to return")] = 100,
 ) -> list[NearbyPoint]:
     """Find GPS points within a radius of a given lat/lon using PostGIS ST_DWithin.
 
@@ -59,10 +64,10 @@ async def find_nearby(
 @router.get("/distance")
 async def calculate_distance(
     request: Request,
-    from_lat: float = Query(..., description="From latitude (e.g. NYC)", examples=[40.7128]),
-    from_lon: float = Query(..., description="From longitude (e.g. NYC)", examples=[-74.006]),
-    to_lat: float = Query(..., description="To latitude (e.g. Times Square)", examples=[40.758]),
-    to_lon: float = Query(..., description="To longitude (e.g. Times Square)", examples=[-73.9855]),
+    from_lat: Annotated[float, Query(description="From latitude (e.g. NYC)", examples=[40.7128])],
+    from_lon: Annotated[float, Query(description="From longitude (e.g. NYC)", examples=[-74.006])],
+    to_lat: Annotated[float, Query(description="To latitude (e.g. Times Square)", examples=[40.758])],
+    to_lon: Annotated[float, Query(description="To longitude (e.g. Times Square)", examples=[-73.9855])],
 ) -> DistanceResult:
     """Calculate the distance in meters between two points using PostGIS ST_Distance.
 
@@ -91,9 +96,15 @@ async def calculate_distance(
 )
 async def within_reference(
     request: Request,
-    name: str = fastapi.Path(description="Reference location name", examples=["home"]),
-    source: str | None = Query(None, description="Filter by source: owntracks or garmin", examples=["owntracks"]),
-    limit: int = Query(100, ge=1, le=5000, description="Maximum number of points to return within the reference area"),
+    name: Annotated[str, fastapi.Path(description="Reference location name", examples=["home"])],
+    source: Annotated[
+        str | None,
+        Query(description="Filter by source: owntracks or garmin", examples=["owntracks"]),
+    ] = None,
+    limit: Annotated[
+        int,
+        Query(ge=1, le=5000, description="Maximum number of points to return within the reference area"),
+    ] = 100,
 ) -> WithinReferenceResult:
     """Find all GPS points within a named reference location's radius.
 

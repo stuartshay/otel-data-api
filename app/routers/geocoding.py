@@ -850,7 +850,7 @@ def _interpret_pelias_response(resp: httpx.Response) -> dict[str, Any] | None:
         try:
             data: dict[str, Any] = resp.json()
             return data
-        except (ValueError, json.JSONDecodeError):  # fmt: skip
+        except ValueError:
             logger.warning("Pelias returned non-JSON body", exc_info=True)
             # Treat invalid JSON on 2xx as permanent—no point retrying.
             return None

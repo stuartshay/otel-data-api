@@ -25,7 +25,11 @@ def _parse_date(value: str) -> date:
         raise HTTPException(status_code=422, detail=f"Invalid date format: {value!r}. Expected YYYY-MM-DD.") from None
 
 
-@router.get("/unified", response_model=PaginatedResponse[UnifiedGpsPoint])
+@router.get(
+    "/unified",
+    response_model=PaginatedResponse[UnifiedGpsPoint],
+    responses={422: {"description": "Invalid date format"}},
+)
 async def list_unified_gps(
     request: Request,
     source: str | None = Query(None, description="Filter by source: owntracks or garmin", examples=["owntracks"]),
@@ -129,7 +133,11 @@ async def list_unified_gps(
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
 
 
-@router.get("/daily-summary", response_model=PaginatedResponse[DailyActivitySummary])
+@router.get(
+    "/daily-summary",
+    response_model=PaginatedResponse[DailyActivitySummary],
+    responses={422: {"description": "Invalid date format"}},
+)
 async def daily_summary(
     request: Request,
     date_from: str | None = Query(
@@ -191,7 +199,11 @@ async def daily_summary(
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
 
 
-@router.get("/daily-summary/date-range", response_model=DailySummaryDateRange)
+@router.get(
+    "/daily-summary/date-range",
+    response_model=DailySummaryDateRange,
+    responses={404: {"description": "No daily summary data found"}},
+)
 async def daily_summary_date_range(request: Request) -> DailySummaryDateRange:
     """Get the earliest and latest activity dates available in the daily summary view."""
     db = request.app.state.db

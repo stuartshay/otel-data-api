@@ -11,6 +11,16 @@ from app.models.reference import ReferenceLocation, ReferenceLocationCreate, Ref
 
 router = APIRouter(prefix="/api/v1/reference-locations", tags=["Reference Locations"])
 
+# Shared string constants (avoid duplicating the same literal across handlers).
+DESC_LOCATION_ID = "Unique reference location ID"
+LOCATION_NOT_FOUND = "Reference location not found"
+
+# Auth-protected endpoints raise these via require_auth -> get_current_user().
+AUTH_RESPONSES: dict = {
+    401: {"description": "Authentication required or token invalid"},
+    503: {"description": "Authentication service unavailable"},
+}
+
 
 @router.get("", response_model=list[ReferenceLocation])
 async def list_reference_locations(request: Request) -> list[ReferenceLocation]:
@@ -23,10 +33,14 @@ async def list_reference_locations(request: Request) -> list[ReferenceLocation]:
     return [ReferenceLocation(**dict(row)) for row in rows]
 
 
-@router.get("/{location_id}", response_model=ReferenceLocation)
+@router.get(
+    "/{location_id}",
+    response_model=ReferenceLocation,
+    responses={404: {"description": "Reference location not found"}},
+)
 async def get_reference_location(
     request: Request,
-    location_id: int = fastapi.Path(description="Unique reference location ID"),
+    location_id: int = fastapi.Path(description=DESC_LOCATION_ID),
 ) -> ReferenceLocation:
     """Get a single reference location by ID."""
     db = request.app.state.db
@@ -36,11 +50,16 @@ async def get_reference_location(
         location_id,
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Reference location not found")
+        raise HTTPException(status_code=404, detail=LOCATION_NOT_FOUND)
     return ReferenceLocation(**dict(row))
 
 
-@router.post("", response_model=ReferenceLocation, status_code=201)
+@router.post(
+    "",
+    response_model=ReferenceLocation,
+    status_code=201,
+    responses={**AUTH_RESPONSES, 500: {"description": "Failed to create reference location"}},
+)
 async def create_reference_location(
     request: Request,
     body: ReferenceLocationCreate,
@@ -63,10 +82,18 @@ async def create_reference_location(
     return ReferenceLocation(**dict(row))
 
 
-@router.put("/{location_id}", response_model=ReferenceLocation)
+@router.put(
+    "/{location_id}",
+    response_model=ReferenceLocation,
+    responses={
+        **AUTH_RESPONSES,
+        400: {"description": "No fields to update"},
+        404: {"description": "Reference location not found"},
+    },
+)
 async def update_reference_location(
     request: Request,
-    location_id: int = fastapi.Path(description="Unique reference location ID"),
+    location_id: int = fastapi.Path(description=DESC_LOCATION_ID),
     body: ReferenceLocationUpdate = fastapi.Body(...),
     _user: dict = Depends(require_auth),
 ) -> ReferenceLocation:
@@ -96,19 +123,24 @@ async def update_reference_location(
         *params,
     )
     if not row:
-        raise HTTPException(status_code=404, detail="Reference location not found")
+        raise HTTPException(status_code=404, detail=LOCATION_NOT_FOUND)
     return ReferenceLocation(**dict(row))
 
 
-@router.delete("/{location_id}", status_code=204, response_class=Response)
+@router.delete(
+    "/{location_id}",
+    status_code=204,
+    response_class=Response,
+    responses={**AUTH_RESPONSES, 404: {"description": "Reference location not found"}},
+)
 async def delete_reference_location(
     request: Request,
-    location_id: int = fastapi.Path(description="Unique reference location ID"),
+    location_id: int = fastapi.Path(description=DESC_LOCATION_ID),
     _user: dict = Depends(require_auth),
 ) -> Response:
     """Delete a reference location (auth required)."""
     db = request.app.state.db
     result = await db.execute("DELETE FROM public.reference_locations WHERE id = $1", location_id)
     if result == "DELETE 0":
-        raise HTTPException(status_code=404, detail="Reference location not found")
+        raise HTTPException(status_code=404, detail=LOCATION_NOT_FOUND)
     return Response(status_code=204)

@@ -910,6 +910,7 @@ async def _fetch_segment_efforts(
     date_to: date | None,
     max_effort_seconds: int,
     limit: int,
+    ref_bearing_deg: float | None = None,
 ) -> list[SegmentEffort]:
     """Match GPS track points to a start→end corridor and rank efforts fastest-first.
 
@@ -918,6 +919,17 @@ async def _fetch_segment_efforts(
     passes within ``tolerance_meters`` of the start point and, later in time,
     within tolerance of the end point (same direction); the shortest such
     traversal per activity is used.
+
+    For loop segments the start and end corridors can overlap (they're the same
+    physical spot), so nearly every track point near the start/finish line would
+    otherwise satisfy both conditions a GPS tick apart. ``pairs`` therefore
+    requires the route to actually leave both corridors somewhere in between,
+    so a real lap is matched instead of two adjacent pings.
+
+    When ``ref_bearing_deg`` is given (the direction of travel through the start
+    corridor on the segment's defining activity), traversals whose own direction
+    differs by 90 degrees or more are discarded so a lap ridden backwards over
+    the same loop doesn't count as a match.
     """
     params: list[Any] = [start_lon, start_lat, end_lon, end_lat, tolerance_meters]
     idx = 6
@@ -945,6 +957,22 @@ async def _fetch_segment_efforts(
     idx += 1
     limit_idx = idx
     params.append(limit)
+    idx += 1
+
+    bearing_clause = ""
+    if ref_bearing_deg is not None:
+        ref_bearing_idx = idx
+        params.append(ref_bearing_deg)
+        idx += 1
+        bearing_clause = f"""
+            AND (
+                sb.bearing_deg IS NULL
+                OR LEAST(
+                    ABS(sb.bearing_deg - ${ref_bearing_idx}::double precision),
+                    360 - ABS(sb.bearing_deg - ${ref_bearing_idx}::double precision)
+                ) < 90
+            )
+        """
 
     query = f"""
         WITH seg AS (
@@ -958,7 +986,7 @@ async def _fetch_segment_efforts(
             WHERE TRUE{sport_clause}{date_from_clause}{date_to_clause}
         ),
         starts AS (
-            SELECT t.activity_id, t.timestamp AS s_ts
+            SELECT t.activity_id, t.timestamp AS s_ts, t.latitude, t.longitude
             FROM public.garmin_track_points t
             JOIN filtered_activities fa ON fa.activity_id = t.activity_id
             CROSS JOIN seg
@@ -971,10 +999,42 @@ async def _fetch_segment_efforts(
             CROSS JOIN seg
             WHERE t.geog IS NOT NULL AND ST_DWithin(t.geog, seg.end_pt, seg.tol)
         ),
+        start_bearings AS (
+            SELECT s.activity_id, s.s_ts,
+                   degrees(ST_Azimuth(
+                       ST_SetSRID(ST_MakePoint(s.longitude, s.latitude), 4326),
+                       ST_SetSRID(ST_MakePoint(nxt.longitude, nxt.latitude), 4326)
+                   )) AS bearing_deg
+            FROM starts s
+            CROSS JOIN seg
+            JOIN LATERAL (
+                SELECT t.longitude, t.latitude
+                FROM public.garmin_track_points t
+                WHERE t.activity_id = s.activity_id
+                  AND t.timestamp > s.s_ts
+                  AND t.geog IS NOT NULL
+                  AND NOT ST_DWithin(t.geog, seg.start_pt, seg.tol)
+                ORDER BY t.timestamp ASC
+                LIMIT 1
+            ) nxt ON TRUE
+        ),
         pairs AS (
             SELECT s.activity_id, s.s_ts, MIN(e.e_ts) AS e_ts
             FROM starts s
             JOIN ends e ON e.activity_id = s.activity_id AND e.e_ts > s.s_ts
+            CROSS JOIN seg
+            LEFT JOIN start_bearings sb
+              ON sb.activity_id = s.activity_id AND sb.s_ts = s.s_ts
+            WHERE EXISTS (
+                SELECT 1
+                FROM public.garmin_track_points tp
+                WHERE tp.activity_id = s.activity_id
+                  AND tp.timestamp > s.s_ts
+                  AND tp.timestamp < e.e_ts
+                  AND tp.geog IS NOT NULL
+                  AND NOT ST_DWithin(tp.geog, seg.start_pt, seg.tol)
+                  AND NOT ST_DWithin(tp.geog, seg.end_pt, seg.tol)
+            ){bearing_clause}
             GROUP BY s.activity_id, s.s_ts
         ),
         best AS (
@@ -1008,6 +1068,63 @@ async def _fetch_segment_efforts(
 
     rows = await db.fetch(query, *params)
     return [SegmentEffort(rank=i + 1, **dict(row)) for i, row in enumerate(rows)]
+
+
+async def _segment_reference_bearing_deg(
+    db: Any,
+    *,
+    source_activity_id: str | None,
+    start_lat: float,
+    start_lon: float,
+    tolerance_meters: float,
+) -> float | None:
+    """Direction of travel through the start corridor on the segment's defining activity.
+
+    Used by ``_fetch_segment_efforts`` to reject efforts that traverse a loop
+    segment backwards. Returns ``None`` when there's no source activity, or it
+    never crosses its own corridor (so no direction filtering is applied).
+    """
+    if source_activity_id is None:
+        return None
+    row = await db.fetchrow(
+        """
+        WITH seg AS (
+            SELECT ST_MakePoint($2, $3)::geography AS start_pt,
+                   $4::double precision AS tol
+        ),
+        crossing AS (
+            SELECT t.timestamp, t.latitude, t.longitude
+            FROM public.garmin_track_points t
+            CROSS JOIN seg
+            WHERE t.activity_id = $1
+              AND t.geog IS NOT NULL
+              AND ST_DWithin(t.geog, seg.start_pt, seg.tol)
+            ORDER BY t.timestamp ASC
+            LIMIT 1
+        )
+        SELECT degrees(ST_Azimuth(
+                   ST_SetSRID(ST_MakePoint(c.longitude, c.latitude), 4326),
+                   ST_SetSRID(ST_MakePoint(nxt.longitude, nxt.latitude), 4326)
+               )) AS bearing_deg
+        FROM crossing c
+        CROSS JOIN seg
+        JOIN LATERAL (
+            SELECT t.longitude, t.latitude
+            FROM public.garmin_track_points t
+            WHERE t.activity_id = $1
+              AND t.timestamp > c.timestamp
+              AND t.geog IS NOT NULL
+              AND NOT ST_DWithin(t.geog, seg.start_pt, seg.tol)
+            ORDER BY t.timestamp ASC
+            LIMIT 1
+        ) nxt ON TRUE
+        """,
+        source_activity_id,
+        start_lon,
+        start_lat,
+        tolerance_meters,
+    )
+    return float(row["bearing_deg"]) if row and row["bearing_deg"] is not None else None
 
 
 @router.get(
@@ -1291,7 +1408,7 @@ async def get_segment_efforts(
     db = request.app.state.db
     seg = await db.fetchrow(
         "SELECT sport, start_latitude, start_longitude, end_latitude, end_longitude, "
-        "match_tolerance_meters::double precision AS match_tolerance_meters "
+        "match_tolerance_meters::double precision AS match_tolerance_meters, source_activity_id "
         "FROM public.garmin_segments WHERE id = $1 AND garmin_sync_status IS DISTINCT FROM 'delete_pending'",
         segment_id,
     )
@@ -1299,6 +1416,13 @@ async def get_segment_efforts(
         raise HTTPException(status_code=404, detail=SEGMENT_NOT_FOUND)
 
     tolerance = float(seg["match_tolerance_meters"])
+    ref_bearing_deg = await _segment_reference_bearing_deg(
+        db,
+        source_activity_id=seg["source_activity_id"],
+        start_lat=seg["start_latitude"],
+        start_lon=seg["start_longitude"],
+        tolerance_meters=tolerance,
+    )
     items = await _fetch_segment_efforts(
         db,
         start_lat=seg["start_latitude"],
@@ -1311,6 +1435,7 @@ async def get_segment_efforts(
         date_to=date_to,
         max_effort_seconds=max_effort_seconds,
         limit=limit,
+        ref_bearing_deg=ref_bearing_deg,
     )
     return SegmentEffortsResponse(
         segment=SegmentDefinition(

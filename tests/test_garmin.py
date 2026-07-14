@@ -1507,6 +1507,14 @@ async def test_segment_efforts_query_and_params(client: AsyncClient, mock_db):
     assert "ST_DWithin(t.geog, seg.start_pt, seg.tol)" in query
     assert "ST_DWithin(t.geog, seg.end_pt, seg.tol)" in query
     assert "e.e_ts > s.s_ts" in query  # same-direction enforcement
+    # a real traversal must leave both corridors, not just tick to an adjacent
+    # GPS point (this is what makes loop segments, where start ~= end, match
+    # the actual lap instead of a 1-second sliver at the start/finish line)
+    assert "NOT ST_DWithin(tp.geog, seg.start_pt, seg.tol)" in query
+    assert "NOT ST_DWithin(tp.geog, seg.end_pt, seg.tol)" in query
+    # stateless endpoint has no reference activity to compare direction
+    # against, so the bearing CTE/join is omitted rather than computed unused
+    assert "start_bearings" not in query
     assert "DISTINCT ON (activity_id)" in query  # shortest traversal per activity
     assert "ORDER BY m.elapsed_seconds ASC" in query
     # $1..$5 = start_lon, start_lat, end_lon, end_lat, tolerance
@@ -1720,6 +1728,7 @@ async def test_get_segment_efforts_uses_saved_coords(client: AsyncClient, mock_d
         "end_latitude": 40.79002409,
         "end_longitude": -73.96422816,
         "match_tolerance_meters": 40.0,
+        "source_activity_id": None,
     }
     mock_db.fetch.return_value = [
         _segment_effort_row("a-fast", 79.0),
@@ -1736,6 +1745,64 @@ async def test_get_segment_efforts_uses_saved_coords(client: AsyncClient, mock_d
     assert "ST_DWithin(t.geog, seg.start_pt, seg.tol)" in efforts_query
     # matching used the saved segment's coordinates and tolerance
     assert efforts_params[:5] == [-73.96104321, 40.79366846, -73.96422816, 40.79002409, 40.0]
+
+
+@pytest.mark.asyncio
+async def test_get_segment_efforts_rejects_reverse_direction(client: AsyncClient, mock_db):
+    """Loop segments (start ~= end) must reject laps ridden the opposite way.
+
+    The segment's own source_activity_id supplies the canonical direction of
+    travel through the start corridor; efforts whose bearing differs by 90
+    degrees or more are filtered out in the SQL, not just deduped.
+    """
+    mock_db.fetchrow.side_effect = [
+        {
+            "sport": "cycling",
+            "start_latitude": 40.707439882680774,
+            "start_longitude": -74.03477042913437,
+            "end_latitude": 40.707470728084445,
+            "end_longitude": -74.03477034531534,
+            "match_tolerance_meters": 35.0,
+            "source_activity_id": "23541736805",
+        },
+        {"bearing_deg": 197.5},
+    ]
+    mock_db.fetch.return_value = []
+
+    response = await client.get("/api/v1/garmin/segments/7/efforts")
+
+    assert response.status_code == 200
+    bearing_query, *bearing_params = mock_db.fetchrow.await_args_list[1].args
+    assert bearing_params[0] == "23541736805"
+
+    efforts_query, *efforts_params = mock_db.fetch.await_args.args
+    assert "start_bearings" in efforts_query
+    assert "LEAST(" in efforts_query
+    assert efforts_params[-1] == 197.5
+
+
+@pytest.mark.asyncio
+async def test_get_segment_efforts_skips_bearing_lookup_without_source_activity(client: AsyncClient, mock_db):
+    mock_db.fetchrow.return_value = {
+        "sport": "cycling",
+        "start_latitude": 40.79366846,
+        "start_longitude": -73.96104321,
+        "end_latitude": 40.79002409,
+        "end_longitude": -73.96422816,
+        "match_tolerance_meters": 40.0,
+        "source_activity_id": None,
+    }
+    mock_db.fetch.return_value = []
+
+    response = await client.get("/api/v1/garmin/segments/5/efforts")
+
+    assert response.status_code == 200
+    assert mock_db.fetchrow.await_count == 1  # no reference-bearing lookup fired
+    efforts_query, *efforts_params = mock_db.fetch.await_args.args
+    # no reference bearing to compare against, so the CTE (and its per-start
+    # LATERAL lookup) is omitted rather than computed and ignored
+    assert "start_bearings" not in efforts_query
+    assert efforts_params[-1] == 100  # last param is still the limit, no bearing appended
 
 
 @pytest.mark.asyncio

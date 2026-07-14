@@ -1512,6 +1512,9 @@ async def test_segment_efforts_query_and_params(client: AsyncClient, mock_db):
     # the actual lap instead of a 1-second sliver at the start/finish line)
     assert "NOT ST_DWithin(tp.geog, seg.start_pt, seg.tol)" in query
     assert "NOT ST_DWithin(tp.geog, seg.end_pt, seg.tol)" in query
+    # stateless endpoint has no reference activity to compare direction
+    # against, so the bearing CTE/join is omitted rather than computed unused
+    assert "start_bearings" not in query
     assert "DISTINCT ON (activity_id)" in query  # shortest traversal per activity
     assert "ORDER BY m.elapsed_seconds ASC" in query
     # $1..$5 = start_lon, start_lat, end_lon, end_lat, tolerance
@@ -1796,7 +1799,9 @@ async def test_get_segment_efforts_skips_bearing_lookup_without_source_activity(
     assert response.status_code == 200
     assert mock_db.fetchrow.await_count == 1  # no reference-bearing lookup fired
     efforts_query, *efforts_params = mock_db.fetch.await_args.args
-    assert "start_bearings" in efforts_query  # CTE always present
+    # no reference bearing to compare against, so the CTE (and its per-start
+    # LATERAL lookup) is omitted rather than computed and ignored
+    assert "start_bearings" not in efforts_query
     assert efforts_params[-1] == 100  # last param is still the limit, no bearing appended
 
 

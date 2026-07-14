@@ -959,11 +959,40 @@ async def _fetch_segment_efforts(
     params.append(limit)
     idx += 1
 
+    # Only computed when a reference bearing is supplied: for the stateless
+    # endpoint and saved segments without a source activity there's nothing to
+    # compare against, so this CTE (and its per-start LATERAL lookup) is
+    # omitted entirely rather than computed and then ignored.
+    start_bearings_cte = ""
+    bearings_join = ""
     bearing_clause = ""
     if ref_bearing_deg is not None:
         ref_bearing_idx = idx
         params.append(ref_bearing_deg)
         idx += 1
+        start_bearings_cte = """
+        start_bearings AS (
+            SELECT s.activity_id, s.s_ts,
+                   degrees(ST_Azimuth(
+                       ST_SetSRID(ST_MakePoint(s.longitude, s.latitude), 4326),
+                       ST_SetSRID(ST_MakePoint(nxt.longitude, nxt.latitude), 4326)
+                   )) AS bearing_deg
+            FROM starts s
+            CROSS JOIN seg
+            JOIN LATERAL (
+                SELECT t.longitude, t.latitude
+                FROM public.garmin_track_points t
+                WHERE t.activity_id = s.activity_id
+                  AND t.timestamp > s.s_ts
+                  AND t.geog IS NOT NULL
+                  AND NOT ST_DWithin(t.geog, seg.start_pt, seg.tol)
+                ORDER BY t.timestamp ASC
+                LIMIT 1
+            ) nxt ON TRUE
+        ),"""
+        bearings_join = """
+            LEFT JOIN start_bearings sb
+              ON sb.activity_id = s.activity_id AND sb.s_ts = s.s_ts"""
         bearing_clause = f"""
             AND (
                 sb.bearing_deg IS NULL
@@ -998,33 +1027,12 @@ async def _fetch_segment_efforts(
             JOIN filtered_activities fa ON fa.activity_id = t.activity_id
             CROSS JOIN seg
             WHERE t.geog IS NOT NULL AND ST_DWithin(t.geog, seg.end_pt, seg.tol)
-        ),
-        start_bearings AS (
-            SELECT s.activity_id, s.s_ts,
-                   degrees(ST_Azimuth(
-                       ST_SetSRID(ST_MakePoint(s.longitude, s.latitude), 4326),
-                       ST_SetSRID(ST_MakePoint(nxt.longitude, nxt.latitude), 4326)
-                   )) AS bearing_deg
-            FROM starts s
-            CROSS JOIN seg
-            JOIN LATERAL (
-                SELECT t.longitude, t.latitude
-                FROM public.garmin_track_points t
-                WHERE t.activity_id = s.activity_id
-                  AND t.timestamp > s.s_ts
-                  AND t.geog IS NOT NULL
-                  AND NOT ST_DWithin(t.geog, seg.start_pt, seg.tol)
-                ORDER BY t.timestamp ASC
-                LIMIT 1
-            ) nxt ON TRUE
-        ),
+        ),{start_bearings_cte}
         pairs AS (
             SELECT s.activity_id, s.s_ts, MIN(e.e_ts) AS e_ts
             FROM starts s
             JOIN ends e ON e.activity_id = s.activity_id AND e.e_ts > s.s_ts
-            CROSS JOIN seg
-            LEFT JOIN start_bearings sb
-              ON sb.activity_id = s.activity_id AND sb.s_ts = s.s_ts
+            CROSS JOIN seg{bearings_join}
             WHERE EXISTS (
                 SELECT 1
                 FROM public.garmin_track_points tp

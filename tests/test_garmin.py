@@ -1704,6 +1704,15 @@ async def test_segment_route_lateral_prefers_lap_boundaries(client: AsyncClient,
     assert "al.lap_index = s.source_lap_index + 1" in query
     assert "make_interval(secs => al.duration_seconds" in query
     assert "COALESCE(lap_bounds.s_ts, proximity_bounds.s_ts)" in query
+    # lap_bounds must not surface a row with a NULL boundary (which would
+    # otherwise mix an exact lap start with a proximity-derived end, or drop
+    # the slice even though the proximity fallback could have supplied one)
+    assert "al.start_time IS NOT NULL" in query
+    assert "al.duration_seconds IS NOT NULL" in query
+    # proximity matching only kicks in when there's no usable lap boundary,
+    # both for correctness (it's meant as a fallback, not a second opinion)
+    # and to avoid the ST_DWithin scan entirely for lap-derived segments
+    assert "WHERE NOT EXISTS (SELECT 1 FROM lap_bounds)" in query
     # the proximity fallback must cluster hits, not just take the first/MIN
     # start and MIN end proximity hit (that's what previously collapsed a
     # loop's start and end into a same-instant sliver)

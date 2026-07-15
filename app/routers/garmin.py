@@ -1282,14 +1282,25 @@ _SEGMENT_ROUTE_LATERAL = """
                 GREATEST(s.match_tolerance_meters, 5)::double precision AS tol
         ),
         lap_bounds AS (
+            -- duration_seconds (never NULL, cross-checked against start/end
+            -- timestamps) is used instead of end_time: end_time diverges from
+            -- start_time + duration_seconds by more than 5s in ~34% of rows in
+            -- this table, including cases where it's *before* start_time, so
+            -- it isn't a reliable slice boundary on its own.
             SELECT al.start_time AS s_ts,
                    al.start_time + make_interval(secs => al.duration_seconds::double precision) AS e_ts
             FROM public.garmin_activity_laps al
             WHERE s.source_lap_index IS NOT NULL
               AND al.activity_id = s.source_activity_id
               AND al.lap_index = s.source_lap_index + 1
+              AND al.start_time IS NOT NULL
+              AND al.duration_seconds IS NOT NULL
+            LIMIT 1
         ),
         crossing_hits AS (
+            -- Skipped entirely once lap_bounds has a usable row: proximity
+            -- matching is only a fallback for climb-/manually-derived
+            -- segments that have no recorded lap to anchor on.
             SELECT t.timestamp AS c_ts,
                    ST_DWithin(t.geog, bounds.start_pt, bounds.tol) AS is_start,
                    ST_DWithin(t.geog, bounds.end_pt, bounds.tol) AS is_end,
@@ -1297,7 +1308,8 @@ _SEGMENT_ROUTE_LATERAL = """
                    LAG(ST_DWithin(t.geog, bounds.start_pt, bounds.tol)) OVER (ORDER BY t.timestamp) AS prev_is_start,
                    LAG(ST_DWithin(t.geog, bounds.end_pt, bounds.tol)) OVER (ORDER BY t.timestamp) AS prev_is_end
             FROM public.garmin_track_points t, bounds
-            WHERE t.activity_id = s.source_activity_id
+            WHERE NOT EXISTS (SELECT 1 FROM lap_bounds)
+              AND t.activity_id = s.source_activity_id
               AND t.geog IS NOT NULL
               AND (ST_DWithin(t.geog, bounds.start_pt, bounds.tol) OR ST_DWithin(t.geog, bounds.end_pt, bounds.tol))
         ),

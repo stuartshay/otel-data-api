@@ -912,24 +912,37 @@ async def _fetch_segment_efforts(
     limit: int,
     ref_bearing_deg: float | None = None,
 ) -> list[SegmentEffort]:
-    """Match GPS track points to a start→end corridor and rank efforts fastest-first.
+    """Match GPS track points to a start→end corridor and rank every qualifying lap.
 
     Shared by the stateless ``/segment-efforts`` endpoint and the saved-segment
-    ``/segments/{id}/efforts`` endpoint. An activity qualifies when its route
-    passes within ``tolerance_meters`` of the start point and, later in time,
-    within tolerance of the end point (same direction); the shortest such
-    traversal per activity is used.
+    ``/segments/{id}/efforts`` endpoint. An activity qualifies each time its
+    route passes within ``tolerance_meters`` of the start point and, later in
+    time, within tolerance of the end point (same direction) -- an activity
+    that laps the segment multiple times (e.g. repeats of a loop) yields one
+    effort per lap, not just its fastest.
 
-    For loop segments the start and end corridors can overlap (they're the same
-    physical spot), so nearly every track point near the start/finish line would
-    otherwise satisfy both conditions a GPS tick apart. ``pairs`` therefore
-    requires the route to actually leave both corridors somewhere in between,
-    so a real lap is matched instead of two adjacent pings.
+    Raw GPS pings near the start or end point arrive in bursts (many points a
+    few seconds apart per physical crossing), so ``crossings`` clusters
+    consecutive hits more than 2 minutes apart -- comfortably below real lap
+    durations but well above a single crossing's span -- into one
+    representative row per physical visit, tagged with whether that visit was
+    near the start point, the end point, or (for loop segments, where they're
+    the same physical spot) both. Without this, every point in a burst would
+    pair up separately and one lap would look like a dozen near-duplicate
+    efforts.
 
-    When ``ref_bearing_deg`` is given (the direction of travel through the start
-    corridor on the segment's defining activity), traversals whose own direction
-    differs by 90 degrees or more are discarded so a lap ridden backwards over
-    the same loop doesn't count as a match.
+    Because two *different* crossings are by definition separated by a gap
+    where the route was near neither point, pairing a start-tagged crossing
+    with the next later end-tagged crossing already guarantees the route left
+    both corridors in between -- no per-pair distance check against the full
+    track needed, which is what made the previous approach (a correlated
+    EXISTS re-scanning the track between every candidate start/end pair)
+    prohibitively slow.
+
+    When ``ref_bearing_deg`` is given (the direction of travel through the
+    start corridor on the segment's defining activity), traversals whose own
+    direction differs by 90 degrees or more are discarded so a lap ridden
+    backwards over the same loop doesn't count as a match.
     """
     params: list[Any] = [start_lon, start_lat, end_lon, end_lat, tolerance_meters]
     idx = 6
@@ -972,27 +985,28 @@ async def _fetch_segment_efforts(
         idx += 1
         start_bearings_cte = """
         start_bearings AS (
-            SELECT s.activity_id, s.s_ts,
+            SELECT s.activity_id, s.c_ts AS s_ts,
                    degrees(ST_Azimuth(
                        ST_SetSRID(ST_MakePoint(s.longitude, s.latitude), 4326),
                        ST_SetSRID(ST_MakePoint(nxt.longitude, nxt.latitude), 4326)
                    )) AS bearing_deg
-            FROM starts s
+            FROM crossings s
             CROSS JOIN seg
             JOIN LATERAL (
                 SELECT t.longitude, t.latitude
                 FROM public.garmin_track_points t
                 WHERE t.activity_id = s.activity_id
-                  AND t.timestamp > s.s_ts
+                  AND t.timestamp > s.c_ts
                   AND t.geog IS NOT NULL
                   AND NOT ST_DWithin(t.geog, seg.start_pt, seg.tol)
                 ORDER BY t.timestamp ASC
                 LIMIT 1
             ) nxt ON TRUE
+            WHERE s.is_start
         ),"""
         bearings_join = """
             LEFT JOIN start_bearings sb
-              ON sb.activity_id = s.activity_id AND sb.s_ts = s.s_ts"""
+              ON sb.activity_id = s.activity_id AND sb.s_ts = s.c_ts"""
         bearing_clause = f"""
             AND (
                 sb.bearing_deg IS NULL
@@ -1014,41 +1028,45 @@ async def _fetch_segment_efforts(
             FROM public.garmin_activities a
             WHERE TRUE{sport_clause}{date_from_clause}{date_to_clause}
         ),
-        starts AS (
-            SELECT t.activity_id, t.timestamp AS s_ts, t.latitude, t.longitude
+        crossing_hits AS (
+            SELECT t.activity_id, t.timestamp AS c_ts, t.latitude, t.longitude,
+                   ST_DWithin(t.geog, seg.start_pt, seg.tol) AS is_start,
+                   ST_DWithin(t.geog, seg.end_pt, seg.tol) AS is_end,
+                   LAG(t.timestamp) OVER (PARTITION BY t.activity_id ORDER BY t.timestamp) AS prev_ts
             FROM public.garmin_track_points t
             JOIN filtered_activities fa ON fa.activity_id = t.activity_id
             CROSS JOIN seg
-            WHERE t.geog IS NOT NULL AND ST_DWithin(t.geog, seg.start_pt, seg.tol)
+            WHERE t.geog IS NOT NULL
+              AND (ST_DWithin(t.geog, seg.start_pt, seg.tol) OR ST_DWithin(t.geog, seg.end_pt, seg.tol))
         ),
-        ends AS (
-            SELECT t.activity_id, t.timestamp AS e_ts
-            FROM public.garmin_track_points t
-            JOIN filtered_activities fa ON fa.activity_id = t.activity_id
-            CROSS JOIN seg
-            WHERE t.geog IS NOT NULL AND ST_DWithin(t.geog, seg.end_pt, seg.tol)
+        crossing_grouped AS (
+            SELECT activity_id, c_ts, latitude, longitude, is_start, is_end,
+                   SUM(CASE WHEN prev_ts IS NULL OR c_ts - prev_ts > INTERVAL '2 minutes' THEN 1 ELSE 0 END)
+                     OVER (PARTITION BY activity_id ORDER BY c_ts) AS crossing
+            FROM crossing_hits
+        ),
+        crossing_repr AS (
+            SELECT DISTINCT ON (activity_id, crossing) activity_id, crossing, c_ts, latitude, longitude
+            FROM crossing_grouped
+            ORDER BY activity_id, crossing, c_ts ASC
+        ),
+        crossing_flags AS (
+            SELECT activity_id, crossing, bool_or(is_start) AS is_start, bool_or(is_end) AS is_end
+            FROM crossing_grouped
+            GROUP BY activity_id, crossing
+        ),
+        crossings AS (
+            SELECT r.activity_id, r.c_ts, r.latitude, r.longitude, f.is_start, f.is_end
+            FROM crossing_repr r
+            JOIN crossing_flags f ON f.activity_id = r.activity_id AND f.crossing = r.crossing
         ),{start_bearings_cte}
         pairs AS (
-            SELECT s.activity_id, s.s_ts, MIN(e.e_ts) AS e_ts
-            FROM starts s
-            JOIN ends e ON e.activity_id = s.activity_id AND e.e_ts > s.s_ts
-            CROSS JOIN seg{bearings_join}
-            WHERE EXISTS (
-                SELECT 1
-                FROM public.garmin_track_points tp
-                WHERE tp.activity_id = s.activity_id
-                  AND tp.timestamp > s.s_ts
-                  AND tp.timestamp < e.e_ts
-                  AND tp.geog IS NOT NULL
-                  AND NOT ST_DWithin(tp.geog, seg.start_pt, seg.tol)
-                  AND NOT ST_DWithin(tp.geog, seg.end_pt, seg.tol)
-            ){bearing_clause}
-            GROUP BY s.activity_id, s.s_ts
-        ),
-        best AS (
-            SELECT DISTINCT ON (activity_id) activity_id, s_ts, e_ts
-            FROM pairs
-            ORDER BY activity_id, (e_ts - s_ts) ASC
+            SELECT s.activity_id, s.c_ts AS s_ts, MIN(e.c_ts) AS e_ts
+            FROM crossings s
+            JOIN crossings e ON e.activity_id = s.activity_id AND e.c_ts > s.c_ts AND e.is_end
+            {bearings_join}
+            WHERE s.is_start{bearing_clause}
+            GROUP BY s.activity_id, s.c_ts
         ),
         metrics AS (
             SELECT b.activity_id, b.s_ts, b.e_ts,
@@ -1057,7 +1075,7 @@ async def _fetch_segment_efforts(
                    AVG(t.heart_rate) FILTER (WHERE t.heart_rate > 0) AS avg_hr,
                    MAX(t.heart_rate) AS max_heart_rate,
                    MAX(t.distance_from_start_km) - MIN(t.distance_from_start_km) AS distance_km
-            FROM best b
+            FROM pairs b
             JOIN public.garmin_track_points t
               ON t.activity_id = b.activity_id
              AND t.timestamp BETWEEN b.s_ts AND b.e_ts

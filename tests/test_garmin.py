@@ -1480,6 +1480,33 @@ async def test_segment_efforts_returns_ranked(client: AsyncClient, mock_db):
 
 
 @pytest.mark.asyncio
+async def test_segment_efforts_keeps_multiple_laps_from_one_activity(client: AsyncClient, mock_db):
+    """A single ride that laps the segment twice should surface as two efforts.
+
+    Guards against the response layer collapsing rows by activity_id -- the
+    SQL itself (not tested here, see live-DB verification) is what collapses
+    GPS-ping bursts down to one row per real crossing while still returning
+    every distinct lap.
+    """
+    mock_db.fetch.return_value = [
+        _segment_effort_row("multi-lap-ride", 1098.0),
+        _segment_effort_row("multi-lap-ride", 1199.0),
+    ]
+
+    response = await client.get(
+        "/api/v1/garmin/segment-efforts"
+        "?start_lat=40.79366846&start_lon=-73.96104321"
+        "&end_lat=40.79002409&end_lon=-73.96422816"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    assert [e["activity_id"] for e in body["items"]] == ["multi-lap-ride", "multi-lap-ride"]
+    assert [e["elapsed_seconds"] for e in body["items"]] == [1098.0, 1199.0]
+
+
+@pytest.mark.asyncio
 async def test_segment_efforts_query_and_params(client: AsyncClient, mock_db):
     mock_db.fetch.return_value = []
 
@@ -1506,16 +1533,28 @@ async def test_segment_efforts_query_and_params(client: AsyncClient, mock_db):
     query, *params = mock_db.fetch.await_args.args
     assert "ST_DWithin(t.geog, seg.start_pt, seg.tol)" in query
     assert "ST_DWithin(t.geog, seg.end_pt, seg.tol)" in query
-    assert "e.e_ts > s.s_ts" in query  # same-direction enforcement
-    # a real traversal must leave both corridors, not just tick to an adjacent
-    # GPS point (this is what makes loop segments, where start ~= end, match
-    # the actual lap instead of a 1-second sliver at the start/finish line)
-    assert "NOT ST_DWithin(tp.geog, seg.start_pt, seg.tol)" in query
-    assert "NOT ST_DWithin(tp.geog, seg.end_pt, seg.tol)" in query
+    assert "e.c_ts > s.c_ts" in query  # same-direction enforcement
+    assert "AND e.is_end" in query
+    assert "WHERE s.is_start" in query
+    # a new crossing must start on a direct start-only -> end-only flip (and
+    # the reverse), not just a >2min time gap -- otherwise a short/fast
+    # point-to-point segment (start and end corridors far enough apart that
+    # they never overlap, but close enough to finish in well under 2 minutes)
+    # would have its start and end hits merged into one crossing, leaving no
+    # separate start/end row to pair and silently dropping the effort
+    assert "prev_is_start AND NOT prev_is_end AND is_end AND NOT is_start" in query
+    assert "prev_is_end AND NOT prev_is_start AND is_start AND NOT is_end" in query
+    # the "left both corridors in between" guarantee comes from the >2min gap
+    # used to cluster crossings, not a per-pair check against the full track
+    # (a correlated EXISTS re-scanning track_points was too slow in production)
+    assert "EXISTS" not in query
     # stateless endpoint has no reference activity to compare direction
     # against, so the bearing CTE/join is omitted rather than computed unused
     assert "start_bearings" not in query
-    assert "DISTINCT ON (activity_id)" in query  # shortest traversal per activity
+    # every qualifying lap is returned (not just the fastest per activity), so
+    # repeated laps of a loop in one activity all show up
+    assert "DISTINCT ON (activity_id)" not in query
+    assert "DISTINCT ON (activity_id, crossing)" in query  # collapses GPS-ping bursts into one row per crossing
     assert "ORDER BY m.elapsed_seconds ASC" in query
     # $1..$5 = start_lon, start_lat, end_lon, end_lat, tolerance
     assert params[:5] == [-73.96104321, 40.79366846, -73.96422816, 40.79002409, 40]
@@ -1753,7 +1792,7 @@ async def test_get_segment_efforts_rejects_reverse_direction(client: AsyncClient
 
     The segment's own source_activity_id supplies the canonical direction of
     travel through the start corridor; efforts whose bearing differs by 90
-    degrees or more are filtered out in the SQL, not just deduped.
+    degrees or more are filtered out in the SQL, not merely deduplicated.
     """
     mock_db.fetchrow.side_effect = [
         {

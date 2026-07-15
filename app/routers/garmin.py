@@ -1260,12 +1260,19 @@ _SEGMENT_SELECT_COLUMNS = (
     "r.route"
 )
 
-# Recover each segment's real path from its source activity GPS track: snap the
-# stored start/end to the nearest in-corridor track points (same ST_DWithin
-# corridor used by segment efforts), slice the ordered track between them, and
+# Recover each segment's real path from its source activity GPS track and
 # return a PostGIS-simplified array of ordered [latitude, longitude] pairs.
 # Yields NULL route when the segment has no source activity or no matchable
-# corridor, in which case the client falls back to a straight start→end line.
+# slice, in which case the client falls back to a straight start->end line.
+#
+# When the segment was saved from a recorded lap (source_lap_index), that
+# lap's own start_time/duration_seconds give the exact slice boundaries --
+# no proximity matching involved, so there's no ambiguity for loop segments
+# (where the start and end points are the same physical spot). Otherwise
+# (climb- or manually-drawn segments), the boundaries are recovered by
+# clustering raw GPS proximity hits into physical crossings the same way
+# _fetch_segment_efforts does, so a loop's start/end corridor overlap can't
+# collapse the slice down to a same-instant sliver either.
 _SEGMENT_ROUTE_LATERAL = """
     LEFT JOIN LATERAL (
         WITH bounds AS (
@@ -1274,34 +1281,78 @@ _SEGMENT_ROUTE_LATERAL = """
                 ST_MakePoint(s.end_longitude, s.end_latitude)::geography AS end_pt,
                 GREATEST(s.match_tolerance_meters, 5)::double precision AS tol
         ),
-        start_ts AS (
-            SELECT MIN(t.timestamp) AS ts
+        lap_bounds AS (
+            SELECT al.start_time AS s_ts,
+                   al.start_time + make_interval(secs => al.duration_seconds::double precision) AS e_ts
+            FROM public.garmin_activity_laps al
+            WHERE s.source_lap_index IS NOT NULL
+              AND al.activity_id = s.source_activity_id
+              AND al.lap_index = s.source_lap_index + 1
+        ),
+        crossing_hits AS (
+            SELECT t.timestamp AS c_ts,
+                   ST_DWithin(t.geog, bounds.start_pt, bounds.tol) AS is_start,
+                   ST_DWithin(t.geog, bounds.end_pt, bounds.tol) AS is_end,
+                   LAG(t.timestamp) OVER (ORDER BY t.timestamp) AS prev_ts,
+                   LAG(ST_DWithin(t.geog, bounds.start_pt, bounds.tol)) OVER (ORDER BY t.timestamp) AS prev_is_start,
+                   LAG(ST_DWithin(t.geog, bounds.end_pt, bounds.tol)) OVER (ORDER BY t.timestamp) AS prev_is_end
             FROM public.garmin_track_points t, bounds
             WHERE t.activity_id = s.source_activity_id
               AND t.geog IS NOT NULL
-              AND ST_DWithin(t.geog, bounds.start_pt, bounds.tol)
+              AND (ST_DWithin(t.geog, bounds.start_pt, bounds.tol) OR ST_DWithin(t.geog, bounds.end_pt, bounds.tol))
         ),
-        end_ts AS (
-            SELECT MIN(t.timestamp) AS ts
-            FROM public.garmin_track_points t, bounds, start_ts
-            WHERE t.activity_id = s.source_activity_id
-              AND t.geog IS NOT NULL
-              AND ST_DWithin(t.geog, bounds.end_pt, bounds.tol)
-              AND start_ts.ts IS NOT NULL
-              AND t.timestamp > start_ts.ts
+        crossing_grouped AS (
+            SELECT c_ts, is_start, is_end,
+                   SUM(CASE
+                         WHEN prev_ts IS NULL OR c_ts - prev_ts > INTERVAL '2 minutes' THEN 1
+                         WHEN prev_is_start AND NOT prev_is_end AND is_end AND NOT is_start THEN 1
+                         WHEN prev_is_end AND NOT prev_is_start AND is_start AND NOT is_end THEN 1
+                         ELSE 0
+                       END) OVER (ORDER BY c_ts) AS crossing
+            FROM crossing_hits
+        ),
+        crossing_repr AS (
+            SELECT DISTINCT ON (crossing) crossing, c_ts
+            FROM crossing_grouped
+            ORDER BY crossing, c_ts ASC
+        ),
+        crossing_flags AS (
+            SELECT crossing, bool_or(is_start) AS is_start, bool_or(is_end) AS is_end
+            FROM crossing_grouped
+            GROUP BY crossing
+        ),
+        crossings AS (
+            SELECT r.c_ts, f.is_start, f.is_end
+            FROM crossing_repr r
+            JOIN crossing_flags f ON f.crossing = r.crossing
+        ),
+        proximity_bounds AS (
+            SELECT cs.c_ts AS s_ts, MIN(ce.c_ts) AS e_ts
+            FROM crossings cs
+            JOIN crossings ce ON ce.c_ts > cs.c_ts AND ce.is_end
+            WHERE cs.is_start
+            GROUP BY cs.c_ts
+            ORDER BY cs.c_ts ASC
+            LIMIT 1
+        ),
+        chosen_bounds AS (
+            SELECT COALESCE(lap_bounds.s_ts, proximity_bounds.s_ts) AS s_ts,
+                   COALESCE(lap_bounds.e_ts, proximity_bounds.e_ts) AS e_ts
+            FROM lap_bounds
+            FULL OUTER JOIN proximity_bounds ON TRUE
         ),
         line AS (
             SELECT ST_Simplify(
                        ST_MakeLine(ST_MakePoint(t.longitude, t.latitude) ORDER BY t.timestamp ASC),
                        0.00005
                    ) AS geom
-            FROM public.garmin_track_points t, start_ts, end_ts
+            FROM public.garmin_track_points t, chosen_bounds
             WHERE t.activity_id = s.source_activity_id
               AND t.latitude IS NOT NULL
               AND t.longitude IS NOT NULL
-              AND start_ts.ts IS NOT NULL
-              AND end_ts.ts IS NOT NULL
-              AND t.timestamp BETWEEN start_ts.ts AND end_ts.ts
+              AND chosen_bounds.s_ts IS NOT NULL
+              AND chosen_bounds.e_ts IS NOT NULL
+              AND t.timestamp BETWEEN chosen_bounds.s_ts AND chosen_bounds.e_ts
         )
         SELECT array_agg(
                    ARRAY[ST_Y((dp).geom), ST_X((dp).geom)]

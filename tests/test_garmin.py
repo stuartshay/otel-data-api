@@ -1536,6 +1536,14 @@ async def test_segment_efforts_query_and_params(client: AsyncClient, mock_db):
     assert "e.c_ts > s.c_ts" in query  # same-direction enforcement
     assert "AND e.is_end" in query
     assert "WHERE s.is_start" in query
+    # a new crossing must start on a direct start-only -> end-only flip (and
+    # the reverse), not just a >2min time gap -- otherwise a short/fast
+    # point-to-point segment (start and end corridors far enough apart that
+    # they never overlap, but close enough to finish in well under 2 minutes)
+    # would have its start and end hits merged into one crossing, leaving no
+    # separate start/end row to pair and silently dropping the effort
+    assert "prev_is_start AND NOT prev_is_end AND is_end AND NOT is_start" in query
+    assert "prev_is_end AND NOT prev_is_start AND is_start AND NOT is_end" in query
     # the "left both corridors in between" guarantee comes from the >2min gap
     # used to cluster crossings, not a per-pair check against the full track
     # (a correlated EXISTS re-scanning track_points was too slow in production)

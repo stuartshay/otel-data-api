@@ -922,22 +922,28 @@ async def _fetch_segment_efforts(
     effort per lap, not just its fastest.
 
     Raw GPS pings near the start or end point arrive in bursts (many points a
-    few seconds apart per physical crossing), so ``crossings`` clusters
-    consecutive hits more than 2 minutes apart -- comfortably below real lap
-    durations but well above a single crossing's span -- into one
-    representative row per physical visit, tagged with whether that visit was
-    near the start point, the end point, or (for loop segments, where they're
-    the same physical spot) both. Without this, every point in a burst would
-    pair up separately and one lap would look like a dozen near-duplicate
-    efforts.
+    few seconds apart per physical crossing), so ``crossings`` clusters them
+    into one representative row per physical visit, tagged with whether that
+    visit was near the start point, the end point, or (for loop segments,
+    where they're the same physical spot) both. Without this, every point in
+    a burst would pair up separately and one lap would look like a dozen
+    near-duplicate efforts. A new crossing starts on a gap of more than 2
+    minutes since the last hit (comfortably below real lap durations, well
+    above a single crossing's span) -- but also, regardless of timing, the
+    moment a start-only hit is directly followed by an end-only hit (or vice
+    versa) with no overlap hit in between, since that flip already means the
+    route left the start corridor and reached the end corridor. The latter
+    rule matters for short/fast point-to-point segments, where the start and
+    end corridors don't overlap and the whole traversal can take well under
+    2 minutes -- relying on the time gap alone would merge the start and end
+    hits into a single crossing and silently drop the effort entirely.
 
-    Because two *different* crossings are by definition separated by a gap
-    where the route was near neither point, pairing a start-tagged crossing
-    with the next later end-tagged crossing already guarantees the route left
-    both corridors in between -- no per-pair distance check against the full
-    track needed, which is what made the previous approach (a correlated
-    EXISTS re-scanning the track between every candidate start/end pair)
-    prohibitively slow.
+    Because two *different* crossings are (by one rule or the other)
+    guaranteed to be separated by the route leaving both corridors, pairing a
+    start-tagged crossing with the next later end-tagged crossing needs no
+    per-pair distance check against the full track -- which is what made the
+    previous approach (a correlated EXISTS re-scanning the track between
+    every candidate start/end pair) prohibitively slow.
 
     When ``ref_bearing_deg`` is given (the direction of travel through the
     start corridor on the segment's defining activity), traversals whose own
@@ -1032,7 +1038,11 @@ async def _fetch_segment_efforts(
             SELECT t.activity_id, t.timestamp AS c_ts, t.latitude, t.longitude,
                    ST_DWithin(t.geog, seg.start_pt, seg.tol) AS is_start,
                    ST_DWithin(t.geog, seg.end_pt, seg.tol) AS is_end,
-                   LAG(t.timestamp) OVER (PARTITION BY t.activity_id ORDER BY t.timestamp) AS prev_ts
+                   LAG(t.timestamp) OVER (PARTITION BY t.activity_id ORDER BY t.timestamp) AS prev_ts,
+                   LAG(ST_DWithin(t.geog, seg.start_pt, seg.tol))
+                     OVER (PARTITION BY t.activity_id ORDER BY t.timestamp) AS prev_is_start,
+                   LAG(ST_DWithin(t.geog, seg.end_pt, seg.tol))
+                     OVER (PARTITION BY t.activity_id ORDER BY t.timestamp) AS prev_is_end
             FROM public.garmin_track_points t
             JOIN filtered_activities fa ON fa.activity_id = t.activity_id
             CROSS JOIN seg
@@ -1041,7 +1051,18 @@ async def _fetch_segment_efforts(
         ),
         crossing_grouped AS (
             SELECT activity_id, c_ts, latitude, longitude, is_start, is_end,
-                   SUM(CASE WHEN prev_ts IS NULL OR c_ts - prev_ts > INTERVAL '2 minutes' THEN 1 ELSE 0 END)
+                   SUM(CASE
+                         WHEN prev_ts IS NULL OR c_ts - prev_ts > INTERVAL '2 minutes' THEN 1
+                         -- a direct start-only -> end-only (or reverse) flip, with no
+                         -- overlap hit in between, means the route left the start
+                         -- corridor and reached the end corridor -- a real traversal
+                         -- boundary regardless of how little time it took, which
+                         -- matters for short/fast point-to-point segments where the
+                         -- start and end corridors don't overlap
+                         WHEN prev_is_start AND NOT prev_is_end AND is_end AND NOT is_start THEN 1
+                         WHEN prev_is_end AND NOT prev_is_start AND is_start AND NOT is_end THEN 1
+                         ELSE 0
+                       END)
                      OVER (PARTITION BY activity_id ORDER BY c_ts) AS crossing
             FROM crossing_hits
         ),

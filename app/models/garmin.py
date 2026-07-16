@@ -336,6 +336,31 @@ class GarminActivityLap(BaseModel):
     updated_at: datetime | None = Field(default=None, description="UTC timestamp when the row was last updated")
 
 
+class GarminActivityWeather(BaseModel):
+    """Open-Meteo weather conditions matched to an activity's start location/time."""
+
+    activity_id: str = Field(description=DESC_PARENT_ACTIVITY_ID)
+    observed_at: datetime = Field(description="UTC hourly bucket the reading was taken from")
+    latitude: float = Field(description="Latitude the weather was looked up for")
+    longitude: float = Field(description="Longitude the weather was looked up for")
+    temperature_c: float | None = Field(default=None, description="Air temperature in degrees C")
+    apparent_temperature_c: float | None = Field(default=None, description="Feels-like temperature in degrees C")
+    relative_humidity_pct: float | None = Field(default=None, description="Relative humidity percent")
+    precipitation_mm: float | None = Field(default=None, description="Total precipitation in millimeters")
+    rain_mm: float | None = Field(default=None, description="Rainfall in millimeters")
+    snowfall_cm: float | None = Field(default=None, description="Snowfall in centimeters")
+    cloud_cover_pct: float | None = Field(default=None, description="Total cloud cover percent")
+    wind_speed_kmh: float | None = Field(default=None, description="Wind speed in km/h")
+    wind_gusts_kmh: float | None = Field(default=None, description="Wind gust speed in km/h")
+    wind_direction_deg: float | None = Field(default=None, description="Wind direction in degrees")
+    surface_pressure_hpa: float | None = Field(default=None, description="Surface pressure in hPa")
+    weather_code: int | None = Field(default=None, description="WMO weather interpretation code")
+    source: str = Field(description="Open-Meteo API the row came from: archive or forecast")
+    is_provisional: bool = Field(description="True when sourced from the forecast API pending ERA5 archive settlement")
+    created_at: datetime | None = Field(default=None, description="UTC timestamp when the row was inserted")
+    updated_at: datetime | None = Field(default=None, description="UTC timestamp when the row was last updated")
+
+
 class GarminLapsActivity(BaseModel):
     """Activity summary metadata for a batch laps response item."""
 

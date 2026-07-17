@@ -22,6 +22,7 @@ from app.models.garmin import (
     GarminActivityLapsGroup,
     GarminActivityManualUpdate,
     GarminActivityTotal,
+    GarminActivityWeather,
     GarminChartPoint,
     GarminDateRange,
     GarminDeviceCount,
@@ -701,6 +702,39 @@ async def list_activity_laps(
     )
 
     return [GarminActivityLap(**dict(row)) for row in rows]
+
+
+@router.get(
+    "/activities/{activity_id}/weather",
+    responses={404: {"description": ACTIVITY_NOT_FOUND}},
+)
+async def get_activity_weather(
+    request: Request,
+    activity_id: Annotated[str, fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"])],
+) -> GarminActivityWeather | None:
+    """Return Open-Meteo weather conditions for an activity's start location/time.
+
+    Returns ``null`` (not 404) when the activity exists but hasn't been
+    backfilled with weather yet — garmin-sync's weather backfill job fills
+    this in asynchronously.
+    """
+    db = request.app.state.db
+
+    exists = await db.fetchval(SQL_ACTIVITY_EXISTS, activity_id)
+    if not exists:
+        raise HTTPException(status_code=404, detail=ACTIVITY_NOT_FOUND)
+
+    row = await db.fetchrow(
+        "SELECT activity_id, observed_at, latitude, longitude, temperature_c, "
+        "apparent_temperature_c, relative_humidity_pct, precipitation_mm, rain_mm, "
+        "snowfall_cm, cloud_cover_pct, wind_speed_kmh, wind_gusts_kmh, "
+        "wind_direction_deg, surface_pressure_hpa, weather_code, source, "
+        "is_provisional, created_at, updated_at "
+        "FROM public.garmin_activity_weather WHERE activity_id = $1",
+        activity_id,
+    )
+
+    return GarminActivityWeather(**dict(row)) if row else None
 
 
 @router.get(

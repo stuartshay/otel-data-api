@@ -361,6 +361,37 @@ class GarminActivityWeather(BaseModel):
     updated_at: datetime | None = Field(default=None, description="UTC timestamp when the row was last updated")
 
 
+class GarminActivityWeatherHourly(BaseModel):
+    """Route-sampled, hour-by-hour Open-Meteo weather for an activity.
+
+    Unlike GarminActivityWeather (a single "conditions at the start"
+    snapshot), this is one row per hour the activity spans, each sampled at
+    the GPS location the athlete was actually at during that hour.
+    """
+
+    activity_id: str = Field(description=DESC_PARENT_ACTIVITY_ID)
+    hour_index: int = Field(description="Zero-based hour offset from the activity start")
+    observed_at: datetime = Field(description="UTC hourly bucket the reading was taken from")
+    latitude: float = Field(description="Latitude sampled from the nearest track point for this hour")
+    longitude: float = Field(description="Longitude sampled from the nearest track point for this hour")
+    temperature_c: float | None = Field(default=None, description="Air temperature in degrees C")
+    apparent_temperature_c: float | None = Field(default=None, description="Feels-like temperature in degrees C")
+    relative_humidity_pct: float | None = Field(default=None, description="Relative humidity percent")
+    precipitation_mm: float | None = Field(default=None, description="Total precipitation in millimeters")
+    rain_mm: float | None = Field(default=None, description="Rainfall in millimeters")
+    snowfall_cm: float | None = Field(default=None, description="Snowfall in centimeters")
+    cloud_cover_pct: float | None = Field(default=None, description="Total cloud cover percent")
+    wind_speed_kmh: float | None = Field(default=None, description="Wind speed in km/h")
+    wind_gusts_kmh: float | None = Field(default=None, description="Wind gust speed in km/h")
+    wind_direction_deg: float | None = Field(default=None, description="Wind direction in degrees")
+    surface_pressure_hpa: float | None = Field(default=None, description="Surface pressure in hPa")
+    weather_code: int | None = Field(default=None, description="WMO weather interpretation code")
+    source: str = Field(description="Open-Meteo API the row came from: archive or forecast")
+    is_provisional: bool = Field(description="True when sourced from the forecast API pending ERA5 archive settlement")
+    created_at: datetime | None = Field(default=None, description="UTC timestamp when the row was inserted")
+    updated_at: datetime | None = Field(default=None, description="UTC timestamp when the row was last updated")
+
+
 class GarminLapsActivity(BaseModel):
     """Activity summary metadata for a batch laps response item."""
 

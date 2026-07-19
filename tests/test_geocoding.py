@@ -12,6 +12,167 @@ from app.auth import require_auth
 from app.config import Config
 
 
+def _point_cell_row(
+    *,
+    status: str | None = "success",
+    display_address: str | None = "5th Ave, New York, NY, USA",
+) -> dict[str, object]:
+    return {
+        "lat_4dp": 407306,
+        "lon_4dp": -739352,
+        "display_address": display_address,
+        "street": "5th Ave" if display_address else None,
+        "housenumber": None,
+        "neighbourhood": "Greenwich Village" if display_address else None,
+        "locality": "New York" if display_address else None,
+        "region": "New York" if display_address else None,
+        "country": "United States" if display_address else None,
+        "postalcode": "10003" if display_address else None,
+        "confidence": 0.9 if display_address else None,
+        "status": status,
+        "geocoded_at": "2026-07-19T12:00:00Z" if status else None,
+    }
+
+
+@pytest.mark.asyncio
+async def test_reverse_geocode_point_returns_successful_cached_cell(
+    client: AsyncClient,
+    mock_db: AsyncMock,
+):
+    mock_db.fetchrow.return_value = _point_cell_row()
+
+    with patch("app.routers.geocoding._process_cell", new=AsyncMock()) as process_cell:
+        response = await client.get("/api/v1/geocoding/reverse?latitude=40.73061&longitude=-73.93524")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "latitude": 40.7306,
+        "longitude": -73.9352,
+        "display_address": "5th Ave, New York, NY, USA",
+        "street": "5th Ave",
+        "housenumber": None,
+        "neighbourhood": "Greenwich Village",
+        "locality": "New York",
+        "region": "New York",
+        "country": "United States",
+        "postalcode": "10003",
+        "confidence": 0.9,
+        "status": "success",
+        "geocoded_at": "2026-07-19T12:00:00Z",
+        "resolution_source": "database",
+    }
+    process_cell.assert_not_awaited()
+    lookup_call = mock_db.fetchrow.await_args
+    assert lookup_call is not None
+    lookup_sql = lookup_call.args[0]
+    assert "public.geocoded_point_cells" in lookup_sql
+    assert "gpc.lat_4dp = cell.lat_4dp" in lookup_sql
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cached_status", [None, "pending", "no_coverage", "error"])
+async def test_reverse_geocode_point_falls_back_and_returns_persisted_cell(
+    client: AsyncClient,
+    mock_db: AsyncMock,
+    cached_status: str | None,
+):
+    missing = _point_cell_row(status=cached_status, display_address=None)
+    refreshed = _point_cell_row()
+    mock_db.fetchrow.side_effect = [missing, refreshed]
+
+    with patch("app.routers.geocoding._process_cell", new=AsyncMock(return_value=1)) as process_cell:
+        response = await client.get("/api/v1/geocoding/reverse?latitude=40.73061&longitude=-73.93524")
+
+    assert response.status_code == 200
+    assert response.json()["display_address"] == "5th Ave, New York, NY, USA"
+    assert response.json()["resolution_source"] == "pelias"
+    process_cell.assert_awaited_once()
+    process_call = process_cell.await_args
+    assert process_call is not None
+    call = process_call.args
+    assert call[0] is mock_db
+    assert call[3:] == (407306, -739352)
+    assert mock_db.fetchrow.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_reverse_geocode_point_returns_persisted_fallback_failure(
+    client: AsyncClient,
+    mock_db: AsyncMock,
+):
+    missing = _point_cell_row(status=None, display_address=None)
+    pending = _point_cell_row(status="pending", display_address=None)
+    mock_db.fetchrow.side_effect = [missing, pending]
+
+    with patch("app.routers.geocoding._process_cell", new=AsyncMock(return_value=1)):
+        response = await client.get("/api/v1/geocoding/reverse?latitude=40.73061&longitude=-73.93524")
+
+    assert response.status_code == 200
+    assert response.json()["display_address"] is None
+    assert response.json()["status"] == "pending"
+    assert response.json()["resolution_source"] == "pelias"
+
+
+@pytest.mark.asyncio
+async def test_reverse_geocode_point_rejects_unpersisted_fallback(
+    client: AsyncClient,
+    mock_db: AsyncMock,
+):
+    mock_db.fetchrow.return_value = _point_cell_row(status=None, display_address=None)
+
+    with patch("app.routers.geocoding._process_cell", new=AsyncMock(return_value=0)):
+        response = await client.get("/api/v1/geocoding/reverse?latitude=40.73061&longitude=-73.93524")
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Pelias fallback result could not be persisted",
+    }
+    assert mock_db.fetchrow.await_count == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "query",
+    [
+        "latitude=91&longitude=0",
+        "latitude=-91&longitude=0",
+        "latitude=0&longitude=181",
+        "latitude=0&longitude=-181",
+    ],
+)
+async def test_reverse_geocode_point_validates_coordinates(
+    client: AsyncClient,
+    mock_db: AsyncMock,
+    query: str,
+):
+    response = await client.get(f"/api/v1/geocoding/reverse?{query}")
+
+    assert response.status_code == 422
+    mock_db.fetchrow.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_reverse_geocode_point_requires_auth(
+    app: FastAPI,
+    client: AsyncClient,
+    mock_db: AsyncMock,
+):
+    async def _deny_auth() -> dict:
+        raise HTTPException(
+            status_code=http_status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+
+    app.dependency_overrides[require_auth] = _deny_auth
+    try:
+        response = await client.get("/api/v1/geocoding/reverse?latitude=40.73061&longitude=-73.93524")
+    finally:
+        app.dependency_overrides.pop(require_auth, None)
+
+    assert response.status_code == 401
+    mock_db.fetchrow.assert_not_awaited()
+
+
 @pytest.mark.asyncio
 async def test_geocoding_status(client: AsyncClient, mock_db: AsyncMock):
     # geocoded_addresses and geocoded_point_cells status counts come from two

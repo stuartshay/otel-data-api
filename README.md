@@ -51,6 +51,7 @@ flowchart LR
 | GET | `/api/v1/garmin/activities/{id}/tracks` | Track points |
 | GET | `/api/v1/garmin/activities/{id}/laps` | Activity laps |
 | POST | `/api/v1/garmin/sync` | Trigger on-demand Garmin sync |
+| GET | `/api/v1/geocoding/reverse` | Resolve a point from the dense address cache with Pelias fallback (auth required) |
 | GET | `/api/v1/gps/unified` | Unified GPS points (view) |
 | GET | `/api/v1/gps/daily-summary` | Daily activity summary |
 | GET | `/api/v1/reference-locations` | List reference locations |

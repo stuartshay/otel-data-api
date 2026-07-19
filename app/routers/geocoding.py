@@ -10,21 +10,29 @@ from typing import Annotated, Any
 
 import httpx
 import structlog
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.auth import require_auth
 from app.models.geocoding import (
+    GeocodedPointAddress,
     GeocodingSourceStatus,
     GeocodingStatus,
     GeocodingStatusBySource,
     GeocodingTriggerResponse,
     PeliasHealth,
+    PointAddressSource,
 )
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/geocoding", tags=["Geocoding"])
 internal_router = APIRouter(prefix="/internal/geocoding", tags=["Internal"])
+
+# Auth-protected endpoints raise these via require_auth -> get_current_user().
+AUTH_RESPONSES: dict = {
+    401: {"description": "Authentication required or token invalid"},
+    503: {"description": "Authentication service unavailable"},
+}
 
 PELIAS_REVERSE_PATH = "/v1/reverse"
 # Per-request cap on concurrent waypoint geocoding tasks (end-to-end:
@@ -73,6 +81,95 @@ class _StatusCache:
 
 class PeliasTransientError(Exception):
     """Raised by ``_call_pelias`` after all retry attempts have failed transiently."""
+
+
+_POINT_CELL_LOOKUP_SQL = (
+    "WITH cell AS ("
+    "  SELECT ROUND($1::double precision * 10000)::INTEGER AS lat_4dp, "
+    "         ROUND($2::double precision * 10000)::INTEGER AS lon_4dp"
+    ") "
+    "SELECT cell.lat_4dp, cell.lon_4dp, gpc.display_address, gpc.street, "
+    "gpc.housenumber, gpc.neighbourhood, gpc.locality, gpc.region, "
+    "gpc.country, gpc.postalcode, gpc.confidence, gpc.status, gpc.geocoded_at "
+    "FROM cell LEFT JOIN public.geocoded_point_cells gpc "
+    "ON gpc.lat_4dp = cell.lat_4dp AND gpc.lon_4dp = cell.lon_4dp"
+)
+
+
+async def _fetch_point_cell(db: Any, latitude: float, longitude: float) -> dict[str, Any]:
+    """Return the rounded cell key and its cached address, when present."""
+    row = await db.fetchrow(_POINT_CELL_LOOKUP_SQL, latitude, longitude)
+    if row is None:  # The single-row CTE should always return a row.
+        raise RuntimeError("Point cell lookup returned no row")
+    return dict(row)
+
+
+def _point_address_response(
+    row: dict[str, Any],
+    *,
+    resolution_source: PointAddressSource,
+) -> GeocodedPointAddress:
+    """Map a dense-cell row to the public point-address response."""
+    return GeocodedPointAddress(
+        latitude=row["lat_4dp"] / 10_000,
+        longitude=row["lon_4dp"] / 10_000,
+        display_address=row.get("display_address"),
+        street=row.get("street"),
+        housenumber=row.get("housenumber"),
+        neighbourhood=row.get("neighbourhood"),
+        locality=row.get("locality"),
+        region=row.get("region"),
+        country=row.get("country"),
+        postalcode=row.get("postalcode"),
+        confidence=row.get("confidence"),
+        status=row.get("status") or "error",
+        geocoded_at=row.get("geocoded_at"),
+        resolution_source=resolution_source,
+    )
+
+
+@router.get(
+    "/reverse",
+    responses={
+        **AUTH_RESPONSES,
+        502: {"description": "Pelias fallback result could not be persisted"},
+    },
+)
+async def reverse_geocode_point(
+    request: Request,
+    latitude: Annotated[float, Query(ge=-90, le=90, description="Latitude in decimal degrees")],
+    longitude: Annotated[float, Query(ge=-180, le=180, description="Longitude in decimal degrees")],
+    _user: Annotated[dict, Depends(require_auth)],
+) -> GeocodedPointAddress:
+    """Resolve a point from the dense cell cache, falling back to Pelias.
+
+    Coordinates use the same indexed 4-decimal (~11 m) cell key as the Garmin
+    dense-geocoding pipeline. A successful cached row avoids a Pelias request;
+    misses and non-success rows are refreshed through Pelias and persisted.
+    Authentication is required because a fallback can mutate the cell cache.
+    """
+    db = request.app.state.db
+    cell = await _fetch_point_cell(db, latitude, longitude)
+    if cell.get("status") == "success" and cell.get("display_address"):
+        return _point_address_response(cell, resolution_source="database")
+
+    config = request.app.state.config
+    async with httpx.AsyncClient(timeout=config.pelias_timeout_seconds) as client:
+        processed = await _process_cell(
+            db,
+            client,
+            config.pelias_base_url,
+            cell["lat_4dp"],
+            cell["lon_4dp"],
+        )
+    if processed == 0:
+        raise HTTPException(
+            status_code=502,
+            detail="Pelias fallback result could not be persisted",
+        )
+
+    refreshed = await _fetch_point_cell(db, latitude, longitude)
+    return _point_address_response(refreshed, resolution_source="pelias")
 
 
 @router.get("/status")

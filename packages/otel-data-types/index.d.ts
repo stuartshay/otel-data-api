@@ -389,6 +389,55 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/garmin/activities/{activity_id}/weather": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Activity Weather
+         * @description Return Open-Meteo weather conditions for an activity's start location/time.
+         *
+         *     Returns ``null`` (not 404) when the activity exists but hasn't been
+         *     backfilled with weather yet — garmin-sync's weather backfill job fills
+         *     this in asynchronously.
+         */
+        get: operations["get_activity_weather_api_v1_garmin_activities__activity_id__weather_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/garmin/activities/{activity_id}/weather-hourly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Activity Weather Hourly
+         * @description Return route-sampled, hour-by-hour Open-Meteo weather for an activity.
+         *
+         *     Unlike ``/weather`` (a single "conditions at the start" snapshot), each
+         *     row here is sampled at the GPS location the athlete was actually at
+         *     during that hour. Returns an empty list (not 404) when the activity
+         *     exists but hasn't been hourly-backfilled yet.
+         */
+        get: operations["list_activity_weather_hourly_api_v1_garmin_activities__activity_id__weather_hourly_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/garmin/laps": {
         parameters: {
             query?: never;
@@ -722,6 +771,31 @@ export type paths = {
          *     from OwnTracks and/or Garmin data within its configured radius.
          */
         get: operations["within_reference_api_v1_spatial_within_reference__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geocoding/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reverse Geocode Point
+         * @description Resolve a point from the dense cell cache, falling back to Pelias.
+         *
+         *     Coordinates use the same indexed 4-decimal (~11 m) cell key as the Garmin
+         *     dense-geocoding pipeline. A successful cached row avoids a Pelias request;
+         *     misses and non-success rows are refreshed through Pelias and persisted.
+         *     Authentication is required because a fallback can mutate the cell cache.
+         */
+        get: operations["reverse_geocode_point_api_v1_geocoding_reverse_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1905,6 +1979,229 @@ export type components = {
             total_calories?: number | null;
         };
         /**
+         * GarminActivityWeather
+         * @description Open-Meteo weather conditions matched to an activity's start location/time.
+         */
+        GarminActivityWeather: {
+            /**
+             * Activity Id
+             * @description Parent Garmin activity identifier
+             */
+            activity_id: string;
+            /**
+             * Observed At
+             * Format: date-time
+             * @description UTC hourly bucket the reading was taken from
+             */
+            observed_at: string;
+            /**
+             * Latitude
+             * @description Latitude the weather was looked up for
+             */
+            latitude: number;
+            /**
+             * Longitude
+             * @description Longitude the weather was looked up for
+             */
+            longitude: number;
+            /**
+             * Temperature C
+             * @description Air temperature in degrees C
+             */
+            temperature_c?: number | null;
+            /**
+             * Apparent Temperature C
+             * @description Feels-like temperature in degrees C
+             */
+            apparent_temperature_c?: number | null;
+            /**
+             * Relative Humidity Pct
+             * @description Relative humidity percent
+             */
+            relative_humidity_pct?: number | null;
+            /**
+             * Precipitation Mm
+             * @description Total precipitation in millimeters
+             */
+            precipitation_mm?: number | null;
+            /**
+             * Rain Mm
+             * @description Rainfall in millimeters
+             */
+            rain_mm?: number | null;
+            /**
+             * Snowfall Cm
+             * @description Snowfall in centimeters
+             */
+            snowfall_cm?: number | null;
+            /**
+             * Cloud Cover Pct
+             * @description Total cloud cover percent
+             */
+            cloud_cover_pct?: number | null;
+            /**
+             * Wind Speed Kmh
+             * @description Wind speed in km/h
+             */
+            wind_speed_kmh?: number | null;
+            /**
+             * Wind Gusts Kmh
+             * @description Wind gust speed in km/h
+             */
+            wind_gusts_kmh?: number | null;
+            /**
+             * Wind Direction Deg
+             * @description Wind direction in degrees
+             */
+            wind_direction_deg?: number | null;
+            /**
+             * Surface Pressure Hpa
+             * @description Surface pressure in hPa
+             */
+            surface_pressure_hpa?: number | null;
+            /**
+             * Weather Code
+             * @description WMO weather interpretation code
+             */
+            weather_code?: number | null;
+            /**
+             * Source
+             * @description Open-Meteo API the row came from: archive or forecast
+             */
+            source: string;
+            /**
+             * Is Provisional
+             * @description True when sourced from the forecast API pending ERA5 archive settlement
+             */
+            is_provisional: boolean;
+            /**
+             * Created At
+             * @description UTC timestamp when the row was inserted
+             */
+            created_at?: string | null;
+            /**
+             * Updated At
+             * @description UTC timestamp when the row was last updated
+             */
+            updated_at?: string | null;
+        };
+        /**
+         * GarminActivityWeatherHourly
+         * @description Route-sampled, hour-by-hour Open-Meteo weather for an activity.
+         *
+         *     Unlike GarminActivityWeather (a single "conditions at the start"
+         *     snapshot), this is one row per hour the activity spans, each sampled at
+         *     the GPS location the athlete was actually at during that hour.
+         */
+        GarminActivityWeatherHourly: {
+            /**
+             * Activity Id
+             * @description Parent Garmin activity identifier
+             */
+            activity_id: string;
+            /**
+             * Hour Index
+             * @description Zero-based hour offset from the activity start
+             */
+            hour_index: number;
+            /**
+             * Observed At
+             * Format: date-time
+             * @description UTC hourly bucket the reading was taken from
+             */
+            observed_at: string;
+            /**
+             * Latitude
+             * @description Latitude sampled from the nearest track point for this hour
+             */
+            latitude: number;
+            /**
+             * Longitude
+             * @description Longitude sampled from the nearest track point for this hour
+             */
+            longitude: number;
+            /**
+             * Temperature C
+             * @description Air temperature in degrees C
+             */
+            temperature_c?: number | null;
+            /**
+             * Apparent Temperature C
+             * @description Feels-like temperature in degrees C
+             */
+            apparent_temperature_c?: number | null;
+            /**
+             * Relative Humidity Pct
+             * @description Relative humidity percent
+             */
+            relative_humidity_pct?: number | null;
+            /**
+             * Precipitation Mm
+             * @description Total precipitation in millimeters
+             */
+            precipitation_mm?: number | null;
+            /**
+             * Rain Mm
+             * @description Rainfall in millimeters
+             */
+            rain_mm?: number | null;
+            /**
+             * Snowfall Cm
+             * @description Snowfall in centimeters
+             */
+            snowfall_cm?: number | null;
+            /**
+             * Cloud Cover Pct
+             * @description Total cloud cover percent
+             */
+            cloud_cover_pct?: number | null;
+            /**
+             * Wind Speed Kmh
+             * @description Wind speed in km/h
+             */
+            wind_speed_kmh?: number | null;
+            /**
+             * Wind Gusts Kmh
+             * @description Wind gust speed in km/h
+             */
+            wind_gusts_kmh?: number | null;
+            /**
+             * Wind Direction Deg
+             * @description Wind direction in degrees
+             */
+            wind_direction_deg?: number | null;
+            /**
+             * Surface Pressure Hpa
+             * @description Surface pressure in hPa
+             */
+            surface_pressure_hpa?: number | null;
+            /**
+             * Weather Code
+             * @description WMO weather interpretation code
+             */
+            weather_code?: number | null;
+            /**
+             * Source
+             * @description Open-Meteo API the row came from: archive or forecast
+             */
+            source: string;
+            /**
+             * Is Provisional
+             * @description True when sourced from the forecast API pending ERA5 archive settlement
+             */
+            is_provisional: boolean;
+            /**
+             * Created At
+             * @description UTC timestamp when the row was inserted
+             */
+            created_at?: string | null;
+            /**
+             * Updated At
+             * @description UTC timestamp when the row was last updated
+             */
+            updated_at?: string | null;
+        };
+        /**
          * GarminChartPoint
          * @description Lightweight track point optimised for time-series chart rendering.
          * @example {
@@ -2576,6 +2873,96 @@ export type components = {
              * @description UTC timestamp when geocoding was performed
              */
             geocoded_at?: string | null;
+        };
+        /**
+         * GeocodedPointAddress
+         * @description Address resolved for a rounded GPS coordinate cell.
+         * @example {
+         *       "confidence": 0.95,
+         *       "country": "United States",
+         *       "display_address": "123 Main St, Hoboken, NJ 07030",
+         *       "geocoded_at": "2026-02-12T08:10:55+00:00",
+         *       "housenumber": "123",
+         *       "locality": "Hoboken",
+         *       "neighbourhood": "Downtown",
+         *       "postalcode": "07030",
+         *       "region": "New Jersey",
+         *       "status": "success",
+         *       "street": "Main St"
+         *     }
+         */
+        GeocodedPointAddress: {
+            /**
+             * Display Address
+             * @description Full formatted address label from Pelias
+             */
+            display_address?: string | null;
+            /**
+             * Street
+             * @description Street name
+             */
+            street?: string | null;
+            /**
+             * Housenumber
+             * @description House or building number
+             */
+            housenumber?: string | null;
+            /**
+             * Neighbourhood
+             * @description Neighbourhood name
+             */
+            neighbourhood?: string | null;
+            /**
+             * Locality
+             * @description City or town
+             */
+            locality?: string | null;
+            /**
+             * Region
+             * @description State or province
+             */
+            region?: string | null;
+            /**
+             * Country
+             * @description Country name
+             */
+            country?: string | null;
+            /**
+             * Postalcode
+             * @description Postal or ZIP code
+             */
+            postalcode?: string | null;
+            /**
+             * Confidence
+             * @description Pelias confidence score (0-1)
+             */
+            confidence?: number | null;
+            /**
+             * Status
+             * @description Geocoding status: success, no_coverage, error, pending
+             */
+            status: string;
+            /**
+             * Geocoded At
+             * @description UTC timestamp when geocoding was performed
+             */
+            geocoded_at?: string | null;
+            /**
+             * Latitude
+             * @description Resolved 4-decimal cell latitude
+             */
+            latitude: number;
+            /**
+             * Longitude
+             * @description Resolved 4-decimal cell longitude
+             */
+            longitude: number;
+            /**
+             * Resolution Source
+             * @description Whether the response came from the database cache or a Pelias fallback
+             * @enum {string}
+             */
+            resolution_source: "database" | "pelias";
         };
         /**
          * GeocodingSourceStatus
@@ -3702,14 +4089,12 @@ export interface operations {
                     "application/json": components["schemas"]["PaginatedResponse_Location_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid date format */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -3751,6 +4136,13 @@ export interface operations {
                     "application/json": components["schemas"]["LocationDateRange"];
                 };
             };
+            /** @description No location data found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     location_count_api_v1_locations_count_get: {
@@ -3776,14 +4168,12 @@ export interface operations {
                     "application/json": components["schemas"]["LocationCount"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid date format */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -3807,6 +4197,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LocationDetail"];
                 };
+            };
+            /** @description Location not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -3922,6 +4319,13 @@ export interface operations {
                     "application/json": components["schemas"]["GarminDateRange"];
                 };
             };
+            /** @description No Garmin activity data found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     list_activities_api_v1_garmin_activities_get: {
@@ -3957,14 +4361,12 @@ export interface operations {
                     "application/json": components["schemas"]["PaginatedResponse_GarminActivity_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid date format */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -4115,7 +4517,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Authentication required */
+            /** @description Authentication required or token invalid */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -4137,6 +4539,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description Authentication service unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4307,6 +4716,84 @@ export interface operations {
             };
         };
     };
+    get_activity_weather_api_v1_garmin_activities__activity_id__weather_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Garmin activity ID */
+                activity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminActivityWeather"] | null;
+                };
+            };
+            /** @description Activity not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_activity_weather_hourly_api_v1_garmin_activities__activity_id__weather_hourly_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Garmin activity ID */
+                activity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GarminActivityWeatherHourly"][];
+                };
+            };
+            /** @description Activity not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_laps_api_v1_garmin_laps_get: {
         parameters: {
             query?: {
@@ -4336,14 +4823,12 @@ export interface operations {
                     "application/json": components["schemas"]["PaginatedResponse_GarminActivityLapsGroup_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid date format */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -4425,14 +4910,12 @@ export interface operations {
                     "application/json": components["schemas"]["SegmentEffortsResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid date format */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -4499,6 +4982,13 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description Failed to create segment */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     get_segment_api_v1_garmin_segments__segment_id__get: {
@@ -4559,6 +5049,20 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Authentication required or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Segment not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -4567,6 +5071,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description Authentication service unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4653,14 +5164,12 @@ export interface operations {
                     "application/json": components["schemas"]["PaginatedResponse_UnifiedGpsPoint_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid date format */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -4691,14 +5200,12 @@ export interface operations {
                     "application/json": components["schemas"]["PaginatedResponse_DailyActivitySummary_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid date format */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -4719,6 +5226,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DailySummaryDateRange"];
                 };
+            };
+            /** @description No daily summary data found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4764,6 +5278,13 @@ export interface operations {
                     "application/json": components["schemas"]["ReferenceLocation"];
                 };
             };
+            /** @description Authentication required or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -4772,6 +5293,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description Failed to create reference location */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication service unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4795,6 +5330,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ReferenceLocation"];
                 };
+            };
+            /** @description Reference location not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -4832,6 +5374,27 @@ export interface operations {
                     "application/json": components["schemas"]["ReferenceLocation"];
                 };
             };
+            /** @description No fields to update */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reference location not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -4840,6 +5403,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description Authentication service unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4862,6 +5432,20 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Authentication required or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reference location not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -4870,6 +5454,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description Authentication service unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4992,6 +5583,61 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    reverse_geocode_point_api_v1_geocoding_reverse_get: {
+        parameters: {
+            query: {
+                /** @description Latitude in decimal degrees */
+                latitude: number;
+                /** @description Longitude in decimal degrees */
+                longitude: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeocodedPointAddress"];
+                };
+            };
+            /** @description Authentication required or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Pelias fallback result could not be persisted */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication service unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

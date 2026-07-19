@@ -5625,6 +5625,13 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description Pelias fallback result could not be persisted */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Authentication service unavailable */
             503: {
                 headers: {

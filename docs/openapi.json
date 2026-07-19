@@ -2957,6 +2957,9 @@
           "503": {
             "description": "Authentication service unavailable"
           },
+          "502": {
+            "description": "Pelias fallback result could not be persisted"
+          },
           "422": {
             "description": "Validation Error",
             "content": {

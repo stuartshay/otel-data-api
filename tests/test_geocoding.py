@@ -114,6 +114,23 @@ async def test_reverse_geocode_point_returns_persisted_fallback_failure(
 
 
 @pytest.mark.asyncio
+async def test_reverse_geocode_point_rejects_unpersisted_fallback(
+    client: AsyncClient,
+    mock_db: AsyncMock,
+):
+    mock_db.fetchrow.return_value = _point_cell_row(status=None, display_address=None)
+
+    with patch("app.routers.geocoding._process_cell", new=AsyncMock(return_value=0)):
+        response = await client.get("/api/v1/geocoding/reverse?latitude=40.73061&longitude=-73.93524")
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "Pelias fallback result could not be persisted",
+    }
+    assert mock_db.fetchrow.await_count == 1
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "query",
     [
@@ -150,7 +167,7 @@ async def test_reverse_geocode_point_requires_auth(
     try:
         response = await client.get("/api/v1/geocoding/reverse?latitude=40.73061&longitude=-73.93524")
     finally:
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(require_auth, None)
 
     assert response.status_code == 401
     mock_db.fetchrow.assert_not_awaited()

@@ -10,7 +10,7 @@ from typing import Annotated, Any
 
 import httpx
 import structlog
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.auth import require_auth
 from app.models.geocoding import (
@@ -128,7 +128,13 @@ def _point_address_response(
     )
 
 
-@router.get("/reverse", responses=AUTH_RESPONSES)
+@router.get(
+    "/reverse",
+    responses={
+        **AUTH_RESPONSES,
+        502: {"description": "Pelias fallback result could not be persisted"},
+    },
+)
 async def reverse_geocode_point(
     request: Request,
     latitude: Annotated[float, Query(ge=-90, le=90, description="Latitude in decimal degrees")],
@@ -149,12 +155,17 @@ async def reverse_geocode_point(
 
     config = request.app.state.config
     async with httpx.AsyncClient(timeout=config.pelias_timeout_seconds) as client:
-        await _process_cell(
+        processed = await _process_cell(
             db,
             client,
             config.pelias_base_url,
             cell["lat_4dp"],
             cell["lon_4dp"],
+        )
+    if processed == 0:
+        raise HTTPException(
+            status_code=502,
+            detail="Pelias fallback result could not be persisted",
         )
 
     refreshed = await _fetch_point_cell(db, latitude, longitude)

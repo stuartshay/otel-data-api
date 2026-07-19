@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 WaypointKind = Literal["start", "end", "waypoint"]
+PointAddressSource = Literal["database", "pelias"]
 
 # Shared field-description constants (reused across address models to avoid
 # duplicating the same literal in multiple Field(...) definitions).
@@ -58,6 +59,16 @@ class GeocodedAddress(BaseModel):
             ]
         }
     }
+
+
+class GeocodedPointAddress(GeocodedAddress):
+    """Address resolved for a rounded GPS coordinate cell."""
+
+    latitude: float = Field(description="Resolved 4-decimal cell latitude")
+    longitude: float = Field(description="Resolved 4-decimal cell longitude")
+    resolution_source: PointAddressSource = Field(
+        description="Whether the response came from the database cache or a Pelias fallback",
+    )
 
 
 class GeocodingStatus(BaseModel):

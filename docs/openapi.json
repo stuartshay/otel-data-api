@@ -190,14 +190,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "Invalid date format"
           }
         }
       }
@@ -246,6 +239,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "No location data found"
           }
         }
       }
@@ -314,14 +310,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "Invalid date format"
           }
         }
       }
@@ -357,6 +346,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Location not found"
           },
           "422": {
             "description": "Validation Error",
@@ -571,6 +563,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "No Garmin activity data found"
           }
         }
       }
@@ -612,7 +607,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "format": "date"
                 },
                 {
                   "type": "null"
@@ -633,7 +629,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "format": "date"
                 },
                 {
                   "type": "null"
@@ -715,14 +712,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "Invalid date format"
           }
         }
       }
@@ -829,7 +819,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "format": "date"
                 },
                 {
                   "type": "null"
@@ -847,7 +838,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "format": "date"
                 },
                 {
                   "type": "null"
@@ -979,11 +971,14 @@
               }
             }
           },
+          "401": {
+            "description": "Authentication required or token invalid"
+          },
+          "503": {
+            "description": "Authentication service unavailable"
+          },
           "400": {
             "description": "No fields to update"
-          },
-          "401": {
-            "description": "Authentication required"
           },
           "404": {
             "description": "Activity not found"
@@ -1292,6 +1287,120 @@
         }
       }
     },
+    "/api/v1/garmin/activities/{activity_id}/weather": {
+      "get": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "Get Activity Weather",
+        "description": "Return Open-Meteo weather conditions for an activity's start location/time.\n\nReturns ``null`` (not 404) when the activity exists but hasn't been\nbackfilled with weather yet \u2014 garmin-sync's weather backfill job fills\nthis in asynchronously.",
+        "operationId": "get_activity_weather_api_v1_garmin_activities__activity_id__weather_get",
+        "parameters": [
+          {
+            "name": "activity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Garmin activity ID",
+              "examples": [
+                "20932993811"
+              ],
+              "title": "Activity Id"
+            },
+            "description": "Garmin activity ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/GarminActivityWeather"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Activity Weather Api V1 Garmin Activities  Activity Id  Weather Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Activity not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garmin/activities/{activity_id}/weather-hourly": {
+      "get": {
+        "tags": [
+          "Garmin"
+        ],
+        "summary": "List Activity Weather Hourly",
+        "description": "Return route-sampled, hour-by-hour Open-Meteo weather for an activity.\n\nUnlike ``/weather`` (a single \"conditions at the start\" snapshot), each\nrow here is sampled at the GPS location the athlete was actually at\nduring that hour. Returns an empty list (not 404) when the activity\nexists but hasn't been hourly-backfilled yet.",
+        "operationId": "list_activity_weather_hourly_api_v1_garmin_activities__activity_id__weather_hourly_get",
+        "parameters": [
+          {
+            "name": "activity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Garmin activity ID",
+              "examples": [
+                "20932993811"
+              ],
+              "title": "Activity Id"
+            },
+            "description": "Garmin activity ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GarminActivityWeatherHourly"
+                  },
+                  "title": "Response List Activity Weather Hourly Api V1 Garmin Activities  Activity Id  Weather Hourly Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Activity not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/garmin/laps": {
       "get": {
         "tags": [
@@ -1329,7 +1438,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "format": "date"
                 },
                 {
                   "type": "null"
@@ -1350,7 +1460,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "format": "date"
                 },
                 {
                   "type": "null"
@@ -1404,14 +1515,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "Invalid date format"
           }
         }
       }
@@ -1576,7 +1680,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "format": "date"
                 },
                 {
                   "type": "null"
@@ -1597,7 +1702,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "format": "date"
                 },
                 {
                   "type": "null"
@@ -1652,14 +1758,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "Invalid date format"
           }
         }
       }
@@ -1755,6 +1854,9 @@
               }
             }
           },
+          "500": {
+            "description": "Failed to create segment"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -1844,6 +1946,15 @@
           "204": {
             "description": "Successful Response"
           },
+          "401": {
+            "description": "Authentication required or token invalid"
+          },
+          "503": {
+            "description": "Authentication service unavailable"
+          },
+          "404": {
+            "description": "Segment not found"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -1884,7 +1995,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "format": "date"
                 },
                 {
                   "type": "null"
@@ -1902,7 +2014,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "format": "date"
                 },
                 {
                   "type": "null"
@@ -2121,14 +2234,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "Invalid date format"
           }
         }
       }
@@ -2224,14 +2330,7 @@
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "Invalid date format"
           }
         }
       }
@@ -2254,6 +2353,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "No daily summary data found"
           }
         }
       }
@@ -2311,6 +2413,15 @@
               }
             }
           },
+          "401": {
+            "description": "Authentication required or token invalid"
+          },
+          "503": {
+            "description": "Authentication service unavailable"
+          },
+          "500": {
+            "description": "Failed to create reference location"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -2360,6 +2471,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Reference location not found"
           },
           "422": {
             "description": "Validation Error",
@@ -2419,6 +2533,18 @@
               }
             }
           },
+          "401": {
+            "description": "Authentication required or token invalid"
+          },
+          "503": {
+            "description": "Authentication service unavailable"
+          },
+          "400": {
+            "description": "No fields to update"
+          },
+          "404": {
+            "description": "Reference location not found"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -2459,6 +2585,15 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "401": {
+            "description": "Authentication required or token invalid"
+          },
+          "503": {
+            "description": "Authentication service unavailable"
+          },
+          "404": {
+            "description": "Reference location not found"
           },
           "422": {
             "description": "Validation Error",
@@ -2750,6 +2885,71 @@
           },
           "404": {
             "description": "Reference location not found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/geocoding/reverse": {
+      "get": {
+        "tags": [
+          "Geocoding"
+        ],
+        "summary": "Reverse Geocode Point",
+        "description": "Resolve a point from the dense cell cache, falling back to Pelias.\n\nCoordinates use the same indexed 4-decimal (~11 m) cell key as the Garmin\ndense-geocoding pipeline. A successful cached row avoids a Pelias request;\nmisses and non-success rows are refreshed through Pelias and persisted.\nAuthentication is required because a fallback can mutate the cell cache.",
+        "operationId": "reverse_geocode_point_api_v1_geocoding_reverse_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "latitude",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "maximum": 90,
+              "minimum": -90,
+              "description": "Latitude in decimal degrees",
+              "title": "Latitude"
+            },
+            "description": "Latitude in decimal degrees"
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "maximum": 180,
+              "minimum": -180,
+              "description": "Longitude in decimal degrees",
+              "title": "Longitude"
+            },
+            "description": "Longitude in decimal degrees"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeocodedPointAddress"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -5243,6 +5443,444 @@
           }
         ]
       },
+      "GarminActivityWeather": {
+        "properties": {
+          "activity_id": {
+            "type": "string",
+            "title": "Activity Id",
+            "description": "Parent Garmin activity identifier"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Observed At",
+            "description": "UTC hourly bucket the reading was taken from"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude",
+            "description": "Latitude the weather was looked up for"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude",
+            "description": "Longitude the weather was looked up for"
+          },
+          "temperature_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature C",
+            "description": "Air temperature in degrees C"
+          },
+          "apparent_temperature_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apparent Temperature C",
+            "description": "Feels-like temperature in degrees C"
+          },
+          "relative_humidity_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relative Humidity Pct",
+            "description": "Relative humidity percent"
+          },
+          "precipitation_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precipitation Mm",
+            "description": "Total precipitation in millimeters"
+          },
+          "rain_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rain Mm",
+            "description": "Rainfall in millimeters"
+          },
+          "snowfall_cm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snowfall Cm",
+            "description": "Snowfall in centimeters"
+          },
+          "cloud_cover_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloud Cover Pct",
+            "description": "Total cloud cover percent"
+          },
+          "wind_speed_kmh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind Speed Kmh",
+            "description": "Wind speed in km/h"
+          },
+          "wind_gusts_kmh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind Gusts Kmh",
+            "description": "Wind gust speed in km/h"
+          },
+          "wind_direction_deg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind Direction Deg",
+            "description": "Wind direction in degrees"
+          },
+          "surface_pressure_hpa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface Pressure Hpa",
+            "description": "Surface pressure in hPa"
+          },
+          "weather_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather Code",
+            "description": "WMO weather interpretation code"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "Open-Meteo API the row came from: archive or forecast"
+          },
+          "is_provisional": {
+            "type": "boolean",
+            "title": "Is Provisional",
+            "description": "True when sourced from the forecast API pending ERA5 archive settlement"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "UTC timestamp when the row was inserted"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "UTC timestamp when the row was last updated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "activity_id",
+          "observed_at",
+          "latitude",
+          "longitude",
+          "source",
+          "is_provisional"
+        ],
+        "title": "GarminActivityWeather",
+        "description": "Open-Meteo weather conditions matched to an activity's start location/time."
+      },
+      "GarminActivityWeatherHourly": {
+        "properties": {
+          "activity_id": {
+            "type": "string",
+            "title": "Activity Id",
+            "description": "Parent Garmin activity identifier"
+          },
+          "hour_index": {
+            "type": "integer",
+            "title": "Hour Index",
+            "description": "Zero-based hour offset from the activity start"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Observed At",
+            "description": "UTC hourly bucket the reading was taken from"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude",
+            "description": "Latitude sampled from the nearest track point for this hour"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude",
+            "description": "Longitude sampled from the nearest track point for this hour"
+          },
+          "temperature_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature C",
+            "description": "Air temperature in degrees C"
+          },
+          "apparent_temperature_c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apparent Temperature C",
+            "description": "Feels-like temperature in degrees C"
+          },
+          "relative_humidity_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relative Humidity Pct",
+            "description": "Relative humidity percent"
+          },
+          "precipitation_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precipitation Mm",
+            "description": "Total precipitation in millimeters"
+          },
+          "rain_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rain Mm",
+            "description": "Rainfall in millimeters"
+          },
+          "snowfall_cm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snowfall Cm",
+            "description": "Snowfall in centimeters"
+          },
+          "cloud_cover_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cloud Cover Pct",
+            "description": "Total cloud cover percent"
+          },
+          "wind_speed_kmh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind Speed Kmh",
+            "description": "Wind speed in km/h"
+          },
+          "wind_gusts_kmh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind Gusts Kmh",
+            "description": "Wind gust speed in km/h"
+          },
+          "wind_direction_deg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wind Direction Deg",
+            "description": "Wind direction in degrees"
+          },
+          "surface_pressure_hpa": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface Pressure Hpa",
+            "description": "Surface pressure in hPa"
+          },
+          "weather_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather Code",
+            "description": "WMO weather interpretation code"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "Open-Meteo API the row came from: archive or forecast"
+          },
+          "is_provisional": {
+            "type": "boolean",
+            "title": "Is Provisional",
+            "description": "True when sourced from the forecast API pending ERA5 archive settlement"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "UTC timestamp when the row was inserted"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "UTC timestamp when the row was last updated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "activity_id",
+          "hour_index",
+          "observed_at",
+          "latitude",
+          "longitude",
+          "source",
+          "is_provisional"
+        ],
+        "title": "GarminActivityWeatherHourly",
+        "description": "Route-sampled, hour-by-hour Open-Meteo weather for an activity.\n\nUnlike GarminActivityWeather (a single \"conditions at the start\"\nsnapshot), this is one row per hour the activity spans, each sampled at\nthe GPS location the athlete was actually at during that hour."
+      },
       "GarminChartPoint": {
         "properties": {
           "timestamp": {
@@ -6541,6 +7179,179 @@
         ],
         "title": "GeocodedAddressSummary",
         "description": "Compact address summary embedded in track-point payloads."
+      },
+      "GeocodedPointAddress": {
+        "properties": {
+          "display_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Address",
+            "description": "Full formatted address label from Pelias"
+          },
+          "street": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Street",
+            "description": "Street name"
+          },
+          "housenumber": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Housenumber",
+            "description": "House or building number"
+          },
+          "neighbourhood": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Neighbourhood",
+            "description": "Neighbourhood name"
+          },
+          "locality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locality",
+            "description": "City or town"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region",
+            "description": "State or province"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country",
+            "description": "Country name"
+          },
+          "postalcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Postalcode",
+            "description": "Postal or ZIP code"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence",
+            "description": "Pelias confidence score (0-1)"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Geocoding status: success, no_coverage, error, pending"
+          },
+          "geocoded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geocoded At",
+            "description": "UTC timestamp when geocoding was performed"
+          },
+          "latitude": {
+            "type": "number",
+            "title": "Latitude",
+            "description": "Resolved 4-decimal cell latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude",
+            "description": "Resolved 4-decimal cell longitude"
+          },
+          "resolution_source": {
+            "type": "string",
+            "enum": [
+              "database",
+              "pelias"
+            ],
+            "title": "Resolution Source",
+            "description": "Whether the response came from the database cache or a Pelias fallback"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "latitude",
+          "longitude",
+          "resolution_source"
+        ],
+        "title": "GeocodedPointAddress",
+        "description": "Address resolved for a rounded GPS coordinate cell.",
+        "examples": [
+          {
+            "confidence": 0.95,
+            "country": "United States",
+            "display_address": "123 Main St, Hoboken, NJ 07030",
+            "geocoded_at": "2026-02-12T08:10:55+00:00",
+            "housenumber": "123",
+            "locality": "Hoboken",
+            "neighbourhood": "Downtown",
+            "postalcode": "07030",
+            "region": "New Jersey",
+            "status": "success",
+            "street": "Main St"
+          }
+        ]
       },
       "GeocodingSourceStatus": {
         "properties": {

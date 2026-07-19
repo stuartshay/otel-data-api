@@ -139,6 +139,32 @@ def _weather_row(activity_id: str = "20932993811", *, is_provisional: bool = Fal
     }
 
 
+def _weather_hourly_row(activity_id: str = "20932993811", hour_index: int = 0, *, is_provisional: bool = False) -> dict:
+    return {
+        "activity_id": activity_id,
+        "hour_index": hour_index,
+        "observed_at": "2026-03-08T20:00:00+00:00",
+        "latitude": 40.7937,
+        "longitude": -73.961,
+        "temperature_c": 18.4,
+        "apparent_temperature_c": 17.0,
+        "relative_humidity_pct": 55.0,
+        "precipitation_mm": 0.0,
+        "rain_mm": 0.0,
+        "snowfall_cm": 0.0,
+        "cloud_cover_pct": 20.0,
+        "wind_speed_kmh": 12.0,
+        "wind_gusts_kmh": 20.0,
+        "wind_direction_deg": 270.0,
+        "surface_pressure_hpa": 1013.0,
+        "weather_code": 1,
+        "source": "forecast" if is_provisional else "archive",
+        "is_provisional": is_provisional,
+        "created_at": "2026-03-09T03:00:00+00:00",
+        "updated_at": "2026-03-09T03:00:00+00:00",
+    }
+
+
 def _lap_row(activity_id: str = "20932993811", lap_index: int = 1) -> dict:
     return {
         "id": lap_index,
@@ -779,6 +805,50 @@ async def test_get_activity_weather_not_found(client: AsyncClient, mock_db):
     mock_db.fetchval.return_value = None
 
     response = await client.get("/api/v1/garmin/activities/nonexistent/weather")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Activity not found"}
+
+
+@pytest.mark.asyncio
+async def test_list_activity_weather_hourly_success(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = [
+        _weather_hourly_row(hour_index=0),
+        _weather_hourly_row(hour_index=1, is_provisional=True),
+    ]
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/weather-hourly")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["hour_index"] == 0
+    assert data[0]["source"] == "archive"
+    assert data[1]["hour_index"] == 1
+    assert data[1]["is_provisional"] is True
+
+    query = mock_db.fetch.await_args.args[0]
+    assert "public.garmin_activity_weather_hourly" in query
+    assert "ORDER BY hour_index ASC" in query
+
+
+@pytest.mark.asyncio
+async def test_list_activity_weather_hourly_empty_for_existing_activity(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = []
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/weather-hourly")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_list_activity_weather_hourly_not_found(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = None
+
+    response = await client.get("/api/v1/garmin/activities/nonexistent/weather-hourly")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Activity not found"}

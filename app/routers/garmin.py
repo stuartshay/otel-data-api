@@ -23,6 +23,7 @@ from app.models.garmin import (
     GarminActivityManualUpdate,
     GarminActivityTotal,
     GarminActivityWeather,
+    GarminActivityWeatherHourly,
     GarminChartPoint,
     GarminDateRange,
     GarminDeviceCount,
@@ -735,6 +736,41 @@ async def get_activity_weather(
     )
 
     return GarminActivityWeather(**dict(row)) if row else None
+
+
+@router.get(
+    "/activities/{activity_id}/weather-hourly",
+    responses={404: {"description": ACTIVITY_NOT_FOUND}},
+)
+async def list_activity_weather_hourly(
+    request: Request,
+    activity_id: Annotated[str, fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"])],
+) -> list[GarminActivityWeatherHourly]:
+    """Return route-sampled, hour-by-hour Open-Meteo weather for an activity.
+
+    Unlike ``/weather`` (a single "conditions at the start" snapshot), each
+    row here is sampled at the GPS location the athlete was actually at
+    during that hour. Returns an empty list (not 404) when the activity
+    exists but hasn't been hourly-backfilled yet.
+    """
+    db = request.app.state.db
+
+    exists = await db.fetchval(SQL_ACTIVITY_EXISTS, activity_id)
+    if not exists:
+        raise HTTPException(status_code=404, detail=ACTIVITY_NOT_FOUND)
+
+    rows = await db.fetch(
+        "SELECT activity_id, hour_index, observed_at, latitude, longitude, "
+        "temperature_c, apparent_temperature_c, relative_humidity_pct, "
+        "precipitation_mm, rain_mm, snowfall_cm, cloud_cover_pct, "
+        "wind_speed_kmh, wind_gusts_kmh, wind_direction_deg, surface_pressure_hpa, "
+        "weather_code, source, is_provisional, created_at, updated_at "
+        "FROM public.garmin_activity_weather_hourly WHERE activity_id = $1 "
+        "ORDER BY hour_index ASC",
+        activity_id,
+    )
+
+    return [GarminActivityWeatherHourly(**dict(row)) for row in rows]
 
 
 @router.get(

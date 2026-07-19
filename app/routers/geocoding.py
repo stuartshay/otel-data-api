@@ -28,6 +28,12 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/v1/geocoding", tags=["Geocoding"])
 internal_router = APIRouter(prefix="/internal/geocoding", tags=["Internal"])
 
+# Auth-protected endpoints raise these via require_auth -> get_current_user().
+AUTH_RESPONSES: dict = {
+    401: {"description": "Authentication required or token invalid"},
+    503: {"description": "Authentication service unavailable"},
+}
+
 PELIAS_REVERSE_PATH = "/v1/reverse"
 # Per-request cap on concurrent waypoint geocoding tasks (end-to-end:
 # neighbour lookup + Pelias call + upsert). Raised from 5 to 20 in #129
@@ -122,7 +128,7 @@ def _point_address_response(
     )
 
 
-@router.get("/reverse")
+@router.get("/reverse", responses=AUTH_RESPONSES)
 async def reverse_geocode_point(
     request: Request,
     latitude: Annotated[float, Query(ge=-90, le=90, description="Latitude in decimal degrees")],

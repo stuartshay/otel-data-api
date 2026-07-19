@@ -2951,6 +2951,12 @@
               }
             }
           },
+          "401": {
+            "description": "Authentication required or token invalid"
+          },
+          "503": {
+            "description": "Authentication service unavailable"
+          },
           "422": {
             "description": "Validation Error",
             "content": {

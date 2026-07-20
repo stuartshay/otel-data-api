@@ -21,6 +21,7 @@ from app.models.garmin import (
     GarminActivityLap,
     GarminActivityLapsGroup,
     GarminActivityManualUpdate,
+    GarminActivitySensor,
     GarminActivityTotal,
     GarminActivityWeather,
     GarminActivityWeatherHourly,
@@ -703,6 +704,34 @@ async def list_activity_laps(
     )
 
     return [GarminActivityLap(**dict(row)) for row in rows]
+
+
+@router.get(
+    "/activities/{activity_id}/sensors",
+    responses={404: {"description": ACTIVITY_NOT_FOUND}},
+)
+async def list_activity_sensors(
+    request: Request,
+    activity_id: Annotated[str, fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"])],
+) -> list[GarminActivitySensor]:
+    """Return the FIT device_info rows (head unit + paired sensors) for an activity."""
+    db = request.app.state.db
+
+    exists = await db.fetchval(SQL_ACTIVITY_EXISTS, activity_id)
+    if not exists:
+        raise HTTPException(status_code=404, detail=ACTIVITY_NOT_FOUND)
+
+    rows = await db.fetch(
+        "SELECT id, activity_id, device_index, is_primary, device_type, "
+        "manufacturer, garmin_product, product_name, serial_number, "
+        "software_version, hardware_version, battery_status, battery_voltage, "
+        "ant_network, source_type, created_at, updated_at "
+        "FROM public.garmin_activity_sensors WHERE activity_id = $1 "
+        "ORDER BY device_index ASC",
+        activity_id,
+    )
+
+    return [GarminActivitySensor(**dict(row)) for row in rows]
 
 
 @router.get(

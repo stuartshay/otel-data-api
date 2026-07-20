@@ -189,6 +189,28 @@ def _lap_row(activity_id: str = "20932993811", lap_index: int = 1) -> dict:
     }
 
 
+def _sensor_row(activity_id: str = "20932993811", device_index: int = 0) -> dict:
+    return {
+        "id": device_index + 1,
+        "activity_id": activity_id,
+        "device_index": device_index,
+        "is_primary": device_index == 0,
+        "device_type": "heart_rate" if device_index else None,
+        "manufacturer": "garmin",
+        "garmin_product": 4061 if device_index == 0 else None,
+        "product_name": "Edge 540 Solar" if device_index == 0 else None,
+        "serial_number": 3444454776 if device_index == 0 else 123456,
+        "software_version": "27.14" if device_index == 0 else None,
+        "hardware_version": None,
+        "battery_status": "low" if device_index else None,
+        "battery_voltage": 2.95 if device_index else None,
+        "ant_network": "antplus" if device_index else None,
+        "source_type": "antplus" if device_index else None,
+        "created_at": "2026-07-19T03:00:00+00:00",
+        "updated_at": "2026-07-19T03:00:00+00:00",
+    }
+
+
 @pytest.mark.asyncio
 async def test_list_activities_empty(client: AsyncClient, mock_db):
     mock_db.fetch.return_value = []
@@ -751,6 +773,51 @@ async def test_list_activity_laps_not_found(client: AsyncClient, mock_db):
     mock_db.fetchval.return_value = None
 
     response = await client.get("/api/v1/garmin/activities/nonexistent/laps")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Activity not found"}
+
+
+@pytest.mark.asyncio
+async def test_list_activity_sensors_success(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = [_sensor_row(device_index=0), _sensor_row(device_index=1)]
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/sensors")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["activity_id"] == "20932993811"
+    assert data[0]["device_index"] == 0
+    assert data[0]["is_primary"] is True
+    assert data[0]["product_name"] == "Edge 540 Solar"
+    assert data[1]["is_primary"] is False
+    assert data[1]["device_type"] == "heart_rate"
+    assert data[1]["battery_status"] == "low"
+    assert data[1]["battery_voltage"] == 2.95
+
+    query = mock_db.fetch.await_args.args[0]
+    assert "public.garmin_activity_sensors" in query
+    assert "ORDER BY device_index ASC" in query
+
+
+@pytest.mark.asyncio
+async def test_list_activity_sensors_empty_for_existing_activity(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = []
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/sensors")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_list_activity_sensors_not_found(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = None
+
+    response = await client.get("/api/v1/garmin/activities/nonexistent/sensors")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Activity not found"}

@@ -336,6 +336,32 @@ class GarminActivityLap(BaseModel):
     updated_at: datetime | None = Field(default=None, description="UTC timestamp when the row was last updated")
 
 
+class GarminActivitySensor(BaseModel):
+    """A FIT device_info record (head unit or paired sensor) for an activity."""
+
+    id: int = Field(description="Unique sensor row identifier")
+    activity_id: str = Field(description=DESC_PARENT_ACTIVITY_ID)
+    device_index: int = Field(description="FIT device_index: 0 for the head unit, 1+ for each paired sensor")
+    is_primary: bool = Field(description="True for the recording device (head unit / FIT creator record)")
+    device_type: str | None = Field(default=None, description="FIT antplus_device_type (e.g. heart_rate, bike_power)")
+    manufacturer: str | None = Field(default=None, description="Sensor manufacturer (e.g. garmin)")
+    garmin_product: int | None = Field(default=None, description="Raw Garmin product enum id from the FIT file")
+    product_name: str | None = Field(default=None, description="Friendly product name (e.g. Edge 540 Solar, HRM-Pro)")
+    serial_number: int | None = Field(default=None, description="Sensor serial number, when reported")
+    software_version: str | None = Field(default=None, description="Sensor firmware/software version")
+    hardware_version: int | None = Field(default=None, description="Sensor hardware revision")
+    battery_status: str | None = Field(
+        default=None, description="FIT battery_status: new, good, ok, low, critical, charging, unknown"
+    )
+    battery_voltage: float | None = Field(default=None, description="Sensor battery voltage")
+    ant_network: str | None = Field(default=None, description="ANT network the sensor was paired on")
+    source_type: str | None = Field(
+        default=None, description="Sensor connection type (ant, antplus, bluetooth_low_energy, ...)"
+    )
+    created_at: datetime | None = Field(default=None, description="UTC timestamp when the row was inserted")
+    updated_at: datetime | None = Field(default=None, description="UTC timestamp when the row was last updated")
+
+
 class GarminActivityWeather(BaseModel):
     """Open-Meteo weather conditions matched to an activity's start location/time."""
 

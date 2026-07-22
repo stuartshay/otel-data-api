@@ -50,6 +50,16 @@ ACTIVITY_NOT_FOUND = "Activity not found"
 SEGMENT_NOT_FOUND = "Segment not found"
 INVALID_SYNC_RESPONSE = "Invalid response from Garmin sync service"
 
+# A real traversal's GPS-measured distance normally lands within a few percent
+# of the segment's recorded distance (route choice/GPS noise). Below this
+# fraction it's not a real completion -- e.g. a loop segment's start and end
+# corridors sit at the same physical spot, so a brief stop or pass-by near the
+# trailhead alone satisfies the start->end crossing pair despite covering
+# almost none of the actual route. Chosen loosely (real completions cluster
+# much closer to 100%) so it only rejects clear non-traversals, not merely
+# short-cut variants.
+MIN_SEGMENT_DISTANCE_RATIO = 0.7
+
 # Auth-protected endpoints raise these via require_auth -> get_current_user().
 AUTH_RESPONSES: dict = {
     401: {"description": "Authentication required or token invalid"},
@@ -1010,6 +1020,7 @@ async def _fetch_segment_efforts(
     max_effort_seconds: int,
     limit: int,
     ref_bearing_deg: float | None = None,
+    min_distance_km: float | None = None,
 ) -> list[SegmentEffort]:
     """Match GPS track points to a start→end corridor and rank every qualifying lap.
 
@@ -1048,6 +1059,11 @@ async def _fetch_segment_efforts(
     start corridor on the segment's defining activity), traversals whose own
     direction differs by 90 degrees or more are discarded so a lap ridden
     backwards over the same loop doesn't count as a match.
+
+    When ``min_distance_km`` is given, traversals covering less than that are
+    discarded -- otherwise a loop segment (whose start and end corridors sit
+    at the same physical spot) counts a brief stop or pass-by near the
+    trailhead as a "completion" despite covering almost none of the route.
     """
     params: list[Any] = [start_lon, start_lat, end_lon, end_lat, tolerance_meters]
     idx = 6
@@ -1073,6 +1089,14 @@ async def _fetch_segment_efforts(
     max_effort_idx = idx
     params.append(max_effort_seconds)
     idx += 1
+
+    min_distance_clause = ""
+    if min_distance_km is not None:
+        min_distance_idx = idx
+        min_distance_clause = f" AND m.distance_km >= ${min_distance_idx}"
+        params.append(min_distance_km)
+        idx += 1
+
     limit_idx = idx
     params.append(limit)
     idx += 1
@@ -1207,7 +1231,7 @@ async def _fetch_segment_efforts(
                ROUND(m.avg_hr)::int AS avg_heart_rate, m.max_heart_rate
         FROM metrics m
         JOIN public.garmin_activities a ON a.activity_id = m.activity_id
-        WHERE m.elapsed_seconds <= ${max_effort_idx}
+        WHERE m.elapsed_seconds <= ${max_effort_idx}{min_distance_clause}
         ORDER BY m.elapsed_seconds ASC
         LIMIT ${limit_idx}
     """
@@ -1617,7 +1641,8 @@ async def get_segment_efforts(
     db = request.app.state.db
     seg = await db.fetchrow(
         "SELECT sport, start_latitude, start_longitude, end_latitude, end_longitude, "
-        "match_tolerance_meters::double precision AS match_tolerance_meters, source_activity_id "
+        "match_tolerance_meters::double precision AS match_tolerance_meters, source_activity_id, "
+        "distance_meters::double precision AS distance_meters "
         "FROM public.garmin_segments WHERE id = $1 AND garmin_sync_status IS DISTINCT FROM 'delete_pending'",
         segment_id,
     )
@@ -1625,6 +1650,7 @@ async def get_segment_efforts(
         raise HTTPException(status_code=404, detail=SEGMENT_NOT_FOUND)
 
     tolerance = float(seg["match_tolerance_meters"])
+    min_distance_km = seg["distance_meters"] / 1000 * MIN_SEGMENT_DISTANCE_RATIO if seg["distance_meters"] else None
     ref_bearing_deg = await _segment_reference_bearing_deg(
         db,
         source_activity_id=seg["source_activity_id"],
@@ -1645,6 +1671,7 @@ async def get_segment_efforts(
         max_effort_seconds=max_effort_seconds,
         limit=limit,
         ref_bearing_deg=ref_bearing_deg,
+        min_distance_km=min_distance_km,
     )
     return SegmentEffortsResponse(
         segment=SegmentDefinition(

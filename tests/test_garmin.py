@@ -2020,6 +2020,7 @@ async def test_get_segment_efforts_uses_saved_coords(client: AsyncClient, mock_d
         "end_longitude": -73.96422816,
         "match_tolerance_meters": 40.0,
         "source_activity_id": None,
+        "distance_meters": None,
     }
     mock_db.fetch.return_value = [
         _segment_effort_row("a-fast", 79.0),
@@ -2039,6 +2040,56 @@ async def test_get_segment_efforts_uses_saved_coords(client: AsyncClient, mock_d
 
 
 @pytest.mark.asyncio
+async def test_get_segment_efforts_applies_min_distance_from_saved_segment(client: AsyncClient, mock_db):
+    """A loop segment's start and end corridors sit at the same physical spot,
+    so a brief stop or pass-by near the trailhead alone satisfies the crossing
+    pair despite covering almost none of the route. Filter those out using
+    the segment's own recorded distance."""
+    mock_db.fetchrow.return_value = {
+        "sport": "cycling",
+        "start_latitude": 40.79366846,
+        "start_longitude": -73.96104321,
+        "end_latitude": 40.79002409,
+        "end_longitude": -73.96422816,
+        "match_tolerance_meters": 40.0,
+        "source_activity_id": None,
+        "distance_meters": 6070.0,
+    }
+    mock_db.fetch.return_value = [_segment_effort_row("a-real-lap", 900.0)]
+
+    response = await client.get("/api/v1/garmin/segments/5/efforts")
+
+    assert response.status_code == 200
+    efforts_query, *efforts_params = mock_db.fetch.await_args.args
+    assert "m.distance_km >= " in efforts_query
+    # 6070m * 0.7 (MIN_SEGMENT_DISTANCE_RATIO) = 4.249 km
+    assert efforts_params[-2] == pytest.approx(4.249)
+
+
+@pytest.mark.asyncio
+async def test_get_segment_efforts_skips_min_distance_without_recorded_distance(client: AsyncClient, mock_db):
+    """Segments saved before distance_meters was recorded (or without a
+    resolvable route) must not have every effort rejected outright."""
+    mock_db.fetchrow.return_value = {
+        "sport": "cycling",
+        "start_latitude": 40.79366846,
+        "start_longitude": -73.96104321,
+        "end_latitude": 40.79002409,
+        "end_longitude": -73.96422816,
+        "match_tolerance_meters": 40.0,
+        "source_activity_id": None,
+        "distance_meters": None,
+    }
+    mock_db.fetch.return_value = [_segment_effort_row("a-real-lap", 900.0)]
+
+    response = await client.get("/api/v1/garmin/segments/5/efforts")
+
+    assert response.status_code == 200
+    efforts_query, *_efforts_params = mock_db.fetch.await_args.args
+    assert "m.distance_km >= " not in efforts_query
+
+
+@pytest.mark.asyncio
 async def test_get_segment_efforts_rejects_reverse_direction(client: AsyncClient, mock_db):
     """Loop segments (start ~= end) must reject laps ridden the opposite way.
 
@@ -2055,6 +2106,7 @@ async def test_get_segment_efforts_rejects_reverse_direction(client: AsyncClient
             "end_longitude": -74.03477034531534,
             "match_tolerance_meters": 35.0,
             "source_activity_id": "23541736805",
+            "distance_meters": None,
         },
         {"bearing_deg": 197.5},
     ]
@@ -2082,6 +2134,7 @@ async def test_get_segment_efforts_skips_bearing_lookup_without_source_activity(
         "end_longitude": -73.96422816,
         "match_tolerance_meters": 40.0,
         "source_activity_id": None,
+        "distance_meters": None,
     }
     mock_db.fetch.return_value = []
 

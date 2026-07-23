@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
 import fastapi
@@ -35,6 +35,8 @@ from app.models.garmin import (
     GarminTrackPoint,
     SegmentDefinition,
     SegmentEffort,
+    SegmentEffortSeriesBin,
+    SegmentEffortSeriesResponse,
     SegmentEffortsResponse,
     SportInfo,
 )
@@ -1683,4 +1685,105 @@ async def get_segment_efforts(
         ),
         total=len(items),
         items=items,
+    )
+
+
+def _aware_utc(value: datetime) -> datetime:
+    """Normalize a datetime to timezone-aware UTC.
+
+    garmin_track_points.timestamp is TIMESTAMPTZ in the live database, and
+    asyncpg interprets *naive* datetimes against the server session timezone,
+    silently shifting the query window. Clients may echo effort boundaries
+    with or without a Z suffix; naive values are UTC by convention.
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+SEGMENT_EFFORT_SERIES_SQL = """
+WITH pts AS (
+    SELECT distance_from_start_km, speed_kmh, heart_rate
+    FROM public.garmin_track_points
+    WHERE activity_id = $1
+      AND timestamp BETWEEN $2 AND $3
+      AND distance_from_start_km IS NOT NULL
+),
+bounds AS (
+    SELECT MIN(distance_from_start_km) AS d0,
+           MAX(distance_from_start_km) AS d1
+    FROM pts
+),
+binned AS (
+    SELECT LEAST(GREATEST(WIDTH_BUCKET(p.distance_from_start_km, b.d0, b.d1, $4), 1), $4) AS bucket,
+           AVG(p.speed_kmh) AS speed_kmh,
+           AVG(p.heart_rate) FILTER (WHERE p.heart_rate > 0) AS avg_hr
+    FROM pts p CROSS JOIN bounds b
+    WHERE b.d1 > b.d0
+    GROUP BY 1
+)
+SELECT gs.i AS index,
+       (gs.i + 0.5) / $4::double precision AS fraction,
+       bn.speed_kmh::double precision AS speed_kmh,
+       ROUND(bn.avg_hr)::int AS heart_rate
+FROM GENERATE_SERIES(0, $4 - 1) AS gs (i)
+LEFT JOIN binned bn ON bn.bucket = gs.i + 1
+ORDER BY gs.i
+"""
+
+
+@router.get(
+    "/segments/{segment_id}/effort-series",
+    responses={404: {"description": SEGMENT_NOT_FOUND}},
+)
+async def get_segment_effort_series(
+    request: Request,
+    segment_id: Annotated[int, fastapi.Path(description=DESC_SAVED_SEGMENT_ID)],
+    activity_id: Annotated[str, Query(description=DESC_ACTIVITY_ID)],
+    effort_start: Annotated[
+        datetime,
+        Query(description="Effort start timestamp, exactly as returned by the efforts endpoint"),
+    ],
+    effort_end: Annotated[
+        datetime,
+        Query(description="Effort end timestamp, exactly as returned by the efforts endpoint"),
+    ],
+    bins: Annotated[int, Query(ge=10, le=400, description="Number of distance bins in the series")] = 100,
+) -> SegmentEffortSeriesResponse:
+    """Return one effort's speed/HR series binned by distance along the segment.
+
+    Bins are normalized to the effort's own traversal; each fraction is the
+    bin midpoint in the open interval between the start and end corridors.
+    Series from different activities are therefore directly comparable at the
+    same fraction despite GPS odometer drift.
+    The effort window is trusted client input from the efforts endpoint and is
+    returned normalized to UTC; an arbitrary window merely aggregates the
+    caller's own read-only track data.
+    """
+    start = _aware_utc(effort_start)
+    end = _aware_utc(effort_end)
+    if end <= start:
+        raise HTTPException(status_code=422, detail="effort_end must be after effort_start")
+
+    db = request.app.state.db
+    seg_exists = await db.fetchval(
+        "SELECT 1 FROM public.garmin_segments WHERE id = $1 AND garmin_sync_status IS DISTINCT FROM 'delete_pending'",
+        segment_id,
+    )
+    if not seg_exists:
+        raise HTTPException(status_code=404, detail=SEGMENT_NOT_FOUND)
+
+    rows = await db.fetch(
+        SEGMENT_EFFORT_SERIES_SQL,
+        activity_id,
+        start,
+        end,
+        bins,
+    )
+    return SegmentEffortSeriesResponse(
+        activity_id=activity_id,
+        effort_start=start,
+        effort_end=end,
+        bin_count=bins,
+        bins=[SegmentEffortSeriesBin(**dict(row)) for row in rows],
     )

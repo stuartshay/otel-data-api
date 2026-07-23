@@ -639,6 +639,29 @@ class SegmentEffortsResponse(BaseModel):
     items: list[SegmentEffort] = Field(description="Efforts ordered fastest-first")
 
 
+class SegmentEffortSeriesBin(BaseModel):
+    """One distance bin of an effort's speed/heart-rate series along a segment."""
+
+    index: int = Field(description="0-based bin index from segment start")
+    fraction: float = Field(description="Bin midpoint strictly within (0, 1) of the effort's traversal distance")
+    speed_kmh: float | None = Field(default=None, description="Average speed within the bin in km/h")
+    heart_rate: int | None = Field(default=None, description="Average heart rate within the bin in bpm")
+
+
+class SegmentEffortSeriesResponse(BaseModel):
+    """A single effort's speed/HR series, binned by normalized distance along the segment.
+
+    ``bins`` always contains exactly ``bin_count`` entries ordered by index;
+    bins with no samples (GPS gaps, degenerate traversals) carry null metrics.
+    """
+
+    activity_id: str = Field(description="Garmin activity identifier")
+    effort_start: datetime = Field(description="UTC timestamp entering the segment start corridor")
+    effort_end: datetime = Field(description="UTC timestamp reaching the segment end corridor")
+    bin_count: int = Field(description="Number of distance bins in the series")
+    bins: list[SegmentEffortSeriesBin] = Field(description="Distance-ordered bins spanning the traversal")
+
+
 class GarminSegment(BaseModel):
     """A saved named segment (path) for cross-activity effort comparison."""
 

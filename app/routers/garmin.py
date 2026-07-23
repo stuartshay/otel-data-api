@@ -1752,12 +1752,13 @@ async def get_segment_effort_series(
 ) -> SegmentEffortSeriesResponse:
     """Return one effort's speed/HR series binned by distance along the segment.
 
-    Bins are normalized to the effort's own traversal (fraction 0 = start
-    corridor, 1 = end corridor), so series from different activities are
-    directly comparable at the same fraction despite GPS odometer drift.
-    The effort window is trusted client input echoed from the efforts
-    endpoint; an arbitrary window merely aggregates the caller's own
-    read-only track data.
+    Bins are normalized to the effort's own traversal; each fraction is the
+    bin midpoint in the open interval between the start and end corridors.
+    Series from different activities are therefore directly comparable at the
+    same fraction despite GPS odometer drift.
+    The effort window is trusted client input from the efforts endpoint and is
+    returned normalized to UTC; an arbitrary window merely aggregates the
+    caller's own read-only track data.
     """
     start = _aware_utc(effort_start)
     end = _aware_utc(effort_end)
@@ -1781,8 +1782,8 @@ async def get_segment_effort_series(
     )
     return SegmentEffortSeriesResponse(
         activity_id=activity_id,
-        effort_start=effort_start,
-        effort_end=effort_end,
+        effort_start=start,
+        effort_end=end,
         bin_count=bins,
         bins=[SegmentEffortSeriesBin(**dict(row)) for row in rows],
     )

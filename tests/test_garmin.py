@@ -2170,11 +2170,10 @@ def _effort_series_bin_row(index: int, bins: int = 100, speed: float | None = 18
 @pytest.mark.asyncio
 async def test_effort_series_returns_gap_filled_bins(client: AsyncClient, mock_db):
     mock_db.fetchval.return_value = 1
-    mock_db.fetch.return_value = [
-        _effort_series_bin_row(0),
-        _effort_series_bin_row(1, speed=None, hr=None),  # GPS gap bin survives as nulls
-        _effort_series_bin_row(2, speed=19.1, hr=140),
-    ]
+    rows = [_effort_series_bin_row(index) for index in range(100)]
+    rows[1] = _effort_series_bin_row(1, speed=None, hr=None)  # GPS gap bin survives as nulls
+    rows[2] = _effort_series_bin_row(2, speed=19.1, hr=140)
+    mock_db.fetch.return_value = rows
 
     response = await client.get(
         "/api/v1/garmin/segments/5/effort-series"
@@ -2188,7 +2187,10 @@ async def test_effort_series_returns_gap_filled_bins(client: AsyncClient, mock_d
     body = response.json()
     assert body["activity_id"] == "20932993811"
     assert body["bin_count"] == 100
-    assert [b["index"] for b in body["bins"]] == [0, 1, 2]
+    assert len(body["bins"]) == body["bin_count"]
+    assert [b["index"] for b in body["bins"]] == list(range(100))
+    assert body["bins"][0]["fraction"] == 0.005
+    assert body["bins"][-1]["fraction"] == 0.995
     assert body["bins"][1]["speed_kmh"] is None
     assert body["bins"][1]["heart_rate"] is None
     assert body["bins"][2]["heart_rate"] == 140
@@ -2224,6 +2226,9 @@ async def test_effort_series_normalizes_timestamps_to_aware_utc(client: AsyncCli
     )
 
     assert response.status_code == 200
+    body = response.json()
+    assert body["effort_start"] == "2026-07-05T10:30:00Z"
+    assert body["effort_end"] == "2026-07-05T10:32:00Z"
     _, _, bound_start, bound_end, _ = mock_db.fetch.await_args.args
     assert bound_start == datetime(2026, 7, 5, 10, 30, 0, tzinfo=UTC)
     assert bound_end == datetime(2026, 7, 5, 10, 32, 0, tzinfo=UTC)

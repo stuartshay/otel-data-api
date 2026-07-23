@@ -23,6 +23,7 @@ async def postgres_connection():
     database_url = os.getenv("TEST_DATABASE_URL")
     if not database_url:
         pytest.skip("TEST_DATABASE_URL is not configured")
+    assert database_url is not None  # narrows for type checkers; skip() above never returns
     if "test" not in database_url.rsplit("/", 1)[-1].lower():
         pytest.fail(
             "TEST_DATABASE_URL's database name must contain 'test' as a guard "

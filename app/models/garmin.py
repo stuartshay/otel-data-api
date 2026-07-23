@@ -643,7 +643,7 @@ class SegmentEffortSeriesBin(BaseModel):
     """One distance bin of an effort's speed/heart-rate series along a segment."""
 
     index: int = Field(description="0-based bin index from segment start")
-    fraction: float = Field(description="Bin midpoint as a 0..1 fraction of the effort's traversal distance")
+    fraction: float = Field(description="Bin midpoint strictly within (0, 1) of the effort's traversal distance")
     speed_kmh: float | None = Field(default=None, description="Average speed within the bin in km/h")
     heart_rate: int | None = Field(default=None, description="Average heart rate within the bin in bpm")
 

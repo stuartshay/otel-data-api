@@ -11,10 +11,23 @@ from app.routers.garmin import SEGMENT_EFFORT_SERIES_BATCH_SQL, SEGMENT_EFFORT_S
 
 @pytest.fixture()
 async def postgres_connection():
-    """Connect only to the disposable PostgreSQL instance explicitly provided for tests."""
+    """Connect to the PostgreSQL instance named by TEST_DATABASE_URL.
+
+    CI points this at an ephemeral `postgres:18-alpine` service container
+    that only exists for the job's lifetime (see .github/workflows/lint.yml).
+    Locally, TEST_DATABASE_URL is whatever the caller sets it to -- this
+    fixture only guards against the database name not looking like a test
+    database, since it creates a session-local temp table there. Point it at
+    a real database's connection string at your own risk.
+    """
     database_url = os.getenv("TEST_DATABASE_URL")
     if not database_url:
         pytest.skip("TEST_DATABASE_URL is not configured")
+    if "test" not in database_url.rsplit("/", 1)[-1].lower():
+        pytest.fail(
+            "TEST_DATABASE_URL's database name must contain 'test' as a guard "
+            "against accidentally pointing this at a real database"
+        )
 
     connection = await asyncpg.connect(database_url)
     try:

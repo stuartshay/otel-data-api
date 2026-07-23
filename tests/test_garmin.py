@@ -1,7 +1,7 @@
 """Tests for Garmin endpoints."""
 
 import dataclasses
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import fastapi
 import httpx
@@ -2156,3 +2156,137 @@ async def test_get_segment_efforts_not_found(client: AsyncClient, mock_db):
     response = await client.get("/api/v1/garmin/segments/999/efforts")
 
     assert response.status_code == 404
+
+
+def _effort_series_bin_row(index: int, bins: int = 100, speed: float | None = 18.4, hr: int | None = 132) -> dict:
+    return {
+        "index": index,
+        "fraction": (index + 0.5) / bins,
+        "speed_kmh": speed,
+        "heart_rate": hr,
+    }
+
+
+@pytest.mark.asyncio
+async def test_effort_series_returns_gap_filled_bins(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = [
+        _effort_series_bin_row(0),
+        _effort_series_bin_row(1, speed=None, hr=None),  # GPS gap bin survives as nulls
+        _effort_series_bin_row(2, speed=19.1, hr=140),
+    ]
+
+    response = await client.get(
+        "/api/v1/garmin/segments/5/effort-series"
+        "?activity_id=20932993811"
+        "&effort_start=2026-07-05T10:30:00"
+        "&effort_end=2026-07-05T10:32:00"
+        "&bins=100"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["activity_id"] == "20932993811"
+    assert body["bin_count"] == 100
+    assert [b["index"] for b in body["bins"]] == [0, 1, 2]
+    assert body["bins"][1]["speed_kmh"] is None
+    assert body["bins"][1]["heart_rate"] is None
+    assert body["bins"][2]["heart_rate"] == 140
+
+    series_query, *series_params = mock_db.fetch.await_args.args
+    assert "WIDTH_BUCKET" in series_query
+    assert "GENERATE_SERIES" in series_query
+    assert series_params == [
+        "20932993811",
+        datetime(2026, 7, 5, 10, 30, 0, tzinfo=UTC),
+        datetime(2026, 7, 5, 10, 32, 0, tzinfo=UTC),
+        100,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_effort_series_normalizes_timestamps_to_aware_utc(client: AsyncClient, mock_db):
+    """Effort boundaries must bind as timezone-aware UTC datetimes.
+
+    garmin_track_points.timestamp is TIMESTAMPTZ in the live database, and
+    asyncpg interprets naive datetimes against the server session timezone,
+    silently shifting the window. Naive inputs are UTC by convention;
+    offset-bearing inputs are converted.
+    """
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = []
+
+    response = await client.get(
+        "/api/v1/garmin/segments/5/effort-series"
+        "?activity_id=20932993811"
+        "&effort_start=2026-07-05T10:30:00"
+        "&effort_end=2026-07-05T06:32:00-04:00"
+    )
+
+    assert response.status_code == 200
+    _, _, bound_start, bound_end, _ = mock_db.fetch.await_args.args
+    assert bound_start == datetime(2026, 7, 5, 10, 30, 0, tzinfo=UTC)
+    assert bound_end == datetime(2026, 7, 5, 10, 32, 0, tzinfo=UTC)
+    assert bound_end.utcoffset() == timedelta(0)
+
+
+@pytest.mark.asyncio
+async def test_effort_series_distinguishes_laps_by_effort_start(client: AsyncClient, mock_db):
+    """Two efforts from one activity (loop laps) must produce distinct queries."""
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = []
+
+    for start, end in (
+        ("2026-07-05T10:30:00", "2026-07-05T10:32:00"),
+        ("2026-07-05T11:00:00", "2026-07-05T11:02:30"),
+    ):
+        response = await client.get(
+            f"/api/v1/garmin/segments/5/effort-series?activity_id=multi-lap-ride&effort_start={start}&effort_end={end}"
+        )
+        assert response.status_code == 200
+
+    first_args = mock_db.fetch.await_args_list[0].args
+    second_args = mock_db.fetch.await_args_list[1].args
+    assert first_args[1] == second_args[1] == "multi-lap-ride"
+    assert first_args[2] != second_args[2]
+    assert first_args[3] != second_args[3]
+
+
+@pytest.mark.asyncio
+async def test_effort_series_segment_not_found(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = None
+
+    response = await client.get(
+        "/api/v1/garmin/segments/999/effort-series"
+        "?activity_id=20932993811"
+        "&effort_start=2026-07-05T10:30:00"
+        "&effort_end=2026-07-05T10:32:00"
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_effort_series_rejects_invalid_windows_and_bins(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 1
+
+    reversed_window = await client.get(
+        "/api/v1/garmin/segments/5/effort-series"
+        "?activity_id=20932993811"
+        "&effort_start=2026-07-05T10:32:00"
+        "&effort_end=2026-07-05T10:30:00"
+    )
+    assert reversed_window.status_code == 422
+
+    bins_too_large = await client.get(
+        "/api/v1/garmin/segments/5/effort-series"
+        "?activity_id=20932993811"
+        "&effort_start=2026-07-05T10:30:00"
+        "&effort_end=2026-07-05T10:32:00&bins=1000"
+    )
+    assert bins_too_large.status_code == 422
+
+    missing_activity = await client.get(
+        "/api/v1/garmin/segments/5/effort-series?effort_start=2026-07-05T10:30:00&effort_end=2026-07-05T10:32:00"
+    )
+    assert missing_activity.status_code == 422

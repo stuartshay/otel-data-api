@@ -35,6 +35,8 @@ from app.models.garmin import (
     GarminTrackPoint,
     SegmentDefinition,
     SegmentEffort,
+    SegmentEffortSeriesBatchRequest,
+    SegmentEffortSeriesBatchResponse,
     SegmentEffortSeriesBin,
     SegmentEffortSeriesResponse,
     SegmentEffortsResponse,
@@ -1732,6 +1734,61 @@ ORDER BY gs.i
 """
 
 
+SEGMENT_EFFORT_SERIES_BATCH_SQL = """
+WITH requested AS (
+    SELECT ordinal - 1 AS request_index,
+           activity_id,
+           effort_start,
+           effort_end
+    FROM UNNEST($1::text[], $2::timestamptz[], $3::timestamptz[])
+         WITH ORDINALITY AS r (activity_id, effort_start, effort_end, ordinal)
+),
+pts AS (
+    SELECT r.request_index,
+           p.distance_from_start_km,
+           p.speed_kmh,
+           p.heart_rate
+    FROM requested r
+    LEFT JOIN public.garmin_track_points p
+      ON p.activity_id = r.activity_id
+     AND p.timestamp BETWEEN r.effort_start AND r.effort_end
+     AND p.distance_from_start_km IS NOT NULL
+),
+bounds AS (
+    SELECT request_index,
+           MIN(distance_from_start_km) AS d0,
+           MAX(distance_from_start_km) AS d1
+    FROM pts
+    GROUP BY request_index
+),
+binned AS (
+    SELECT p.request_index,
+           LEAST(GREATEST(WIDTH_BUCKET(p.distance_from_start_km, b.d0, b.d1, $4), 1), $4) AS bucket,
+           AVG(p.speed_kmh) AS speed_kmh,
+           AVG(p.heart_rate) FILTER (WHERE p.heart_rate > 0) AS avg_hr
+    FROM pts p
+    JOIN bounds b USING (request_index)
+    WHERE b.d1 > b.d0
+    GROUP BY p.request_index, 2
+),
+grid AS (
+    SELECT r.request_index, gs.i
+    FROM requested r
+    CROSS JOIN GENERATE_SERIES(0, $4 - 1) AS gs (i)
+)
+SELECT g.request_index,
+       g.i AS index,
+       (g.i + 0.5) / $4::double precision AS fraction,
+       bn.speed_kmh::double precision AS speed_kmh,
+       ROUND(bn.avg_hr)::int AS heart_rate
+FROM grid g
+LEFT JOIN binned bn
+  ON bn.request_index = g.request_index
+ AND bn.bucket = g.i + 1
+ORDER BY g.request_index, g.i
+"""
+
+
 @router.get(
     "/segments/{segment_id}/effort-series",
     responses={404: {"description": SEGMENT_NOT_FOUND}},
@@ -1786,4 +1843,60 @@ async def get_segment_effort_series(
         effort_end=end,
         bin_count=bins,
         bins=[SegmentEffortSeriesBin(**dict(row)) for row in rows],
+    )
+
+
+@router.post(
+    "/segments/{segment_id}/effort-series/batch",
+    responses={404: {"description": SEGMENT_NOT_FOUND}},
+)
+async def get_segment_effort_series_batch(
+    request: Request,
+    segment_id: Annotated[int, fastapi.Path(description=DESC_SAVED_SEGMENT_ID)],
+    body: SegmentEffortSeriesBatchRequest,
+) -> SegmentEffortSeriesBatchResponse:
+    """Return multiple effort series in request order using one database query."""
+    normalized: list[tuple[str, datetime, datetime]] = []
+    for index, effort in enumerate(body.efforts):
+        start = _aware_utc(effort.effort_start)
+        end = _aware_utc(effort.effort_end)
+        if end <= start:
+            raise HTTPException(
+                status_code=422,
+                detail=f"efforts[{index}].effort_end must be after effort_start",
+            )
+        normalized.append((effort.activity_id, start, end))
+
+    db = request.app.state.db
+    seg_exists = await db.fetchval(
+        "SELECT 1 FROM public.garmin_segments WHERE id = $1 AND garmin_sync_status IS DISTINCT FROM 'delete_pending'",
+        segment_id,
+    )
+    if not seg_exists:
+        raise HTTPException(status_code=404, detail=SEGMENT_NOT_FOUND)
+
+    rows = await db.fetch(
+        SEGMENT_EFFORT_SERIES_BATCH_SQL,
+        [activity_id for activity_id, _, _ in normalized],
+        [start for _, start, _ in normalized],
+        [end for _, _, end in normalized],
+        body.bins,
+    )
+    bins_by_request: list[list[SegmentEffortSeriesBin]] = [[] for _ in normalized]
+    for row in rows:
+        values = dict(row)
+        request_index = values.pop("request_index")
+        bins_by_request[request_index].append(SegmentEffortSeriesBin(**values))
+
+    return SegmentEffortSeriesBatchResponse(
+        items=[
+            SegmentEffortSeriesResponse(
+                activity_id=activity_id,
+                effort_start=start,
+                effort_end=end,
+                bin_count=body.bins,
+                bins=bins_by_request[index],
+            )
+            for index, (activity_id, start, end) in enumerate(normalized)
+        ]
     )

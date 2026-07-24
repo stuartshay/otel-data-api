@@ -8,10 +8,12 @@ import httpx
 import pytest
 import structlog
 from httpx import ASGITransport, AsyncClient
+from pydantic import ValidationError as PydanticValidationError
 
 from app import create_app
 from app.auth import require_auth
 from app.config import Config
+from app.models.garmin import SegmentEffortSeriesBin, SegmentEffortSeriesResponse
 
 
 def _activity_row(activity_id: str = "20932993811") -> dict:
@@ -2167,6 +2169,13 @@ def _effort_series_bin_row(index: int, bins: int = 100, speed: float | None = 18
     }
 
 
+def _effort_series_batch_row(request_index: int, index: int, bins: int = 10) -> dict:
+    return {
+        "request_index": request_index,
+        **_effort_series_bin_row(index, bins=bins),
+    }
+
+
 @pytest.mark.asyncio
 async def test_effort_series_returns_gap_filled_bins(client: AsyncClient, mock_db):
     mock_db.fetchval.return_value = 1
@@ -2295,3 +2304,144 @@ async def test_effort_series_rejects_invalid_windows_and_bins(client: AsyncClien
         "/api/v1/garmin/segments/5/effort-series?effort_start=2026-07-05T10:30:00&effort_end=2026-07-05T10:32:00"
     )
     assert missing_activity.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("index", -1),
+        ("fraction", 0),
+        ("fraction", 1),
+        ("speed_kmh", -0.1),
+        ("heart_rate", 0),
+    ],
+)
+def test_effort_series_bin_rejects_values_outside_contract(field: str, value: int | float):
+    values = _effort_series_bin_row(0)
+    values[field] = value
+
+    with pytest.raises(PydanticValidationError):
+        SegmentEffortSeriesBin(**values)
+
+
+@pytest.mark.parametrize("bin_count", [9, 401])
+def test_effort_series_response_rejects_bin_count_outside_contract(bin_count: int):
+    with pytest.raises(PydanticValidationError):
+        SegmentEffortSeriesResponse(
+            activity_id="activity-1",
+            effort_start=datetime(2026, 7, 5, 10, 30, tzinfo=UTC),
+            effort_end=datetime(2026, 7, 5, 10, 32, tzinfo=UTC),
+            bin_count=bin_count,
+            bins=[],
+        )
+
+
+@pytest.mark.asyncio
+async def test_effort_series_batch_returns_request_order_with_one_query(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = [
+        _effort_series_batch_row(request_index, index) for request_index in range(2) for index in range(10)
+    ]
+
+    response = await client.post(
+        "/api/v1/garmin/segments/5/effort-series/batch",
+        json={
+            "bins": 10,
+            "efforts": [
+                {
+                    "activity_id": "activity-a",
+                    "effort_start": "2026-07-05T10:30:00",
+                    "effort_end": "2026-07-05T10:32:00",
+                },
+                {
+                    "activity_id": "activity-b",
+                    "effort_start": "2026-07-05T07:00:00-04:00",
+                    "effort_end": "2026-07-05T07:03:00-04:00",
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert [item["activity_id"] for item in items] == ["activity-a", "activity-b"]
+    assert [len(item["bins"]) for item in items] == [10, 10]
+    assert items[0]["effort_start"] == "2026-07-05T10:30:00Z"
+    assert items[1]["effort_start"] == "2026-07-05T11:00:00Z"
+
+    series_query, activity_ids, starts, ends, bins = mock_db.fetch.await_args.args
+    assert "UNNEST" in series_query
+    assert "GENERATE_SERIES" in series_query
+    assert activity_ids == ["activity-a", "activity-b"]
+    assert starts == [
+        datetime(2026, 7, 5, 10, 30, tzinfo=UTC),
+        datetime(2026, 7, 5, 11, 0, tzinfo=UTC),
+    ]
+    assert ends == [
+        datetime(2026, 7, 5, 10, 32, tzinfo=UTC),
+        datetime(2026, 7, 5, 11, 3, tzinfo=UTC),
+    ]
+    assert bins == 10
+    assert mock_db.fetch.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_effort_series_batch_rejects_invalid_requests(client: AsyncClient, mock_db):
+    empty = await client.post(
+        "/api/v1/garmin/segments/5/effort-series/batch",
+        json={"efforts": []},
+    )
+    assert empty.status_code == 422
+
+    too_many = await client.post(
+        "/api/v1/garmin/segments/5/effort-series/batch",
+        json={
+            "efforts": [
+                {
+                    "activity_id": f"activity-{index}",
+                    "effort_start": "2026-07-05T10:30:00Z",
+                    "effort_end": "2026-07-05T10:32:00Z",
+                }
+                for index in range(51)
+            ]
+        },
+    )
+    assert too_many.status_code == 422
+
+    reversed_window = await client.post(
+        "/api/v1/garmin/segments/5/effort-series/batch",
+        json={
+            "efforts": [
+                {
+                    "activity_id": "activity-a",
+                    "effort_start": "2026-07-05T10:32:00Z",
+                    "effort_end": "2026-07-05T10:30:00Z",
+                }
+            ]
+        },
+    )
+    assert reversed_window.status_code == 422
+    assert reversed_window.json()["detail"] == "efforts[0].effort_end must be after effort_start"
+    mock_db.fetchval.assert_not_awaited()
+    mock_db.fetch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_effort_series_batch_segment_not_found(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = None
+
+    response = await client.post(
+        "/api/v1/garmin/segments/999/effort-series/batch",
+        json={
+            "efforts": [
+                {
+                    "activity_id": "activity-a",
+                    "effort_start": "2026-07-05T10:30:00Z",
+                    "effort_end": "2026-07-05T10:32:00Z",
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 404
+    mock_db.fetch.assert_not_awaited()

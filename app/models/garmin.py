@@ -642,10 +642,14 @@ class SegmentEffortsResponse(BaseModel):
 class SegmentEffortSeriesBin(BaseModel):
     """One distance bin of an effort's speed/heart-rate series along a segment."""
 
-    index: int = Field(description="0-based bin index from segment start")
-    fraction: float = Field(description="Bin midpoint strictly within (0, 1) of the effort's traversal distance")
-    speed_kmh: float | None = Field(default=None, description="Average speed within the bin in km/h")
-    heart_rate: int | None = Field(default=None, description="Average heart rate within the bin in bpm")
+    index: int = Field(ge=0, description="0-based bin index from segment start")
+    fraction: float = Field(
+        gt=0,
+        lt=1,
+        description="Bin midpoint strictly within (0, 1) of the effort's traversal distance",
+    )
+    speed_kmh: float | None = Field(default=None, ge=0, description="Average speed within the bin in km/h")
+    heart_rate: int | None = Field(default=None, ge=1, description="Average heart rate within the bin in bpm")
 
 
 class SegmentEffortSeriesResponse(BaseModel):
@@ -658,8 +662,33 @@ class SegmentEffortSeriesResponse(BaseModel):
     activity_id: str = Field(description="Garmin activity identifier")
     effort_start: datetime = Field(description="UTC timestamp entering the segment start corridor")
     effort_end: datetime = Field(description="UTC timestamp reaching the segment end corridor")
-    bin_count: int = Field(description="Number of distance bins in the series")
+    bin_count: int = Field(ge=10, le=400, description="Number of distance bins in the series")
     bins: list[SegmentEffortSeriesBin] = Field(description="Distance-ordered bins spanning the traversal")
+
+
+class SegmentEffortSeriesBatchItem(BaseModel):
+    """One effort window requested as part of a batch series lookup."""
+
+    activity_id: str = Field(min_length=1, description="Garmin activity identifier")
+    effort_start: datetime = Field(description="Effort start timestamp returned by the efforts endpoint")
+    effort_end: datetime = Field(description="Effort end timestamp returned by the efforts endpoint")
+
+
+class SegmentEffortSeriesBatchRequest(BaseModel):
+    """Bounded collection of effort windows to bin in one database query."""
+
+    efforts: list[SegmentEffortSeriesBatchItem] = Field(
+        min_length=1,
+        max_length=50,
+        description="Effort windows processed and returned in request order",
+    )
+    bins: int = Field(default=100, ge=10, le=400, description="Number of distance bins per effort")
+
+
+class SegmentEffortSeriesBatchResponse(BaseModel):
+    """Distance-binned series returned in the same order as the batch request."""
+
+    items: list[SegmentEffortSeriesResponse] = Field(description="Effort series in request order")
 
 
 class GarminSegment(BaseModel):

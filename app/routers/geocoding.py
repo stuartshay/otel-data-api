@@ -192,7 +192,7 @@ async def reverse_geocode_point(
     return _point_address_response(refreshed, resolution_source="pelias")
 
 
-@router.post("/reverse/batch")
+@router.post("/reverse/batch", responses=AUTH_RESPONSES)
 async def reverse_geocode_points_batch(
     request: Request,
     body: ReverseGeocodeBatchRequest,

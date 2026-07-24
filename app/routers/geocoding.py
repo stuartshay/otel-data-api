@@ -21,6 +21,9 @@ from app.models.geocoding import (
     GeocodingTriggerResponse,
     PeliasHealth,
     PointAddressSource,
+    ReverseGeocodeBatchItem,
+    ReverseGeocodeBatchRequest,
+    ReverseGeocodeBatchResponse,
 )
 
 logger = structlog.get_logger(__name__)
@@ -93,6 +96,23 @@ _POINT_CELL_LOOKUP_SQL = (
     "gpc.country, gpc.postalcode, gpc.confidence, gpc.status, gpc.geocoded_at "
     "FROM cell LEFT JOIN public.geocoded_point_cells gpc "
     "ON gpc.lat_4dp = cell.lat_4dp AND gpc.lon_4dp = cell.lon_4dp"
+)
+
+
+_POINT_CELL_BATCH_LOOKUP_SQL = (
+    "WITH requested AS ("
+    "  SELECT ordinal - 1 AS request_index, "
+    "         ROUND(lat::double precision * 10000)::INTEGER AS lat_4dp, "
+    "         ROUND(lon::double precision * 10000)::INTEGER AS lon_4dp "
+    "  FROM UNNEST($1::double precision[], $2::double precision[]) "
+    "       WITH ORDINALITY AS r (lat, lon, ordinal)"
+    ") "
+    "SELECT r.request_index, r.lat_4dp, r.lon_4dp, gpc.display_address, gpc.street, "
+    "gpc.housenumber, gpc.neighbourhood, gpc.locality, gpc.region, "
+    "gpc.country, gpc.postalcode, gpc.confidence, gpc.status, gpc.geocoded_at "
+    "FROM requested r LEFT JOIN public.geocoded_point_cells gpc "
+    "ON gpc.lat_4dp = r.lat_4dp AND gpc.lon_4dp = r.lon_4dp "
+    "ORDER BY r.request_index"
 )
 
 
@@ -170,6 +190,48 @@ async def reverse_geocode_point(
 
     refreshed = await _fetch_point_cell(db, latitude, longitude)
     return _point_address_response(refreshed, resolution_source="pelias")
+
+
+@router.post("/reverse/batch")
+async def reverse_geocode_points_batch(
+    request: Request,
+    body: ReverseGeocodeBatchRequest,
+    _user: Annotated[dict, Depends(require_auth)],
+) -> ReverseGeocodeBatchResponse:
+    """Resolve up to 300 points from the dense cell cache in one database query.
+
+    Unlike ``/reverse``, this never falls back to Pelias: an uncached or
+    unresolved cell is reported as ``status='pending'`` rather than resolved
+    synchronously, so the response time stays bounded regardless of how many
+    of the requested points have never been geocoded. Callers that need a
+    guaranteed resolution for a single point should use ``/reverse`` instead.
+    """
+    db = request.app.state.db
+    rows = await db.fetch(
+        _POINT_CELL_BATCH_LOOKUP_SQL,
+        [point.latitude for point in body.points],
+        [point.longitude for point in body.points],
+    )
+    return ReverseGeocodeBatchResponse(
+        items=[
+            ReverseGeocodeBatchItem(
+                latitude=row["lat_4dp"] / 10_000,
+                longitude=row["lon_4dp"] / 10_000,
+                display_address=row.get("display_address"),
+                street=row.get("street"),
+                housenumber=row.get("housenumber"),
+                neighbourhood=row.get("neighbourhood"),
+                locality=row.get("locality"),
+                region=row.get("region"),
+                country=row.get("country"),
+                postalcode=row.get("postalcode"),
+                confidence=row.get("confidence"),
+                status=row.get("status") or "pending",
+                geocoded_at=row.get("geocoded_at"),
+            )
+            for row in rows
+        ]
+    )
 
 
 @router.get("/status")

@@ -71,6 +71,41 @@ class GeocodedPointAddress(GeocodedAddress):
     )
 
 
+class ReverseGeocodePointInput(BaseModel):
+    """One coordinate requested as part of a batch reverse-geocode lookup."""
+
+    latitude: float = Field(ge=-90, le=90, description="Latitude in decimal degrees")
+    longitude: float = Field(ge=-180, le=180, description="Longitude in decimal degrees")
+
+
+class ReverseGeocodeBatchRequest(BaseModel):
+    """Bounded collection of coordinates to resolve from the dense cell cache."""
+
+    points: list[ReverseGeocodePointInput] = Field(
+        min_length=1,
+        max_length=300,
+        description="Coordinates to resolve, processed and returned in request order",
+    )
+
+
+class ReverseGeocodeBatchItem(GeocodedAddress):
+    """One coordinate's cached address, or a cache miss, from a batch lookup.
+
+    Unlike GeocodedPointAddress, this never triggers a Pelias fallback: the
+    batch endpoint is a single set-based database read, so an uncached cell
+    is reported as status='pending' rather than resolved synchronously.
+    """
+
+    latitude: float = Field(description="Resolved 4-decimal cell latitude")
+    longitude: float = Field(description="Resolved 4-decimal cell longitude")
+
+
+class ReverseGeocodeBatchResponse(BaseModel):
+    """Multiple coordinates' cached addresses, returned in request order."""
+
+    items: list[ReverseGeocodeBatchItem] = Field(description="Resolved addresses in request order")
+
+
 class GeocodingStatus(BaseModel):
     """Coverage statistics for geocoded location records."""
 

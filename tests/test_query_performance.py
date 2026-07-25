@@ -182,3 +182,58 @@ async def test_mv_garmin_track_point_cells_coverage_baseline(live_db: DatabaseSe
     assert duration_ms < 3000, (
         f"coverage aggregate took {duration_ms:.2f}ms -- unexpectedly slow even for an unfiltered scan"
     )
+
+
+@pytest.mark.asyncio
+async def test_segment_efforts_pairs_regression_guard(live_db: DatabaseService) -> None:
+    """Segment-crossing effort matching: partially fixed, this test guards the fix.
+
+    New Relic showed this as the single most expensive query pattern (avg
+    3.26s, max 11.25s, 50% of calls >500ms). The `pairs` CTE (matching each
+    start-crossing to its nearest later end-crossing) used a
+    crossings-JOIN-crossings self-join with no index to drive it -- a full
+    activity_id x activity_id nested loop, quadratic in the number of
+    crossings. Rewritten to a single ordered window pass
+    (`app.routers.garmin._fetch_segment_efforts`'s `pairs`/`pairs_raw` CTEs).
+    Verified against prod with wide parameters (200m tolerance, all sports)
+    around the busiest real track in the DB: identical results, ~25-30%
+    faster (785-823ms -> 547-647ms over 3 runs) at that scale, with the win
+    expected to grow for segments crossed by many more activities/laps since
+    the removed cost was O(n^2) in crossing count, not O(n log n).
+
+    The other major cost component here -- the crossing_hits/crossing_grouped
+    window-function pipeline over all candidate track points -- is a larger,
+    separate follow-up, not addressed by this test or the fix it guards.
+    """
+    row = await live_db.fetchrow(
+        "SELECT t.activity_id, "
+        "(SELECT longitude FROM public.garmin_track_points WHERE activity_id = t.activity_id ORDER BY timestamp ASC LIMIT 1) AS start_lon, "
+        "(SELECT latitude FROM public.garmin_track_points WHERE activity_id = t.activity_id ORDER BY timestamp ASC LIMIT 1) AS start_lat, "
+        "(SELECT longitude FROM public.garmin_track_points WHERE activity_id = t.activity_id ORDER BY timestamp DESC LIMIT 1) AS end_lon, "
+        "(SELECT latitude FROM public.garmin_track_points WHERE activity_id = t.activity_id ORDER BY timestamp DESC LIMIT 1) AS end_lat "
+        "FROM public.garmin_track_points t "
+        "GROUP BY t.activity_id ORDER BY COUNT(*) DESC LIMIT 1"
+    )
+    if row is None:
+        pytest.skip("no garmin_track_points to test against")
+    assert row is not None  # narrows for type checkers; skip() above never returns
+
+    from app.routers.garmin import _fetch_segment_efforts
+
+    _, duration_ms = await _timed(
+        _fetch_segment_efforts(
+            live_db,
+            start_lat=row["start_lat"],
+            start_lon=row["start_lon"],
+            end_lat=row["end_lat"],
+            end_lon=row["end_lon"],
+            tolerance_meters=200.0,
+            sport=None,
+            date_from=None,
+            date_to=None,
+            max_effort_seconds=7200,
+            limit=20,
+        )
+    )
+    print(f"\n[segment-efforts pairs] activity_id={row['activity_id']} took {duration_ms:.2f}ms")
+    assert duration_ms < 5000, f"segment-efforts took {duration_ms:.2f}ms -- possible regression in the pairs rewrite"

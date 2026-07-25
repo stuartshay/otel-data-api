@@ -1751,8 +1751,12 @@ async def test_segment_efforts_query_and_params(client: AsyncClient, mock_db):
     query, *params = mock_db.fetch.await_args.args
     assert "ST_DWithin(t.geog, seg.start_pt, seg.tol)" in query
     assert "ST_DWithin(t.geog, seg.end_pt, seg.tol)" in query
-    assert "e.c_ts > s.c_ts" in query  # same-direction enforcement
-    assert "AND e.is_end" in query
+    # same-direction enforcement: the nearest later is_end crossing is found via
+    # an ordered window pass (ROWS 1 FOLLOWING..UNBOUNDED, ORDER BY c_ts), not a
+    # crossings-JOIN-crossings self-join (no index to drive it -- quadratic in
+    # the number of crossings for segments crossed by many activities/laps)
+    assert "ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING" in query
+    assert "MIN(c_ts) FILTER (WHERE is_end)" in query
     assert "WHERE s.is_start" in query
     # a new crossing must start on a direct start-only -> end-only flip (and
     # the reverse), not just a >2min time gap -- otherwise a short/fast

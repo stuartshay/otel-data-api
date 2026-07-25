@@ -1139,7 +1139,7 @@ async def _fetch_segment_efforts(
         ),"""
         bearings_join = """
             LEFT JOIN start_bearings sb
-              ON sb.activity_id = s.activity_id AND sb.s_ts = s.c_ts"""
+              ON sb.activity_id = s.activity_id AND sb.s_ts = s.s_ts"""
         bearing_clause = f"""
             AND (
                 sb.bearing_deg IS NULL
@@ -1208,13 +1208,26 @@ async def _fetch_segment_efforts(
             FROM crossing_repr r
             JOIN crossing_flags f ON f.activity_id = r.activity_id AND f.crossing = r.crossing
         ),{start_bearings_cte}
+        -- For each crossing, the nearest later is_end crossing in the same
+        -- activity ("next matching row"). Computed as one ordered window pass
+        -- rather than a crossings-JOIN-crossings self-join: that self-join
+        -- has no index to drive it (crossings is a CTE), so it degenerated
+        -- into a full activity_id x activity_id nested loop -- quadratic in
+        -- the number of crossings, which dominates for segments crossed by
+        -- many activities/laps.
+        pairs_raw AS (
+            SELECT activity_id, c_ts AS s_ts, is_start,
+                   MIN(c_ts) FILTER (WHERE is_end) OVER (
+                       PARTITION BY activity_id ORDER BY c_ts
+                       ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING
+                   ) AS e_ts
+            FROM crossings
+        ),
         pairs AS (
-            SELECT s.activity_id, s.c_ts AS s_ts, MIN(e.c_ts) AS e_ts
-            FROM crossings s
-            JOIN crossings e ON e.activity_id = s.activity_id AND e.c_ts > s.c_ts AND e.is_end
+            SELECT s.activity_id, s.s_ts, s.e_ts
+            FROM pairs_raw s
             {bearings_join}
-            WHERE s.is_start{bearing_clause}
-            GROUP BY s.activity_id, s.c_ts
+            WHERE s.is_start AND s.e_ts IS NOT NULL{bearing_clause}
         ),
         metrics AS (
             SELECT b.activity_id, b.s_ts, b.e_ts,
@@ -1465,13 +1478,22 @@ _SEGMENT_ROUTE_LATERAL = """
             FROM crossing_repr r
             JOIN crossing_flags f ON f.crossing = r.crossing
         ),
+        -- Same "next matching row" rewrite as _fetch_segment_efforts' pairs
+        -- CTE: a single ordered window pass instead of a crossings-JOIN-
+        -- crossings self-join with no index to drive it.
+        proximity_bounds_raw AS (
+            SELECT c_ts AS s_ts, is_start,
+                   MIN(c_ts) FILTER (WHERE is_end) OVER (
+                       ORDER BY c_ts
+                       ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING
+                   ) AS e_ts
+            FROM crossings
+        ),
         proximity_bounds AS (
-            SELECT cs.c_ts AS s_ts, MIN(ce.c_ts) AS e_ts
-            FROM crossings cs
-            JOIN crossings ce ON ce.c_ts > cs.c_ts AND ce.is_end
-            WHERE cs.is_start
-            GROUP BY cs.c_ts
-            ORDER BY cs.c_ts ASC
+            SELECT s_ts, e_ts
+            FROM proximity_bounds_raw
+            WHERE is_start AND e_ts IS NOT NULL
+            ORDER BY s_ts ASC
             LIMIT 1
         ),
         chosen_bounds AS (

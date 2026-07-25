@@ -316,7 +316,7 @@ async def _get_mv_metrics(db: Any, cache: _MvMetricsCache) -> _MvMetrics:
         # ... WHERE EXISTS(ROUND ...) Parallel Seq Scan over ~4.5M
         # garmin_track_points rows (~0.9s now, per #167). Still an unfiltered
         # ~556k-row aggregate though, so it gets its own longer-TTL cache
-        # rather than running on every 60s /status cache miss (see #<TBD>).
+        # rather than running on every 60s /status cache miss.
         row = await db.fetchrow(
             "SELECT COUNT(*)::BIGINT AS dense_total_cells, "
             "COALESCE(SUM(m.point_count), 0)::BIGINT AS total_track_points, "

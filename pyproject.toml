@@ -58,10 +58,13 @@ quote-style = "double"
 skip-magic-trailing-comma = false
 
 [tool.pytest.ini_options]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short -m \"not db_integration\""
 asyncio_mode = "auto"
 filterwarnings = [
   "ignore::DeprecationWarning",
+]
+markers = [
+  "db_integration: exercises real production SQL against the live homelab DB (opt-in: pytest -m db_integration -v -s). Skipped by default/CI.",
 ]
 python_files = ["test_*.py", "*_test.py"]
 python_functions = ["test_*"]

@@ -109,6 +109,26 @@ class DatabaseService:
         self._log_query(query, args, (time.perf_counter() - start) * 1000.0, row_count=len(result))
         return result
 
+    async def fetch_no_jit(self, query: str, *args: Any) -> list[asyncpg.Record]:
+        """Execute a query with JIT disabled for this transaction only.
+
+        For some multi-CTE queries (window functions over a correlated
+        ST_DWithin candidate set, e.g. segment-efforts matching) the planner's
+        row-count misestimate inflates the query's apparent cost enough to
+        trigger Postgres's JIT compiler, whose fixed compilation overhead then
+        exceeds what it saves on a single execution over a few thousand rows.
+        Verified ~17% faster with JIT off for that query (interleaved timing,
+        no overlap between the two distributions). Scoped to a single
+        transaction via SET LOCAL so it doesn't affect other queries sharing
+        the pooled connection -- use `fetch()` for everything else.
+        """
+        start = time.perf_counter()
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.execute("SET LOCAL jit = off")
+            result: list[asyncpg.Record] = await conn.fetch(query, *args)
+        self._log_query(query, args, (time.perf_counter() - start) * 1000.0, row_count=len(result))
+        return result
+
     async def fetchrow(self, query: str, *args: Any) -> asyncpg.Record | None:
         """Execute a query and return a single row."""
         start = time.perf_counter()

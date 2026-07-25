@@ -9,6 +9,34 @@ import pytest
 from app.database import DatabaseService, _parse_operation
 
 
+class FakeTransaction:
+    async def __aenter__(self) -> FakeTransaction:
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> bool:
+        return False
+
+
+class FakeConnection:
+    def __init__(self) -> None:
+        self.fetch = AsyncMock()
+        self.execute = AsyncMock()
+
+    def transaction(self) -> FakeTransaction:
+        return FakeTransaction()
+
+
+class FakeAcquireContext:
+    def __init__(self, conn: FakeConnection) -> None:
+        self._conn = conn
+
+    async def __aenter__(self) -> FakeConnection:
+        return self._conn
+
+    async def __aexit__(self, *exc_info: object) -> bool:
+        return False
+
+
 class FakePool:
     def __init__(self) -> None:
         self.fetch = AsyncMock()
@@ -18,6 +46,10 @@ class FakePool:
         self.closed = False
         self._size = 2
         self._idle = 1
+        self.conn = FakeConnection()
+
+    def acquire(self) -> FakeAcquireContext:
+        return FakeAcquireContext(self.conn)
 
     def get_size(self) -> int:
         return self._size
@@ -123,6 +155,25 @@ async def test_fetch_helpers_delegate_to_pool(monkeypatch: pytest.MonkeyPatch, c
 
     assert await db.execute("DELETE FROM table") == "OK"
     fake_pool.execute.assert_awaited_with("DELETE FROM table")
+
+
+@pytest.mark.asyncio
+async def test_fetch_no_jit_disables_jit_for_a_single_transaction(monkeypatch: pytest.MonkeyPatch, config):
+    fake_pool = FakePool()
+    fake_pool.conn.fetch.return_value = ["rows"]
+
+    monkeypatch.setattr("app.database.asyncpg.create_pool", AsyncMock(return_value=fake_pool))
+
+    db = DatabaseService(config)
+    await db.initialize()
+
+    assert await db.fetch_no_jit("SELECT * FROM table WHERE id=$1", 1) == ["rows"]
+    # runs on the SAME acquired connection, inside a transaction, so SET LOCAL
+    # scopes the JIT-off setting to just this query -- not the pool default,
+    # which other queries sharing the pooled connection must keep using.
+    fake_pool.conn.execute.assert_awaited_with("SET LOCAL jit = off")
+    fake_pool.conn.fetch.assert_awaited_with("SELECT * FROM table WHERE id=$1", 1)
+    fake_pool.fetch.assert_not_awaited()  # not the plain pool.fetch() path
 
 
 @pytest.mark.asyncio

@@ -192,24 +192,35 @@ async def test_mv_garmin_track_point_cells_coverage_baseline(live_db: DatabaseSe
 
 @pytest.mark.asyncio
 async def test_segment_efforts_pairs_regression_guard(live_db: DatabaseService) -> None:
-    """Segment-crossing effort matching: partially fixed, this test guards the fix.
+    """Segment-crossing effort matching: two fixes layered, this test guards both.
 
     New Relic showed this as the single most expensive query pattern (avg
-    3.26s, max 11.25s, 50% of calls >500ms). The `pairs` CTE (matching each
-    start-crossing to its nearest later end-crossing) used a
-    crossings-JOIN-crossings self-join with no index to drive it -- a full
-    activity_id x activity_id nested loop, quadratic in the number of
-    crossings. Rewritten to a single ordered window pass
-    (`app.routers.garmin._fetch_segment_efforts`'s `pairs`/`pairs_raw` CTEs).
-    Verified against prod with wide parameters (200m tolerance, all sports)
-    around the busiest real track in the DB: identical results, ~25-30%
-    faster (785-823ms -> 547-647ms over 3 runs) at that scale, with the win
-    expected to grow for segments crossed by many more activities/laps since
-    the removed cost was O(n^2) in crossing count, not O(n log n).
+    3.26s, max 11.25s, 50% of calls >500ms). Two independent fixes:
 
-    The other major cost component here -- the crossing_hits/crossing_grouped
-    window-function pipeline over all candidate track points -- is a larger,
-    separate follow-up, not addressed by this test or the fix it guards.
+    1. The `pairs` CTE (matching each start-crossing to its nearest later
+       end-crossing) used a crossings-JOIN-crossings self-join with no index
+       to drive it -- a full activity_id x activity_id nested loop, quadratic
+       in the number of crossings. Rewritten to a single ordered window pass
+       (`app.routers.garmin._fetch_segment_efforts`'s `pairs`/`pairs_raw`
+       CTEs). Verified against prod with wide parameters (200m tolerance, all
+       sports) around the busiest real track in the DB: identical results,
+       ~25-30% faster (785-823ms -> 547-647ms over 3 runs) at that scale, with
+       the win expected to grow for segments crossed by many more
+       activities/laps since the removed cost was O(n^2) in crossing count,
+       not O(n log n).
+    2. Separately, this query's planner cost estimate (row-count misestimate
+       across the CTE chain) triggers Postgres's JIT compiler, whose fixed
+       compilation overhead exceeds what it saves on a single execution over
+       a few thousand rows. `DatabaseService.fetch_no_jit` disables JIT for
+       just this query via `SET LOCAL jit = off` in its own transaction --
+       verified ~17% faster with interleaved timing (no overlap between the
+       JIT-on and JIT-off distributions across 8 runs each).
+
+    Not addressed here: the crossing_hits/crossing_grouped window-function
+    pipeline's own row-processing cost (deduplicating its redundant
+    ST_DWithin calls was tried and measured -- only ~5%, within noise, so not
+    worth the added complexity) is a larger, structurally different
+    follow-up if this query needs to get faster still.
     """
     row = await live_db.fetchrow(
         "SELECT t.activity_id, "

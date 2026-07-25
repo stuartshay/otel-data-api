@@ -1253,7 +1253,10 @@ async def _fetch_segment_efforts(
         LIMIT ${limit_idx}
     """
 
-    rows = await db.fetch(query, *params)
+    # fetch_no_jit: this query's planner cost estimate triggers JIT
+    # compilation whose overhead exceeds its benefit here -- see
+    # DatabaseService.fetch_no_jit's docstring.
+    rows = await db.fetch_no_jit(query, *params)
     return [SegmentEffort(rank=i + 1, **dict(row)) for i, row in enumerate(rows)]
 
 

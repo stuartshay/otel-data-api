@@ -1671,7 +1671,7 @@ def _segment_effort_row(activity_id: str, elapsed: float) -> dict:
 
 @pytest.mark.asyncio
 async def test_segment_efforts_returns_ranked(client: AsyncClient, mock_db):
-    mock_db.fetch.return_value = [
+    mock_db.fetch_no_jit.return_value = [
         _segment_effort_row("a-fast", 89.0),
         _segment_effort_row("a-slow", 130.0),
     ]
@@ -1706,7 +1706,7 @@ async def test_segment_efforts_keeps_multiple_laps_from_one_activity(client: Asy
     GPS-ping bursts down to one row per real crossing while still returning
     every distinct lap.
     """
-    mock_db.fetch.return_value = [
+    mock_db.fetch_no_jit.return_value = [
         _segment_effort_row("multi-lap-ride", 1098.0),
         _segment_effort_row("multi-lap-ride", 1199.0),
     ]
@@ -1726,7 +1726,7 @@ async def test_segment_efforts_keeps_multiple_laps_from_one_activity(client: Asy
 
 @pytest.mark.asyncio
 async def test_segment_efforts_query_and_params(client: AsyncClient, mock_db):
-    mock_db.fetch.return_value = []
+    mock_db.fetch_no_jit.return_value = []
 
     response = await client.get(
         "/api/v1/garmin/segment-efforts"
@@ -1748,7 +1748,7 @@ async def test_segment_efforts_query_and_params(client: AsyncClient, mock_db):
         "items": [],
     }
 
-    query, *params = mock_db.fetch.await_args.args
+    query, *params = mock_db.fetch_no_jit.await_args.args
     assert "ST_DWithin(t.geog, seg.start_pt, seg.tol)" in query
     assert "ST_DWithin(t.geog, seg.end_pt, seg.tol)" in query
     # same-direction enforcement: the nearest later is_end crossing is found via
@@ -1790,14 +1790,14 @@ async def test_segment_efforts_query_and_params(client: AsyncClient, mock_db):
 
 @pytest.mark.asyncio
 async def test_segment_efforts_all_sports_when_blank(client: AsyncClient, mock_db):
-    mock_db.fetch.return_value = []
+    mock_db.fetch_no_jit.return_value = []
 
     response = await client.get(
         "/api/v1/garmin/segment-efforts?start_lat=40.79&start_lon=-73.96&end_lat=40.79&end_lon=-73.964&sport="
     )
 
     assert response.status_code == 200
-    query, *params = mock_db.fetch.await_args.args
+    query, *params = mock_db.fetch_no_jit.await_args.args
     assert "a.sport =" not in query
     assert "cycling" not in params
 
@@ -2028,7 +2028,7 @@ async def test_get_segment_efforts_uses_saved_coords(client: AsyncClient, mock_d
         "source_activity_id": None,
         "distance_meters": None,
     }
-    mock_db.fetch.return_value = [
+    mock_db.fetch_no_jit.return_value = [
         _segment_effort_row("a-fast", 79.0),
         _segment_effort_row("a-slow", 130.0),
     ]
@@ -2039,7 +2039,7 @@ async def test_get_segment_efforts_uses_saved_coords(client: AsyncClient, mock_d
     body = response.json()
     assert body["segment"]["tolerance_meters"] == 40
     assert [e["rank"] for e in body["items"]] == [1, 2]
-    efforts_query, *efforts_params = mock_db.fetch.await_args.args
+    efforts_query, *efforts_params = mock_db.fetch_no_jit.await_args.args
     assert "ST_DWithin(t.geog, seg.start_pt, seg.tol)" in efforts_query
     # matching used the saved segment's coordinates and tolerance
     assert efforts_params[:5] == [-73.96104321, 40.79366846, -73.96422816, 40.79002409, 40.0]
@@ -2061,12 +2061,12 @@ async def test_get_segment_efforts_applies_min_distance_from_saved_segment(clien
         "source_activity_id": None,
         "distance_meters": 6070.0,
     }
-    mock_db.fetch.return_value = [_segment_effort_row("a-real-lap", 900.0)]
+    mock_db.fetch_no_jit.return_value = [_segment_effort_row("a-real-lap", 900.0)]
 
     response = await client.get("/api/v1/garmin/segments/5/efforts")
 
     assert response.status_code == 200
-    efforts_query, *efforts_params = mock_db.fetch.await_args.args
+    efforts_query, *efforts_params = mock_db.fetch_no_jit.await_args.args
     assert "m.distance_km >= " in efforts_query
     # 6070m * 0.7 (MIN_SEGMENT_DISTANCE_RATIO) = 4.249 km
     assert efforts_params[-2] == pytest.approx(4.249)
@@ -2086,12 +2086,12 @@ async def test_get_segment_efforts_skips_min_distance_without_recorded_distance(
         "source_activity_id": None,
         "distance_meters": None,
     }
-    mock_db.fetch.return_value = [_segment_effort_row("a-real-lap", 900.0)]
+    mock_db.fetch_no_jit.return_value = [_segment_effort_row("a-real-lap", 900.0)]
 
     response = await client.get("/api/v1/garmin/segments/5/efforts")
 
     assert response.status_code == 200
-    efforts_query, *_efforts_params = mock_db.fetch.await_args.args
+    efforts_query, *_efforts_params = mock_db.fetch_no_jit.await_args.args
     assert "m.distance_km >= " not in efforts_query
 
 
@@ -2116,7 +2116,7 @@ async def test_get_segment_efforts_rejects_reverse_direction(client: AsyncClient
         },
         {"bearing_deg": 197.5},
     ]
-    mock_db.fetch.return_value = []
+    mock_db.fetch_no_jit.return_value = []
 
     response = await client.get("/api/v1/garmin/segments/7/efforts")
 
@@ -2124,7 +2124,7 @@ async def test_get_segment_efforts_rejects_reverse_direction(client: AsyncClient
     bearing_query, *bearing_params = mock_db.fetchrow.await_args_list[1].args
     assert bearing_params[0] == "23541736805"
 
-    efforts_query, *efforts_params = mock_db.fetch.await_args.args
+    efforts_query, *efforts_params = mock_db.fetch_no_jit.await_args.args
     assert "start_bearings" in efforts_query
     assert "LEAST(" in efforts_query
     assert efforts_params[-1] == 197.5
@@ -2142,13 +2142,13 @@ async def test_get_segment_efforts_skips_bearing_lookup_without_source_activity(
         "source_activity_id": None,
         "distance_meters": None,
     }
-    mock_db.fetch.return_value = []
+    mock_db.fetch_no_jit.return_value = []
 
     response = await client.get("/api/v1/garmin/segments/5/efforts")
 
     assert response.status_code == 200
     assert mock_db.fetchrow.await_count == 1  # no reference-bearing lookup fired
-    efforts_query, *efforts_params = mock_db.fetch.await_args.args
+    efforts_query, *efforts_params = mock_db.fetch_no_jit.await_args.args
     # no reference bearing to compare against, so the CTE (and its per-start
     # LATERAL lookup) is omitted rather than computed and ignored
     assert "start_bearings" not in efforts_query

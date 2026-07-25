@@ -467,6 +467,48 @@ async def test_geocoding_status_cache_expires(client: AsyncClient, mock_db: Asyn
 
 
 @pytest.mark.asyncio
+async def test_geocoding_status_mv_metrics_outlive_status_cache_expiry(client: AsyncClient, mock_db: AsyncMock):
+    """The mv_garmin_track_point_cells-derived metrics use a longer, separate
+    TTL (_MV_METRICS_CACHE_TTL_SECONDS) than the rest of /status
+    (_STATUS_CACHE_TTL_SECONDS). That aggregate is an unfiltered scan over the
+    full MV (~556k rows in prod, consistently >500ms per New Relic), so once
+    it's warm it should survive an outer-cache expiry that only invalidates
+    the cheaper, more dynamic parts of the response.
+    """
+    addr_rows = [{"source": "owntracks", "status": "success", "n": 100}]
+    cell_rows = [{"status": "success", "n": 200}]
+    # Two full outer-cache cycles' worth of fetch/fetchval side effects, but
+    # only ONE fetchrow value -- if the MV cache were bypassed on the second
+    # cycle, fetchrow would be awaited twice and this would still pass by
+    # returning stale data, so the await_count assertion below is what
+    # actually guards the regression.
+    mock_db.fetch.side_effect = [addr_rows, cell_rows, addr_rows, cell_rows]
+    mock_db.fetchval.side_effect = [1000, 10, 5] * 2
+    mock_db.fetchrow.return_value = {
+        "dense_total_cells": 300,
+        "total_track_points": 50000,
+        "covered_track_points": 35000,
+    }
+
+    now = [0.0]
+    with patch("app.routers.geocoding.time.monotonic", side_effect=lambda: now[0]):
+        await client.get("/api/v1/geocoding/status")
+        assert mock_db.fetchrow.await_count == 1
+
+        # Past the 60s outer /status TTL, but well within the 600s MV TTL.
+        now[0] = 120.0
+        second = await client.get("/api/v1/geocoding/status")
+
+    assert second.status_code == 200
+    assert second.json()["dense_point_coverage_percent"] == 70.0
+    # Outer response was recomputed (dynamic parts re-queried)...
+    assert mock_db.fetch.await_count == 4
+    assert mock_db.fetchval.await_count == 6
+    # ...but the MV aggregate was served from its own longer-lived cache.
+    assert mock_db.fetchrow.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_trigger_geocoding_no_pending(client: AsyncClient, mock_db: AsyncMock):
     mock_db.fetch.return_value = []
     mock_db.fetchval.return_value = 0

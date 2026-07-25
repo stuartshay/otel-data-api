@@ -61,6 +61,7 @@ def mock_db() -> AsyncMock:
     db = AsyncMock(spec=DatabaseService)
     db.health_check = AsyncMock(return_value={"status": "connected", "pool_size": 2, "pool_free": 2})
     db.fetch = AsyncMock(return_value=[])
+    db.fetch_no_jit = AsyncMock(return_value=[])
     db.fetchrow = AsyncMock(return_value=None)
     db.fetchval = AsyncMock(return_value=0)
     db.execute = AsyncMock(return_value="OK")

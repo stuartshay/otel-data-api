@@ -72,12 +72,41 @@ _GARMIN_CONFLICT = "ON CONFLICT (garmin_track_point_id) WHERE source = 'garmin'"
 # every dashboard poll.
 _STATUS_CACHE_TTL_SECONDS = 60.0
 
+# Cache TTL specifically for the mv_garmin_track_point_cells-derived metrics
+# below (dense_cells_total / dense_point_coverage_percent). That query is an
+# unfiltered aggregate over the full MV (~556k rows, ~0.6-3.5s per New Relic
+# span data) that the plain 60s _StatusCache TTL still forced dozens of times
+# a day. The MV itself only refreshes out-of-band on an hours-scale cadence
+# (migrations 000018/000021), and geocoded_point_cells (the live side of the
+# join) is background-job progress, not something a dashboard needs
+# sub-minute freshness on -- so this portion gets its own, much longer TTL,
+# independent of the rest of the response.
+_MV_METRICS_CACHE_TTL_SECONDS = 600.0
+
 
 @dataclass
 class _StatusCache:
     """Per-process cache holder for the geocoding /status response."""
 
     value: GeocodingStatus | None = None
+    expires_at: float = 0.0
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+
+@dataclass
+class _MvMetrics:
+    """Raw counts from the mv_garmin_track_point_cells aggregate."""
+
+    dense_total_cells: int
+    total_track_points: int
+    covered_track_points: int
+
+
+@dataclass
+class _MvMetricsCache:
+    """Per-process cache holder for `_MvMetrics`, decoupled from `_StatusCache`."""
+
+    value: _MvMetrics | None = None
     expires_at: float = 0.0
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -255,13 +284,62 @@ async def geocoding_status(request: Request) -> GeocodingStatus:
         # Re-check after acquiring the lock so only one request recomputes.
         if cache.value is not None and time.monotonic() < cache.expires_at:
             return cache.value
-        status = await _compute_geocoding_status(request.app.state.db)
+        mv_cache: _MvMetricsCache | None = getattr(request.app.state, "_mv_metrics_cache", None)
+        if mv_cache is None:
+            mv_cache = _MvMetricsCache()
+            request.app.state._mv_metrics_cache = mv_cache
+        mv_metrics = await _get_mv_metrics(request.app.state.db, mv_cache)
+        status = await _compute_geocoding_status(request.app.state.db, mv_metrics)
         cache.value = status
         cache.expires_at = time.monotonic() + _STATUS_CACHE_TTL_SECONDS
         return status
 
 
-async def _compute_geocoding_status(db: Any) -> GeocodingStatus:
+async def _get_mv_metrics(db: Any, cache: _MvMetricsCache) -> _MvMetrics:
+    """Return mv_garmin_track_point_cells coverage metrics, cached for
+    `_MV_METRICS_CACHE_TTL_SECONDS` independently of the outer /status cache.
+    """
+    if cache.value is not None and time.monotonic() < cache.expires_at:
+        return cache.value
+
+    async with cache.lock:
+        if cache.value is not None and time.monotonic() < cache.expires_at:
+            return cache.value
+
+        # Derive all materialized-view metrics in a SINGLE query so
+        # dense_total_cells, total and covered come from one MV snapshot. The
+        # MV (migrations 18 + 21) is refreshed out-of-band, so computing these
+        # as separate statements could span a refresh and briefly skew the
+        # coverage percentage. The MV carries a per-cell point_count; a LEFT
+        # JOIN to geocoded_point_cells on the indexed (lat_4dp, lon_4dp) key
+        # yields covered points via FILTER — replacing the old ~5.2s COUNT(*)
+        # ... WHERE EXISTS(ROUND ...) Parallel Seq Scan over ~4.5M
+        # garmin_track_points rows (~0.9s now, per #167). Still an unfiltered
+        # ~556k-row aggregate though, so it gets its own longer-TTL cache
+        # rather than running on every 60s /status cache miss (see #<TBD>).
+        row = await db.fetchrow(
+            "SELECT COUNT(*)::BIGINT AS dense_total_cells, "
+            "COALESCE(SUM(m.point_count), 0)::BIGINT AS total_track_points, "
+            "COALESCE(SUM(m.point_count) FILTER (WHERE g.lat_4dp IS NOT NULL), 0)::BIGINT "
+            "AS covered_track_points "
+            "FROM public.mv_garmin_track_point_cells m "
+            "LEFT JOIN public.geocoded_point_cells g USING (lat_4dp, lon_4dp)"
+        )
+        metrics = (
+            _MvMetrics(
+                dense_total_cells=row["dense_total_cells"],
+                total_track_points=row["total_track_points"],
+                covered_track_points=row["covered_track_points"],
+            )
+            if row
+            else _MvMetrics(dense_total_cells=0, total_track_points=0, covered_track_points=0)
+        )
+        cache.value = metrics
+        cache.expires_at = time.monotonic() + _MV_METRICS_CACHE_TTL_SECONDS
+        return metrics
+
+
+async def _compute_geocoding_status(db: Any, mv_metrics: _MvMetrics) -> GeocodingStatus:
     """Compute geocoding coverage statistics (uncached)."""
     # Per-(source, status) counts for geocoded_addresses in a single GROUP BY
     # instead of eight separate COUNT(*) round-trips.
@@ -301,25 +379,12 @@ async def _compute_geocoding_status(db: Any) -> GeocodingStatus:
     dense_errors = cell.get("error", 0)
     dense_geocoded = dense_success + dense_pending + dense_no_coverage + dense_errors
 
-    # Derive all materialized-view metrics in a SINGLE query so dense_total_cells,
-    # total and covered come from one MV snapshot. The MV (migrations 18 + 21) is
-    # refreshed out-of-band, so computing these as separate statements could span a
-    # refresh and briefly skew the coverage percentage. The MV carries a per-cell
-    # point_count; a LEFT JOIN to geocoded_point_cells on the indexed (lat_4dp, lon_4dp)
-    # key yields covered points via FILTER — replacing the old ~5.2s COUNT(*) ...
-    # WHERE EXISTS(ROUND ...) Parallel Seq Scan over ~4.5M garmin_track_points rows
-    # (~0.9s now). Staleness of hours is acceptable (see migration 21).
-    mv_metrics = await db.fetchrow(
-        "SELECT COUNT(*)::BIGINT AS dense_total_cells, "
-        "COALESCE(SUM(m.point_count), 0)::BIGINT AS total_track_points, "
-        "COALESCE(SUM(m.point_count) FILTER (WHERE g.lat_4dp IS NOT NULL), 0)::BIGINT "
-        "AS covered_track_points "
-        "FROM public.mv_garmin_track_point_cells m "
-        "LEFT JOIN public.geocoded_point_cells g USING (lat_4dp, lon_4dp)"
-    )
-    dense_total_cells = mv_metrics["dense_total_cells"] if mv_metrics else 0
-    total_track_points = mv_metrics["total_track_points"] if mv_metrics else 0
-    covered_track_points = mv_metrics["covered_track_points"] if mv_metrics else 0
+    # mv_garmin_track_point_cells-derived metrics are resolved by the caller
+    # via `_get_mv_metrics`, cached separately with a much longer TTL than the
+    # rest of this response (see _MV_METRICS_CACHE_TTL_SECONDS).
+    dense_total_cells = mv_metrics.dense_total_cells
+    total_track_points = mv_metrics.total_track_points
+    covered_track_points = mv_metrics.covered_track_points
     dense_point_coverage_percent = (
         round((covered_track_points / total_track_points * 100), 2) if total_track_points else 0.0
     )

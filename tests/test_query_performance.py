@@ -160,14 +160,20 @@ async def test_garmin_track_points_full_fetch_baseline(live_db: DatabaseService)
 
 @pytest.mark.asyncio
 async def test_mv_garmin_track_point_cells_coverage_baseline(live_db: DatabaseService) -> None:
-    """Geocoding coverage aggregate: baseline only, not fixed here.
+    """Geocoding coverage aggregate: cold-cache baseline, not sped up here.
 
     Full-table aggregate over mv_garmin_track_point_cells with no WHERE
-    clause -- indexes can't speed up an unfiltered aggregate. New Relic
-    showed 100% of calls >500ms (avg 942ms). Caching this at the app layer
-    (invalidated on MV refresh) is the real fix and is a separate follow-up;
-    this test just records today's baseline. Query matches
-    app/routers/geocoding.py's coverage-stats handler.
+    clause -- indexes can't speed up an unfiltered aggregate (~556k rows).
+    New Relic showed 100% of raw calls >500ms (avg ~1s). The app-layer fix
+    (this test bypasses, since it hits the DB directly) is a longer,
+    dedicated cache TTL for just this portion of GET /status
+    (_MV_METRICS_CACHE_TTL_SECONDS = 600s in app/routers/geocoding.py,
+    decoupled from the 60s _STATUS_CACHE_TTL_SECONDS the rest of the
+    response uses), which cuts how often this query runs by ~10x without
+    touching the query itself. This test documents the unavoidable
+    cold-cache/cache-miss cost -- see test_geocoding.py's
+    test_geocoding_status_mv_metrics_outlive_status_cache_expiry for the
+    caching behavior itself.
     """
     row, duration_ms = await _timed(
         live_db.fetchrow(

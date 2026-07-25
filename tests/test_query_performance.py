@@ -22,7 +22,6 @@ from __future__ import annotations
 import time
 from collections.abc import AsyncGenerator, Awaitable
 from datetime import date
-from typing import Any
 
 import pytest
 from dotenv import load_dotenv
@@ -31,8 +30,6 @@ from app.config import Config
 from app.database import DatabaseService
 
 pytestmark = pytest.mark.db_integration
-
-load_dotenv()
 
 
 @pytest.fixture()
@@ -45,15 +42,19 @@ async def live_db() -> AsyncGenerator[DatabaseService]:
     DB is unreachable, so this suite is safe to run without homelab network
     access.
     """
+    load_dotenv(override=False)
     config = Config.from_env()
     db = DatabaseService(config)
     try:
         await db.initialize()
         await db.fetchval("SELECT 1")
     except Exception as exc:  # noqa: BLE001 - any connection failure means "skip"
+        await db.close()
         pytest.skip(f"live DB unreachable: {exc}")
-    yield db
-    await db.close()
+    try:
+        yield db
+    finally:
+        await db.close()
 
 
 async def _timed[T](coro: Awaitable[T]) -> tuple[T, float]:
@@ -168,8 +169,7 @@ async def test_mv_garmin_track_point_cells_coverage_baseline(live_db: DatabaseSe
     this test just records today's baseline. Query matches
     app/routers/geocoding.py's coverage-stats handler.
     """
-    row: dict[str, Any] | None
-    row, duration_ms = await _timed(  # type: ignore[assignment]
+    row, duration_ms = await _timed(
         live_db.fetchrow(
             "SELECT COUNT(*)::BIGINT AS dense_total_cells, "
             "COALESCE(SUM(m.point_count), 0)::BIGINT AS total_track_points, "

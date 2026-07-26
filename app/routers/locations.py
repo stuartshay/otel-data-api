@@ -97,16 +97,34 @@ async def list_locations(
     count_query = f"SELECT COUNT(*) FROM public.locations {where}"
     total = await db.fetchval(count_query, *params)
 
+    # `page` selects and limits locations alone (index-driven top-N via
+    # idx_locations_created_at etc.) *before* joining geocoded_addresses --
+    # joining first and limiting after made the planner Seq Scan + hash-join
+    # the entire ~350k-row geocoded_addresses table merely to sort and throw
+    # away all but `limit` rows (2.4s at offset=0 in production). MATERIALIZED
+    # keeps Postgres from flattening the CTE back into that same bad plan.
+    # The join also needs an explicit `ga.source = 'owntracks'` -- true for
+    # every row with a non-null location_id per the table's CHECK constraint,
+    # but stating it lets the planner use the existing partial unique index
+    # (uniq_geocoded_addresses_owntracks_location) instead of a full scan.
+    # `sort` (not qualified_sort) for the outer ORDER BY: it's already
+    # whitelist-validated above and names exactly the column `page` selects,
+    # so it doesn't depend on _SORT_COLUMN_MAP's values staying simple
+    # "l.<column>" strings the way string-stripping qualified_sort would.
     data_query = (
-        f"SELECT l.id, l.device_id, l.tid, l.latitude, l.longitude, l.accuracy, l.altitude, "
-        f"l.velocity, l.battery, l.battery_status, l.connection_type, l.trigger, "
-        f"l.timestamp, l.created_at, "
-        f"ga.display_address "
-        f"FROM public.locations l "
-        f"LEFT JOIN public.geocoded_addresses ga ON ga.location_id = l.id "
-        f"{where} "
-        f"ORDER BY {qualified_sort} {order} "
-        f"LIMIT ${idx} OFFSET ${idx + 1}"
+        f"WITH page AS MATERIALIZED ("
+        f"  SELECT l.id, l.device_id, l.tid, l.latitude, l.longitude, l.accuracy, l.altitude, "
+        f"  l.velocity, l.battery, l.battery_status, l.connection_type, l.trigger, "
+        f"  l.timestamp, l.created_at "
+        f"  FROM public.locations l "
+        f"  {where} "
+        f"  ORDER BY {qualified_sort} {order} "
+        f"  LIMIT ${idx} OFFSET ${idx + 1}"
+        f") "
+        f"SELECT page.*, ga.display_address "
+        f"FROM page "
+        f"LEFT JOIN public.geocoded_addresses ga ON ga.location_id = page.id AND ga.source = 'owntracks' "
+        f"ORDER BY page.{sort} {order}"
     )
     params.extend([limit, offset])
     rows = await db.fetch(data_query, *params)

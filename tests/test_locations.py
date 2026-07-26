@@ -65,7 +65,10 @@ async def test_list_locations_filters_and_invalid_sort_falls_back(client: AsyncC
     assert "created_at < ($3::date + INTERVAL '1 day')" in count_query
 
     data_query, *params = mock_db.fetch.await_args.args
-    assert "ORDER BY l.created_at asc" in data_query
+    assert "ORDER BY l.created_at asc" in data_query  # inner CTE: index-driven top-N on locations alone
+    assert "ORDER BY page.created_at asc" in data_query  # outer: final order after the join
+    assert "MATERIALIZED" in data_query  # keeps the join fenced behind the LIMIT, not merged above it
+    assert "ga.source = 'owntracks'" in data_query  # lets the planner use the partial unique index
     assert params == ["phone", date(2025, 1, 1), date(2025, 1, 2), 10, 5]
 
 

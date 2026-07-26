@@ -194,6 +194,47 @@ async def test_chart_data_bins_is_fast(live_db: DatabaseService) -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_locations_first_page_is_fast(live_db: DatabaseService) -> None:
+    """GET /api/v1/locations default (first) page: found via a fresh New Relic
+    re-scan after the other fixes shipped, not part of the original catalog.
+
+    The original query joined geocoded_addresses (~350k rows) *before*
+    applying ORDER BY/LIMIT, so the planner Seq Scanned and hash-joined the
+    entire table just to sort and discard all but 50 rows -- 2420ms measured
+    via EXPLAIN ANALYZE against prod even at offset=0, not just at deep
+    OFFSET pages. Fixed by selecting/limiting locations alone in a
+    MATERIALIZED CTE first, then joining only those rows -- plus adding an
+    explicit `ga.source = 'owntracks'` predicate (always true for
+    location_id-joined rows per the table's CHECK constraint) so the planner
+    can use the existing partial unique index for the join instead of
+    another full scan. Verified against prod: identical results, 2420ms ->
+    10.6ms (EXPLAIN ANALYZE) / ~22ms (this test's full asyncpg round trip).
+    app/routers/locations.py's list_locations handler, default params
+    (sort=created_at, order=desc, limit=50, offset=0).
+    """
+    _, duration_ms = await _timed(
+        live_db.fetch(
+            "WITH page AS MATERIALIZED ("
+            "  SELECT l.id, l.device_id, l.tid, l.latitude, l.longitude, l.accuracy, l.altitude, "
+            "  l.velocity, l.battery, l.battery_status, l.connection_type, l.trigger, "
+            "  l.timestamp, l.created_at "
+            "  FROM public.locations l "
+            "  ORDER BY l.created_at desc "
+            "  LIMIT $1 OFFSET $2"
+            ") "
+            "SELECT page.*, ga.display_address "
+            "FROM page "
+            "LEFT JOIN public.geocoded_addresses ga ON ga.location_id = page.id AND ga.source = 'owntracks' "
+            "ORDER BY page.created_at desc",
+            50,
+            0,
+        )
+    )
+    print(f"\n[locations first page] took {duration_ms:.2f}ms")
+    assert duration_ms < 500, f"locations first page took {duration_ms:.2f}ms -- possible regression in the CTE fencing"
+
+
+@pytest.mark.asyncio
 async def test_mv_garmin_track_point_cells_coverage_baseline(live_db: DatabaseService) -> None:
     """Geocoding coverage aggregate: cold-cache baseline, not sped up here.
 

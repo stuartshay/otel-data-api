@@ -124,15 +124,16 @@ async def test_geocoded_addresses_nearest_match_regression_guard(live_db: Databa
 
 @pytest.mark.asyncio
 async def test_garmin_track_points_full_fetch_baseline(live_db: DatabaseService) -> None:
-    """Full-track fetch by activity_id: baseline only, not fixed here.
+    """Full-track fetch by activity_id: baseline for the *default* (unbinned) path.
 
     Indexes are already correct (composite unique (activity_id, timestamp)
     index + GiST on geog). New Relic's 15s max is raw data volume: some
     activities return tens of thousands of unpaginated rows/columns. This
-    test documents today's baseline against the largest real activity in the
-    DB; capping/paginating large-activity responses is a separate follow-up,
-    not addressed here. Query matches
-    app/routers/garmin.py's chart-data handler.
+    remains the default response shape for backward compatibility -- see
+    test_chart_data_bins_is_fast below for the opt-in fix (a `bins` query
+    param on GET .../chart-data). This test documents the raw path's
+    baseline cost for existing callers who still need every point. Query
+    matches app/routers/garmin.py's chart-data handler (no `bins`).
     """
     row = await live_db.fetchrow(
         "SELECT activity_id, COUNT(*) AS n FROM public.garmin_track_points GROUP BY activity_id ORDER BY n DESC LIMIT 1"
@@ -155,6 +156,40 @@ async def test_garmin_track_points_full_fetch_baseline(live_db: DatabaseService)
     )
     assert duration_ms < 4000, (
         f"full-track fetch for activity {row['activity_id']} ({row['n']} points) took {duration_ms:.2f}ms"
+    )
+
+
+@pytest.mark.asyncio
+async def test_chart_data_bins_is_fast(live_db: DatabaseService) -> None:
+    """GET .../chart-data?bins=N: the opt-in fix for the full-fetch baseline above.
+
+    SQL-side time-bucketing (WIDTH_BUCKET, mirroring the existing
+    get_segment_effort_series bins pattern) instead of returning every raw
+    row -- same GarminChartPoint response shape, just at most `bins` rows.
+    Verified against prod on the busiest real activity (13,720 raw points,
+    440 bucketed rows): server-side execution (`EXPLAIN ANALYZE`) measured
+    ~69ms there and ~44ms on a second activity with heart-rate/cadence data;
+    this test's full round trip through asyncpg (what it actually asserts
+    below) runs closer to ~150-160ms, vs. 1.1-2.1s for the same activities'
+    raw fetch above -- both the query cost and the response payload shrink
+    by roughly the same ~30x the point count does.
+    """
+    row = await live_db.fetchrow(
+        "SELECT activity_id, COUNT(*) AS n FROM public.garmin_track_points GROUP BY activity_id ORDER BY n DESC LIMIT 1"
+    )
+    if row is None:
+        pytest.skip("no garmin_track_points to test against")
+    assert row is not None  # narrows for type checkers; skip() above never returns
+
+    from app.routers.garmin import CHART_DATA_BINNED_SQL
+
+    rows, duration_ms = await _timed(live_db.fetch(CHART_DATA_BINNED_SQL, row["activity_id"], 500))
+    print(
+        f"\n[chart-data bins=500] activity_id={row['activity_id']} ({row['n']} raw points) -> {len(rows)} bucketed rows in {duration_ms:.2f}ms"
+    )
+    assert len(rows) <= 500
+    assert duration_ms < 1000, (
+        f"binned chart-data took {duration_ms:.2f}ms for {row['n']} raw points -- expected well under the raw-fetch baseline"
     )
 
 

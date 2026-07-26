@@ -626,6 +626,50 @@ async def list_track_points(
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
 
 
+# Bins by time (not distance, unlike SEGMENT_EFFORT_SERIES_SQL) since
+# chart-data's contract is a full activity time series, not a single
+# distance-bounded effort. No GENERATE_SERIES grid: unlike the fixed-fraction
+# effort series axis, a chart series has no need to represent empty buckets,
+# so a plain GROUP BY already yields at most $2 rows in chronological order.
+# Categorical columns (surface_type, effort_level) use the per-bucket mode;
+# everything else numeric is averaged and rounded back to its column's type.
+CHART_DATA_BINNED_SQL = """
+WITH pts AS (
+    SELECT latitude, longitude, altitude, distance_from_start_km, speed_kmh,
+           heart_rate, hr_zone, respiration_rate, cadence, temperature_c,
+           surface_type, effort_level, EXTRACT(EPOCH FROM timestamp) AS ts_epoch
+    FROM public.garmin_track_points
+    WHERE activity_id = $1
+),
+bounds AS (
+    SELECT MIN(ts_epoch) AS t0, MAX(ts_epoch) AS t1 FROM pts
+),
+binned AS (
+    SELECT LEAST(GREATEST(WIDTH_BUCKET(p.ts_epoch, b.t0, b.t1, $2), 1), $2) AS bucket,
+           AVG(p.latitude) AS latitude,
+           AVG(p.longitude) AS longitude,
+           to_timestamp(AVG(p.ts_epoch)) AS timestamp,
+           AVG(p.altitude) AS altitude,
+           AVG(p.distance_from_start_km) AS distance_from_start_km,
+           AVG(p.speed_kmh) AS speed_kmh,
+           ROUND(AVG(p.heart_rate) FILTER (WHERE p.heart_rate > 0))::int AS heart_rate,
+           ROUND(AVG(p.hr_zone))::int AS hr_zone,
+           ROUND(AVG(p.respiration_rate))::int AS respiration_rate,
+           ROUND(AVG(p.cadence))::int AS cadence,
+           ROUND(AVG(p.temperature_c))::int AS temperature_c,
+           MODE() WITHIN GROUP (ORDER BY p.surface_type) AS surface_type,
+           MODE() WITHIN GROUP (ORDER BY p.effort_level) AS effort_level
+    FROM pts p CROSS JOIN bounds b
+    WHERE b.t1 > b.t0
+    GROUP BY 1
+)
+SELECT latitude, longitude, timestamp, altitude, distance_from_start_km, speed_kmh,
+       heart_rate, hr_zone, respiration_rate, cadence, temperature_c, surface_type, effort_level
+FROM binned
+ORDER BY bucket
+"""
+
+
 @router.get(
     "/activities/{activity_id}/chart-data",
     responses={404: {"description": ACTIVITY_NOT_FOUND}},
@@ -633,18 +677,35 @@ async def list_track_points(
 async def get_chart_data(
     request: Request,
     activity_id: Annotated[str, fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"])],
+    bins: Annotated[
+        int | None,
+        Query(
+            ge=10,
+            le=2000,
+            description="When set, downsamples to at most this many time-bucketed points "
+            "(numeric columns averaged, categorical columns use the per-bucket mode) instead "
+            "of every raw row -- large activities can have tens of thousands of points. "
+            "Omit for the full, unbinned series.",
+        ),
+    ] = None,
 ) -> list[GarminChartPoint]:
-    """Return all track points for chart rendering (no pagination).
+    """Return track points for chart rendering, in full or time-bucketed.
 
-    Provides the complete time-series data (altitude, speed, heart rate, cadence)
-    for an activity, ordered by timestamp. Uniqueness is guaranteed by the
-    UNIQUE(activity_id, timestamp) database constraint.
+    Provides time-series data (altitude, speed, heart rate, cadence) for an
+    activity, ordered by timestamp. Uniqueness of the raw (unbinned) series is
+    guaranteed by the UNIQUE(activity_id, timestamp) database constraint. Use
+    `bins` to downsample large activities instead of paying to fetch and
+    serialize every raw point.
     """
     db = request.app.state.db
 
     exists = await db.fetchval(SQL_ACTIVITY_EXISTS, activity_id)
     if not exists:
         raise HTTPException(status_code=404, detail=ACTIVITY_NOT_FOUND)
+
+    if bins is not None:
+        rows = await db.fetch(CHART_DATA_BINNED_SQL, activity_id, bins)
+        return [GarminChartPoint(**dict(row)) for row in rows]
 
     rows = await db.fetch(
         "SELECT latitude, longitude, timestamp, altitude, "

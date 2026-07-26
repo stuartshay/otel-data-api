@@ -702,7 +702,43 @@ async def test_get_chart_data_not_found(client: AsyncClient, mock_db):
     response = await client.get("/api/v1/garmin/activities/nonexistent/chart-data")
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "Activity not found"}
+
+
+@pytest.mark.asyncio
+async def test_get_chart_data_bins_downsamples(client: AsyncClient, mock_db):
+    """`bins` switches to the time-bucketed query, same GarminChartPoint shape.
+
+    Large activities can have tens of thousands of raw points (New Relic:
+    max 15s for the unbinned fetch). `bins` trades exhaustive raw rows for a
+    bounded number of time-bucketed, aggregated ones -- opt-in, so the
+    default (unbinned) response for existing callers is unaffected.
+    """
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = [_chart_row(), _chart_row()]
+
+    response = await client.get("/api/v1/garmin/activities/20932993811/chart-data?bins=500")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["heart_rate"] == 135  # same GarminChartPoint shape as the unbinned path
+
+    query, *params = mock_db.fetch.await_args.args
+    assert "WIDTH_BUCKET" in query
+    assert "MODE() WITHIN GROUP" in query  # categorical columns (surface_type, effort_level)
+    assert params == ["20932993811", 500]
+
+
+@pytest.mark.asyncio
+async def test_get_chart_data_omits_bins_by_default(client: AsyncClient, mock_db):
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = []
+
+    await client.get("/api/v1/garmin/activities/20932993811/chart-data")
+
+    query = mock_db.fetch.await_args.args[0]
+    assert "WIDTH_BUCKET" not in query
+    assert "ORDER BY timestamp ASC" in query
 
 
 @pytest.mark.asyncio

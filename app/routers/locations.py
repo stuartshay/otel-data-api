@@ -107,7 +107,10 @@ async def list_locations(
     # every row with a non-null location_id per the table's CHECK constraint,
     # but stating it lets the planner use the existing partial unique index
     # (uniq_geocoded_addresses_owntracks_location) instead of a full scan.
-    bare_sort = qualified_sort.removeprefix("l.")
+    # `sort` (not qualified_sort) for the outer ORDER BY: it's already
+    # whitelist-validated above and names exactly the column `page` selects,
+    # so it doesn't depend on _SORT_COLUMN_MAP's values staying simple
+    # "l.<column>" strings the way string-stripping qualified_sort would.
     data_query = (
         f"WITH page AS MATERIALIZED ("
         f"  SELECT l.id, l.device_id, l.tid, l.latitude, l.longitude, l.accuracy, l.altitude, "
@@ -121,7 +124,7 @@ async def list_locations(
         f"SELECT page.*, ga.display_address "
         f"FROM page "
         f"LEFT JOIN public.geocoded_addresses ga ON ga.location_id = page.id AND ga.source = 'owntracks' "
-        f"ORDER BY page.{bare_sort} {order}"
+        f"ORDER BY page.{sort} {order}"
     )
     params.extend([limit, offset])
     rows = await db.fetch(data_query, *params)

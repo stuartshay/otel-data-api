@@ -166,12 +166,13 @@ async def test_chart_data_bins_is_fast(live_db: DatabaseService) -> None:
     SQL-side time-bucketing (WIDTH_BUCKET, mirroring the existing
     get_segment_effort_series bins pattern) instead of returning every raw
     row -- same GarminChartPoint response shape, just at most `bins` rows.
-    Verified against prod on the busiest real activity (13,720 raw points):
-    440 bucketed rows in ~69ms and ~44ms across two different activities
-    (one GPS-only, one with heart rate/cadence data) via EXPLAIN ANALYZE,
-    vs. 1.1-2s for the same activities' raw fetch above -- both the query
-    cost and the response payload shrink by roughly the same ~30x the point
-    count does.
+    Verified against prod on the busiest real activity (13,720 raw points,
+    440 bucketed rows): server-side execution (`EXPLAIN ANALYZE`) measured
+    ~69ms there and ~44ms on a second activity with heart-rate/cadence data;
+    this test's full round trip through asyncpg (what it actually asserts
+    below) runs closer to ~150-160ms, vs. 1.1-2.1s for the same activities'
+    raw fetch above -- both the query cost and the response payload shrink
+    by roughly the same ~30x the point count does.
     """
     row = await live_db.fetchrow(
         "SELECT activity_id, COUNT(*) AS n FROM public.garmin_track_points GROUP BY activity_id ORDER BY n DESC LIMIT 1"

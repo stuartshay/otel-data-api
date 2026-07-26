@@ -645,7 +645,13 @@ bounds AS (
     SELECT MIN(ts_epoch) AS t0, MAX(ts_epoch) AS t1 FROM pts
 ),
 binned AS (
-    SELECT LEAST(GREATEST(WIDTH_BUCKET(p.ts_epoch, b.t0, b.t1, $2), 1), $2) AS bucket,
+    -- WIDTH_BUCKET errors if t0 = t1 (Postgres requires distinct bounds), which
+    -- a single-point activity or one where every point shares a timestamp would
+    -- hit -- collapse those into one bucket instead of calling WIDTH_BUCKET.
+    SELECT CASE
+               WHEN b.t1 > b.t0 THEN LEAST(GREATEST(WIDTH_BUCKET(p.ts_epoch, b.t0, b.t1, $2), 1), $2)
+               ELSE 1
+           END AS bucket,
            AVG(p.latitude) AS latitude,
            AVG(p.longitude) AS longitude,
            to_timestamp(AVG(p.ts_epoch)) AS timestamp,
@@ -660,7 +666,6 @@ binned AS (
            MODE() WITHIN GROUP (ORDER BY p.surface_type) AS surface_type,
            MODE() WITHIN GROUP (ORDER BY p.effort_level) AS effort_level
     FROM pts p CROSS JOIN bounds b
-    WHERE b.t1 > b.t0
     GROUP BY 1
 )
 SELECT latitude, longitude, timestamp, altitude, distance_from_start_km, speed_kmh,

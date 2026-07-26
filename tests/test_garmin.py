@@ -702,6 +702,7 @@ async def test_get_chart_data_not_found(client: AsyncClient, mock_db):
     response = await client.get("/api/v1/garmin/activities/nonexistent/chart-data")
 
     assert response.status_code == 404
+    assert response.json() == {"detail": "Activity not found"}
 
 
 @pytest.mark.asyncio
@@ -727,6 +728,10 @@ async def test_get_chart_data_bins_downsamples(client: AsyncClient, mock_db):
     assert "WIDTH_BUCKET" in query
     assert "MODE() WITHIN GROUP" in query  # categorical columns (surface_type, effort_level)
     assert params == ["20932993811", 500]
+    # WIDTH_BUCKET errors if its lower/upper bounds are equal -- a single-point
+    # activity, or one where every point shares a timestamp, must not reach it
+    assert "WHEN b.t1 > b.t0 THEN" in query
+    assert "WHERE b.t1 > b.t0" not in query  # verified live: this filtered out all rows instead
 
 
 @pytest.mark.asyncio

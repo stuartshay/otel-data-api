@@ -2035,6 +2035,28 @@ async def test_segment_route_lateral_prefers_lap_boundaries(client: AsyncClient,
 
 
 @pytest.mark.asyncio
+async def test_segment_route_proximity_prefers_shortest_pairing(client: AsyncClient, mock_db):
+    """The proximity fallback must pick the shortest start/end pairing.
+
+    An activity that passes near a point-to-point segment's start and end
+    coordinates more than once (e.g. an incidental pass-by elsewhere in a
+    long ride, plus the actual short traversal) produces multiple start
+    crossings. Pairing the chronologically-first start with whichever end
+    crossing follows it can grab an end from a much later, unrelated pass --
+    a route spanning hours of the ride instead of the real few-minute
+    traversal. Ordering candidate pairings by duration instead of by start
+    time picks the plausible (shortest) one.
+    """
+    mock_db.fetch.return_value = [_segment_row(1)]
+
+    response = await client.get("/api/v1/garmin/segments")
+
+    assert response.status_code == 200
+    query, *_ = mock_db.fetch.await_args.args
+    assert "ORDER BY (e_ts - s_ts) ASC" in query
+
+
+@pytest.mark.asyncio
 async def test_list_segments_null_route(client: AsyncClient, mock_db):
     mock_db.fetch.return_value = [_segment_row(1, route=None)]
 

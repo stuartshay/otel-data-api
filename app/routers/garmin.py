@@ -1620,10 +1620,18 @@ _SEGMENT_ROUTE_LATERAL = """
             FROM crossings
         ),
         proximity_bounds AS (
+            -- Shortest (not first-chronological) start/end pairing: an
+            -- activity that passes near the start/end points more than once
+            -- (e.g. the segment ridden once mid-ride, plus an incidental
+            -- pass-by elsewhere in a long route) pairs its first start with
+            -- whichever end comes next overall, which can be a crossing
+            -- hours later from a completely different part of the ride.
+            -- The shortest pairing is the one actually bounded by the
+            -- corridor tolerance on both ends, so it's the plausible match.
             SELECT s_ts, e_ts
             FROM proximity_bounds_raw
             WHERE is_start AND e_ts IS NOT NULL
-            ORDER BY s_ts ASC
+            ORDER BY (e_ts - s_ts) ASC
             LIMIT 1
         ),
         chosen_bounds AS (

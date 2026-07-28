@@ -48,10 +48,15 @@
       "groupSlug": "pydantic"
     },
     {
-      "description": "Group ALL OpenTelemetry packages (core + instrumentation) into one PR. They must move in lockstep: opentelemetry-sdk and the instrumentation packages each pin a matching opentelemetry-semantic-conventions, so bumping them in separate PRs causes pip ResolutionImpossible.",
+      "description": "Group ALL OpenTelemetry packages (core + instrumentation) into one PR. They must move in lockstep: opentelemetry-sdk and the instrumentation packages each pin a matching opentelemetry-semantic-conventions, so bumping them in separate PRs causes pip ResolutionImpossible. Explicit names (not a /^opentelemetry-/ regex) to match every other group in this file, and because the regex form silently failed to keep instrumentation-asyncpg/fastapi/httpx grouped with core across two release cycles (see otel-data-api#173) -- if a new opentelemetry-* package is added to requirements.txt, add it here too.",
       "matchManagers": ["pip_requirements"],
       "matchPackageNames": [
-        "/^opentelemetry-/"
+        "opentelemetry-api",
+        "opentelemetry-sdk",
+        "opentelemetry-exporter-otlp-proto-grpc",
+        "opentelemetry-instrumentation-asyncpg",
+        "opentelemetry-instrumentation-fastapi",
+        "opentelemetry-instrumentation-httpx"
       ],
       "groupName": "opentelemetry",
       "groupSlug": "opentelemetry"

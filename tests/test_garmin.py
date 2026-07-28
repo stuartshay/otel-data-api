@@ -1936,7 +1936,17 @@ def _segment_row(segment_id: int = 1, route: list[list[float]] | None = None) ->
 
 @pytest.mark.asyncio
 async def test_create_segment(client: AsyncClient, mock_db):
-    mock_db.fetchrow.return_value = _segment_row(7)
+    """distance_meters comes from the server-computed GPS route length.
+
+    Not from whatever the client sends -- Garmin devices can report a lap's
+    own distance_meters wildly wrong (e.g. GPS degradation near large
+    structures during an auto-lap trigger), and the client's "save this
+    lap as a segment" button passes that value through with no validation.
+    """
+    mock_db.fetchrow.side_effect = [
+        {"route_length_meters": 550.25, "straight_line_meters": 480.0},
+        _segment_row(7),
+    ]
 
     response = await client.post(
         "/api/v1/garmin/segments",
@@ -1946,6 +1956,7 @@ async def test_create_segment(client: AsyncClient, mock_db):
             "start_longitude": -73.96104321,
             "end_latitude": 40.79002409,
             "end_longitude": -73.96422816,
+            "distance_meters": 8046.72,
             "source_activity_id": "23493313338",
             "source_climb_index": 0,
         },
@@ -1956,9 +1967,65 @@ async def test_create_segment(client: AsyncClient, mock_db):
     assert body["id"] == 7
     assert body["name"] == "Harlem Hill"
     assert body["match_tolerance_meters"] == 35.0
-    query, *params = mock_db.fetchrow.await_args.args
-    assert "INSERT INTO public.garmin_segments" in query
-    assert params[0] == "Harlem Hill"
+    assert mock_db.fetchrow.await_count == 2
+    compute_query, *_ = mock_db.fetchrow.await_args_list[0].args
+    assert "LEFT JOIN LATERAL" in compute_query
+    assert "route_length_meters" in compute_query
+    insert_query, *insert_params = mock_db.fetchrow.await_args_list[1].args
+    assert "INSERT INTO public.garmin_segments" in insert_query
+    assert insert_params[0] == "Harlem Hill"
+    assert insert_params[6] == 550.25
+
+
+@pytest.mark.asyncio
+async def test_create_segment_falls_back_to_straight_line(client: AsyncClient, mock_db):
+    """When no route can be recovered, fall back to the straight-line distance."""
+    mock_db.fetchrow.side_effect = [
+        {"route_length_meters": None, "straight_line_meters": 480.0},
+        _segment_row(7),
+    ]
+
+    response = await client.post(
+        "/api/v1/garmin/segments",
+        json={
+            "name": "Manual Range",
+            "start_latitude": 40.79366846,
+            "start_longitude": -73.96104321,
+            "end_latitude": 40.79002409,
+            "end_longitude": -73.96422816,
+        },
+    )
+
+    assert response.status_code == 201
+    insert_query, *insert_params = mock_db.fetchrow.await_args_list[1].args
+    assert insert_params[6] == 480.0
+
+
+@pytest.mark.asyncio
+async def test_create_segment_errors_when_distance_computation_returns_no_row(client: AsyncClient, mock_db):
+    """A missing row from the distance-computation query is a server error.
+
+    Not a reason to fall back to the client-supplied distance_meters --
+    that would defeat the point of computing it server-side. The query
+    always yields exactly one row (a single-row `s` CTE, LEFT JOINed), so
+    None here means something is unexpectedly wrong with the DB.
+    """
+    mock_db.fetchrow.side_effect = [None]
+
+    response = await client.post(
+        "/api/v1/garmin/segments",
+        json={
+            "name": "Harlem Hill",
+            "start_latitude": 40.79366846,
+            "start_longitude": -73.96104321,
+            "end_latitude": 40.79002409,
+            "end_longitude": -73.96422816,
+            "distance_meters": 8046.72,
+        },
+    )
+
+    assert response.status_code == 500
+    assert mock_db.fetchrow.await_count == 1
 
 
 @pytest.mark.asyncio

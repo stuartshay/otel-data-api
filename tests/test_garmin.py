@@ -1,6 +1,7 @@
 """Tests for Garmin endpoints."""
 
 import dataclasses
+import time
 from datetime import UTC, date, datetime, timedelta
 
 import fastapi
@@ -783,6 +784,18 @@ def test_chart_data_cache_evicts_oldest_beyond_max_entries():
 
     assert cache.get("activity-0") is None  # oldest entry evicted
     assert cache.get(f"activity-{_CHART_DATA_CACHE_MAX_ENTRIES}") == []  # newest still present
+
+
+def test_chart_data_cache_prunes_expired_entries_on_get():
+    """An expired entry must not keep occupying a slot in the bounded
+    cache -- otherwise it can cause a still-valid entry to get LRU-evicted
+    early instead."""
+    cache = _ChartDataCache()
+    cache.set("activity-stale", [])
+    cache._entries["activity-stale"].expires_at = time.monotonic() - 1  # force expiry
+
+    assert cache.get("activity-stale") is None
+    assert "activity-stale" not in cache._entries
 
 
 @pytest.mark.asyncio

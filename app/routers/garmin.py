@@ -655,7 +655,14 @@ class _ChartDataCache:
 
     def get(self, activity_id: str) -> list[GarminChartPoint] | None:
         entry = self._entries.get(activity_id)
-        if entry is None or time.monotonic() >= entry.expires_at:
+        if entry is None:
+            return None
+        if time.monotonic() >= entry.expires_at:
+            # Prune rather than leave it occupying a slot: an expired entry
+            # nobody re-requests would otherwise sit in the bounded cache
+            # until aged out by insertion order, at the expense of a
+            # still-valid entry getting LRU-evicted early.
+            del self._entries[activity_id]
             return None
         self._entries.move_to_end(activity_id)
         return entry.points

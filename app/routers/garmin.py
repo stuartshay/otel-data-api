@@ -1531,9 +1531,13 @@ _SEGMENT_SELECT_COLUMNS = (
 )
 
 # Recover each segment's real path from its source activity GPS track and
-# return a PostGIS-simplified array of ordered [latitude, longitude] pairs.
-# Yields NULL route when the segment has no source activity or no matchable
-# slice, in which case the client falls back to a straight start->end line.
+# return a PostGIS-simplified array of ordered [latitude, longitude] pairs,
+# plus the route's real length in meters before simplification (route_length_meters)
+# -- used by create_segment to compute distance_meters server-side instead
+# of trusting the client. Yields NULL route/length when the segment has no
+# source activity or no matchable slice, in which case the client falls
+# back to a straight start->end line (and create_segment falls back to the
+# straight-line ST_Distance between the two points).
 #
 # When the segment was saved from a recorded lap (source_lap_index), that
 # lap's own start_time/duration_seconds give the exact slice boundaries --
@@ -1641,10 +1645,7 @@ _SEGMENT_ROUTE_LATERAL = """
             FULL OUTER JOIN proximity_bounds ON TRUE
         ),
         line AS (
-            SELECT ST_Simplify(
-                       ST_MakeLine(ST_MakePoint(t.longitude, t.latitude) ORDER BY t.timestamp ASC),
-                       0.00005
-                   ) AS geom
+            SELECT ST_MakeLine(ST_MakePoint(t.longitude, t.latitude) ORDER BY t.timestamp ASC) AS geom
             FROM public.garmin_track_points t, chosen_bounds
             WHERE t.activity_id = s.source_activity_id
               AND t.latitude IS NOT NULL
@@ -1652,15 +1653,23 @@ _SEGMENT_ROUTE_LATERAL = """
               AND chosen_bounds.s_ts IS NOT NULL
               AND chosen_bounds.e_ts IS NOT NULL
               AND t.timestamp BETWEEN chosen_bounds.s_ts AND chosen_bounds.e_ts
+        ),
+        -- Simplified only for the point array returned for map rendering;
+        -- route_length_meters below is measured on the line before simplification so
+        -- corner-cutting from ST_Simplify doesn't shrink the reported
+        -- distance.
+        simplified_line AS (
+            SELECT ST_Simplify(geom, 0.00005) AS geom FROM line
         )
         SELECT array_agg(
                    ARRAY[ST_Y((dp).geom), ST_X((dp).geom)]
                    ORDER BY (dp).path
-               ) AS route
-        FROM line
-        CROSS JOIN LATERAL ST_DumpPoints(line.geom) AS dp
-        WHERE line.geom IS NOT NULL
-          AND ST_NPoints(line.geom) >= 2
+               ) AS route,
+               (SELECT ST_Length(geom::geography) FROM line) AS route_length_meters
+        FROM simplified_line AS sl
+        CROSS JOIN LATERAL ST_DumpPoints(sl.geom) AS dp
+        WHERE sl.geom IS NOT NULL
+          AND ST_NPoints(sl.geom) >= 2
     ) r ON s.source_activity_id IS NOT NULL
 """
 
@@ -1695,8 +1704,46 @@ async def create_segment(
     body: GarminSegmentCreate,
     _user: Annotated[dict, Depends(require_auth)],
 ) -> GarminSegment:
-    """Save a new segment (path) from a climb, lap, or manual selection (auth required)."""
+    """Save a new segment (path) from a climb, lap, or manual selection (auth required).
+
+    distance_meters is computed server-side from GPS data rather than
+    trusting the client -- Garmin devices can report a lap's own recorded
+    distance (garmin_activity_laps.distance_meters) that disagrees sharply
+    with that same lap's actual track points (e.g. GPS degradation near
+    large structures during an auto-lap-by-distance trigger), and the
+    client (a "save this lap/climb as a segment" button) otherwise passes
+    that value straight through with no validation.
+    """
     db = request.app.state.db
+    computed = await db.fetchrow(
+        "WITH s AS ("
+        "    SELECT $1::double precision AS start_longitude, "
+        "           $2::double precision AS start_latitude, "
+        "           $3::double precision AS end_longitude, "
+        "           $4::double precision AS end_latitude, "
+        "           $5::double precision AS match_tolerance_meters, "
+        "           $6::varchar AS source_activity_id, "
+        "           $7::int AS source_lap_index"
+        ") "
+        "SELECT r.route_length_meters, "
+        "       ST_Distance("
+        "           ST_MakePoint($1, $2)::geography, ST_MakePoint($3, $4)::geography"
+        "       ) AS straight_line_meters "
+        f"FROM s {_SEGMENT_ROUTE_LATERAL}",
+        body.start_longitude,
+        body.start_latitude,
+        body.end_longitude,
+        body.end_latitude,
+        body.match_tolerance_meters,
+        body.source_activity_id,
+        body.source_lap_index,
+    )
+    distance_meters = (
+        computed["route_length_meters"]
+        if computed and computed["route_length_meters"] is not None
+        else (computed["straight_line_meters"] if computed else body.distance_meters)
+    )
+
     row = await db.fetchrow(
         "INSERT INTO public.garmin_segments "
         "(name, sport, start_latitude, start_longitude, end_latitude, end_longitude, "
@@ -1709,7 +1756,7 @@ async def create_segment(
         body.start_longitude,
         body.end_latitude,
         body.end_longitude,
-        body.distance_meters,
+        distance_meters,
         body.match_tolerance_meters,
         body.source_activity_id,
         body.source_lap_index,

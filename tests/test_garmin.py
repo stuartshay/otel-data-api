@@ -2002,6 +2002,33 @@ async def test_create_segment_falls_back_to_straight_line(client: AsyncClient, m
 
 
 @pytest.mark.asyncio
+async def test_create_segment_errors_when_distance_computation_returns_no_row(client: AsyncClient, mock_db):
+    """A missing row from the distance-computation query is a server error.
+
+    Not a reason to fall back to the client-supplied distance_meters --
+    that would defeat the point of computing it server-side. The query
+    always yields exactly one row (a single-row `s` CTE, LEFT JOINed), so
+    None here means something is unexpectedly wrong with the DB.
+    """
+    mock_db.fetchrow.side_effect = [None]
+
+    response = await client.post(
+        "/api/v1/garmin/segments",
+        json={
+            "name": "Harlem Hill",
+            "start_latitude": 40.79366846,
+            "start_longitude": -73.96104321,
+            "end_latitude": 40.79002409,
+            "end_longitude": -73.96422816,
+            "distance_meters": 8046.72,
+        },
+    )
+
+    assert response.status_code == 500
+    assert mock_db.fetchrow.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_list_segments(client: AsyncClient, mock_db):
     mock_db.fetch.return_value = [_segment_row(1), _segment_row(2)]
 

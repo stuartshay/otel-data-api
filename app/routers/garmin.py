@@ -1738,10 +1738,18 @@ async def create_segment(
         body.source_activity_id,
         body.source_lap_index,
     )
+    if computed is None:
+        # The query above always yields exactly one row (a single-row `s`
+        # CTE, LEFT JOINed) -- a missing row means something is
+        # unexpectedly wrong with the DB, not that GPS data is merely
+        # unavailable. Treat it as a server error rather than silently
+        # falling back to the client-supplied distance_meters, which would
+        # defeat the point of computing it server-side.
+        raise HTTPException(status_code=500, detail="Failed to compute segment distance")
     distance_meters = (
         computed["route_length_meters"]
-        if computed and computed["route_length_meters"] is not None
-        else (computed["straight_line_meters"] if computed else body.distance_meters)
+        if computed["route_length_meters"] is not None
+        else computed["straight_line_meters"]
     )
 
     row = await db.fetchrow(

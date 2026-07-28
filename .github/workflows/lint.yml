@@ -5,11 +5,17 @@ on:
     branches: [master, develop]
   pull_request:
     branches: [master, develop]
+    # Explicit types (GitHub's default omits ready_for_review): without
+    # this, marking a draft "ready for review" wouldn't re-trigger the
+    # workflow unless a new commit was also pushed, leaving the required
+    # checks in their draft-skipped (passing) state through a merge.
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   pre-commit:
     name: Pre-commit Checks
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -39,6 +45,7 @@ jobs:
   test:
     name: Python Tests
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     services:
       postgres:
         image: postgres:18-alpine
@@ -119,6 +126,7 @@ jobs:
   docker-lint:
     name: Dockerfile Lint
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -132,6 +140,7 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     steps:
       - name: Checkout
         uses: actions/checkout@v7

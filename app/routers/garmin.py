@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import time
 import uuid
+from collections import OrderedDict
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
@@ -626,6 +629,46 @@ async def list_track_points(
     return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
 
 
+# Full-resolution chart-data cache. Deliberately unbounded resolution (see
+# get_chart_data's caller in otel-data-ui: "Full-resolution points for
+# accurate time-series charts" -- downsampling via `bins` already exists but
+# is opt-in, not a default, so it isn't a substitute here) -- returning every
+# raw point for a long activity is what made this NR's slowest recurring
+# query (up to ~3.9s). garmin_track_points rows are never mutated once
+# synced (writes only come from the separate garmin-sync service, and only
+# ever insert new activities), so a short-TTL cache carries no staleness
+# risk beyond that window; bounded to a max entry count so it can't grow
+# unboundedly across many distinct activities.
+_CHART_DATA_CACHE_TTL_SECONDS = 900.0
+_CHART_DATA_CACHE_MAX_ENTRIES = 64
+
+
+@dataclass
+class _ChartDataCacheEntry:
+    points: list[GarminChartPoint]
+    expires_at: float
+
+
+class _ChartDataCache:
+    def __init__(self) -> None:
+        self._entries: OrderedDict[str, _ChartDataCacheEntry] = OrderedDict()
+
+    def get(self, activity_id: str) -> list[GarminChartPoint] | None:
+        entry = self._entries.get(activity_id)
+        if entry is None or time.monotonic() >= entry.expires_at:
+            return None
+        self._entries.move_to_end(activity_id)
+        return entry.points
+
+    def set(self, activity_id: str, points: list[GarminChartPoint]) -> None:
+        self._entries[activity_id] = _ChartDataCacheEntry(
+            points=points, expires_at=time.monotonic() + _CHART_DATA_CACHE_TTL_SECONDS
+        )
+        self._entries.move_to_end(activity_id)
+        while len(self._entries) > _CHART_DATA_CACHE_MAX_ENTRIES:
+            self._entries.popitem(last=False)
+
+
 # Bins by time (not distance, unlike SEGMENT_EFFORT_SERIES_SQL) since
 # chart-data's contract is a full activity time series, not a single
 # distance-bounded effort. No GENERATE_SERIES grid: unlike the fixed-fraction
@@ -712,6 +755,15 @@ async def get_chart_data(
         rows = await db.fetch(CHART_DATA_BINNED_SQL, activity_id, bins)
         return [GarminChartPoint(**dict(row)) for row in rows]
 
+    cache: _ChartDataCache | None = getattr(request.app.state, "_chart_data_cache", None)
+    if cache is None:
+        cache = _ChartDataCache()
+        request.app.state._chart_data_cache = cache
+
+    cached = cache.get(activity_id)
+    if cached is not None:
+        return cached
+
     rows = await db.fetch(
         "SELECT latitude, longitude, timestamp, altitude, "
         "distance_from_start_km, speed_kmh, heart_rate, hr_zone, respiration_rate, "
@@ -720,7 +772,9 @@ async def get_chart_data(
         activity_id,
     )
 
-    return [GarminChartPoint(**dict(row)) for row in rows]
+    points = [GarminChartPoint(**dict(row)) for row in rows]
+    cache.set(activity_id, points)
+    return points
 
 
 @router.get(

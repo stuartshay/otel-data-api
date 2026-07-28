@@ -1,6 +1,7 @@
 """Tests for Garmin endpoints."""
 
 import dataclasses
+import time
 from datetime import UTC, date, datetime, timedelta
 
 import fastapi
@@ -14,6 +15,7 @@ from app import create_app
 from app.auth import require_auth
 from app.config import Config
 from app.models.garmin import SegmentEffortSeriesBin, SegmentEffortSeriesResponse
+from app.routers.garmin import _CHART_DATA_CACHE_MAX_ENTRIES, _ChartDataCache
 
 
 def _activity_row(activity_id: str = "20932993811") -> dict:
@@ -744,6 +746,56 @@ async def test_get_chart_data_omits_bins_by_default(client: AsyncClient, mock_db
     query = mock_db.fetch.await_args.args[0]
     assert "WIDTH_BUCKET" not in query
     assert "ORDER BY timestamp ASC" in query
+
+
+@pytest.mark.asyncio
+async def test_get_chart_data_caches_unbinned_series(client: AsyncClient, mock_db):
+    """The unbinned path is cached per activity_id -- garmin_track_points
+    rows are never mutated once synced, so a repeat request for the same
+    activity shouldn't pay for the full scan+fetch again (New Relic: this
+    was otel-data-api's slowest recurring query, up to ~3.9s).
+    """
+    mock_db.fetchval.return_value = 1
+    mock_db.fetch.return_value = [_chart_row()]
+
+    first = await client.get("/api/v1/garmin/activities/20932993811/chart-data")
+    second = await client.get("/api/v1/garmin/activities/20932993811/chart-data")
+
+    assert first.status_code == second.status_code == 200
+    assert first.json() == second.json()
+    assert mock_db.fetch.await_count == 1
+
+    # A different activity still triggers its own fetch (not a cache hit).
+    await client.get("/api/v1/garmin/activities/99999999999/chart-data")
+    assert mock_db.fetch.await_count == 2
+
+    # bins requests bypass the unbinned cache entirely -- always fresh.
+    await client.get("/api/v1/garmin/activities/20932993811/chart-data?bins=500")
+    assert mock_db.fetch.await_count == 3
+
+
+def test_chart_data_cache_evicts_oldest_beyond_max_entries():
+    """Bounded so many distinct activities viewed over time can't grow the
+    per-process cache unboundedly."""
+    cache = _ChartDataCache()
+
+    for i in range(_CHART_DATA_CACHE_MAX_ENTRIES + 1):
+        cache.set(f"activity-{i}", [])
+
+    assert cache.get("activity-0") is None  # oldest entry evicted
+    assert cache.get(f"activity-{_CHART_DATA_CACHE_MAX_ENTRIES}") == []  # newest still present
+
+
+def test_chart_data_cache_prunes_expired_entries_on_get():
+    """An expired entry must not keep occupying a slot in the bounded
+    cache -- otherwise it can cause a still-valid entry to get LRU-evicted
+    early instead."""
+    cache = _ChartDataCache()
+    cache.set("activity-stale", [])
+    cache._entries["activity-stale"].expires_at = time.monotonic() - 1  # force expiry
+
+    assert cache.get("activity-stale") is None
+    assert "activity-stale" not in cache._entries
 
 
 @pytest.mark.asyncio

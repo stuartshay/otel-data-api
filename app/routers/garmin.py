@@ -1631,7 +1631,7 @@ _SEGMENT_ROUTE_LATERAL = """
             SELECT s_ts, e_ts
             FROM proximity_bounds_raw
             WHERE is_start AND e_ts IS NOT NULL
-            ORDER BY (e_ts - s_ts) ASC
+            ORDER BY (e_ts - s_ts) ASC, s_ts ASC
             LIMIT 1
         ),
         chosen_bounds AS (

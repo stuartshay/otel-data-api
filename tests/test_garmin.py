@@ -2053,7 +2053,12 @@ async def test_segment_route_proximity_prefers_shortest_pairing(client: AsyncCli
 
     assert response.status_code == 200
     query, *_ = mock_db.fetch.await_args.args
-    assert "ORDER BY (e_ts - s_ts) ASC" in query
+    # Duration first, then start time as a tie-breaker so two candidate
+    # pairings of equal duration still resolve deterministically.
+    assert "ORDER BY (e_ts - s_ts) ASC, s_ts ASC" in query
+    # Guard against the old chronological-first selection being
+    # reintroduced elsewhere in the query.
+    assert "ORDER BY s_ts ASC" not in query
 
 
 @pytest.mark.asyncio

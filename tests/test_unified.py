@@ -3,7 +3,11 @@
 from datetime import date, timedelta
 
 import pytest
-from httpx import AsyncClient
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+
+from app import create_app
+from app.config import Config
 
 
 def _unified_row() -> dict:
@@ -249,3 +253,42 @@ async def test_list_unified_gps_both_filters(client: AsyncClient, mock_db):
     count_query = mock_db.fetchval.await_args.args[0]
     assert "DISTINCT ON" in count_query
     assert "(speed_kmh > 0 OR speed_kmh IS NULL)" in count_query
+
+
+# --- Internal daily-summary refresh endpoint tests ---
+
+
+@pytest.mark.asyncio
+async def test_internal_refresh_daily_summary_no_auth_required(client: AsyncClient, mock_db):
+    """Internal endpoint should succeed without authentication."""
+    response = await client.post("/internal/gps/daily-summary/refresh")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "refreshed"}
+
+    query = mock_db.execute.await_args.args[0]
+    assert "REFRESH MATERIALIZED VIEW" in query
+    assert "daily_activity_summary" in query
+
+
+@pytest.mark.asyncio
+async def test_internal_refresh_daily_summary_disabled_by_config(config: Config, mock_db):
+    """Internal endpoint should return 404 when internal_endpoints_enabled is False."""
+    from app.config import Config as ConfigCls
+
+    disabled_config = ConfigCls(
+        db_host=config.db_host,
+        db_port=config.db_port,
+        db_name=config.db_name,
+        db_user=config.db_user,
+        db_password=config.db_password,
+        internal_endpoints_enabled=False,
+    )
+    disabled_app: FastAPI = create_app(disabled_config)
+    disabled_app.state.db = mock_db
+
+    transport = ASGITransport(app=disabled_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as disabled_client:
+        response = await disabled_client.post("/internal/gps/daily-summary/refresh")
+
+    assert response.status_code == 404

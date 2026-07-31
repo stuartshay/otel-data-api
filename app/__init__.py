@@ -91,6 +91,7 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(geocoding.router)
     if config.internal_endpoints_enabled:
         app.include_router(geocoding.internal_router)
+        app.include_router(unified.internal_router)
 
     # OpenTelemetry auto-instrumentation (opt-in via OTEL_TRACES_ENABLED)
     app.state.tracer_provider = setup_tracing(app, config)

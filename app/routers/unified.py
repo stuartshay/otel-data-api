@@ -11,6 +11,7 @@ from app.models import PaginatedResponse
 from app.models.spatial import DailyActivitySummary, DailySummaryDateRange, UnifiedGpsPoint
 
 router = APIRouter(prefix="/api/v1/gps", tags=["Unified GPS"])
+internal_router = APIRouter(prefix="/internal/gps", tags=["Internal"])
 
 # Default lookback period when no date filters are provided.
 # Prevents full-table scans on the 4M+ row unified view.
@@ -226,3 +227,18 @@ async def daily_summary_date_range(request: Request) -> DailySummaryDateRange:
     if not row or row["min_date"] is None:
         raise HTTPException(status_code=404, detail="No daily summary data found")
     return DailySummaryDateRange(min_date=row["min_date"], max_date=row["max_date"])
+
+
+@internal_router.post("/daily-summary/refresh")
+async def refresh_daily_summary(request: Request) -> dict[str, str]:
+    """Refresh the daily_activity_summary materialized view.
+
+    daily_activity_summary is a MATERIALIZED VIEW (migration 000037), not a
+    live view, so new OwnTracks/Garmin data is invisible to readers until
+    this runs. No unique key exists across the underlying FULL JOIN, so a
+    plain (briefly exclusive-locking) REFRESH is used rather than
+    REFRESH ... CONCURRENTLY.
+    """
+    db = request.app.state.db
+    await db.execute("REFRESH MATERIALIZED VIEW public.daily_activity_summary")
+    return {"status": "refreshed"}

@@ -26,6 +26,7 @@ from app.models.garmin import (
     GarminActivityManualUpdate,
     GarminActivitySensor,
     GarminActivityTotal,
+    GarminActivityTrimRequest,
     GarminActivityWeather,
     GarminActivityWeatherHourly,
     GarminChartPoint,
@@ -94,6 +95,7 @@ ACTIVITY_BY_ID_SELECT = (
     "a.total_descent_m, a.total_distance, a.avg_pace, a.device_manufacturer, "
     "a.avg_temperature_c, a.min_temperature_c, a.max_temperature_c, "
     "a.total_elapsed_time, a.total_timer_time, a.created_at, a.uploaded_at, "
+    "a.is_modified, a.modified_at, a.trim_status, a.trim_error, "
     "a.device_id, d.manufacturer AS dev_manufacturer, "
     "d.garmin_product AS dev_garmin_product, d.model AS dev_model, "
     "d.software_version AS dev_software_version, "
@@ -323,6 +325,7 @@ async def list_activities(
         f"a.device_manufacturer, a.avg_temperature_c, a.min_temperature_c, "
         f"a.max_temperature_c, a.total_elapsed_time, a.total_timer_time, "
         f"a.created_at, a.uploaded_at, "
+        f"a.is_modified, a.modified_at, a.trim_status, a.trim_error, "
         f"a.device_id, d.manufacturer AS dev_manufacturer, "
         f"d.garmin_product AS dev_garmin_product, d.model AS dev_model, "
         f"d.software_version AS dev_software_version, "
@@ -496,6 +499,103 @@ async def patch_activity(
     )
     if not updated:
         raise HTTPException(status_code=404, detail=ACTIVITY_NOT_FOUND)
+
+    row = await db.fetchrow(ACTIVITY_BY_ID_SELECT, activity_id)
+    if not row:
+        raise HTTPException(status_code=404, detail=ACTIVITY_NOT_FOUND)
+    return GarminActivity.from_row(row)
+
+
+@router.post(
+    "/activities/{activity_id}/trim",
+    responses={
+        **AUTH_RESPONSES,
+        400: {"description": "Cutoff timestamp out of range"},
+        404: {"description": ACTIVITY_NOT_FOUND},
+    },
+)
+async def trim_activity(
+    request: Request,
+    body: Annotated[GarminActivityTrimRequest, fastapi.Body()],
+    activity_id: Annotated[str, fastapi.Path(description=DESC_ACTIVITY_ID, examples=["20932993811"])],
+    _user: Annotated[dict, Depends(require_auth)],
+) -> GarminActivity:
+    """Delete trailing track points at/after a cutoff (auth required).
+
+    Removes local ``garmin_track_points`` at or after ``cutoff_timestamp``,
+    shrinks the activity's totals to match the kept range, and marks
+    ``trim_status = 'trim_pending'`` so the garmin-sync agent deletes and
+    re-uploads a trimmed FIT file on Garmin Connect asynchronously (mirrors
+    the ``delete_segment`` hand-off pattern). ``is_modified``/``modified_at``
+    are set permanently on first trim, independent of that async status.
+    """
+    db = request.app.state.db
+
+    activity_row = await db.fetchrow(
+        "SELECT start_time, end_time, modified_at FROM public.garmin_activities WHERE activity_id = $1",
+        activity_id,
+    )
+    if activity_row is None:
+        raise HTTPException(status_code=404, detail=ACTIVITY_NOT_FOUND)
+
+    start_time = activity_row["start_time"]
+    end_time = activity_row["end_time"]
+    cutoff = body.cutoff_timestamp
+    if (start_time is not None and cutoff <= start_time) or (end_time is not None and cutoff >= end_time):
+        raise HTTPException(status_code=400, detail="cutoff_timestamp must fall strictly within the activity")
+
+    async with db.pool.acquire() as conn, conn.transaction():
+        await conn.execute(
+            "DELETE FROM public.garmin_track_points WHERE activity_id = $1 AND timestamp >= $2",
+            activity_id,
+            cutoff,
+        )
+        totals = await conn.fetchrow(
+            "SELECT MAX(timestamp) AS end_time, MAX(distance) AS total_distance, "
+            "MAX(speed) AS max_speed, AVG(speed) AS avg_speed "
+            "FROM public.garmin_track_points WHERE activity_id = $1",
+            activity_id,
+        )
+
+        def _as_float(value: Any) -> float | None:
+            return float(value) if value is not None else None
+
+        new_end_time = totals["end_time"] if totals else None
+        new_total_distance = _as_float(totals["total_distance"]) if totals else None
+        new_max_speed = _as_float(totals["max_speed"]) if totals else None
+        new_avg_speed = _as_float(totals["avg_speed"]) if totals else None
+        new_elapsed = (new_end_time - start_time).total_seconds() if new_end_time and start_time else None
+
+        await conn.execute(
+            "UPDATE public.garmin_activities SET "
+            "end_time = $2, total_distance = $3, distance_km = $4, "
+            "total_elapsed_time = $5, duration_seconds = $6, "
+            "max_speed = $7, max_speed_kmh = $8, avg_speed = $9, avg_speed_kmh = $10, "
+            "trim_status = 'trim_pending', trim_cutoff_timestamp = $11, trim_error = NULL, "
+            "is_modified = TRUE, modified_at = COALESCE(modified_at, NOW()) "
+            "WHERE activity_id = $1",
+            activity_id,
+            new_end_time,
+            new_total_distance,
+            (new_total_distance / 1000.0) if new_total_distance is not None else None,
+            new_elapsed,
+            int(new_elapsed) if new_elapsed is not None else None,
+            new_max_speed,
+            (new_max_speed * 3.6) if new_max_speed is not None else None,
+            new_avg_speed,
+            (new_avg_speed * 3.6) if new_avg_speed is not None else None,
+            cutoff,
+        )
+
+    config = request.app.state.config
+    base_url = config.garmin_sync_base_url.rstrip("/")
+    try:
+        async with httpx.AsyncClient(base_url=base_url, timeout=config.garmin_sync_timeout_seconds) as client:
+            await client.post(f"/internal/trim/trigger?activity_id={activity_id}")
+    except httpx.HTTPError:
+        # Non-fatal: the scheduled poll loop in garmin-sync will pick up
+        # trim_pending activities as a safety net if this trigger fails.
+        logger.warning("garmin_trim_trigger_failed", garmin_activity_id=activity_id)
 
     row = await db.fetchrow(ACTIVITY_BY_ID_SELECT, activity_id)
     if not row:

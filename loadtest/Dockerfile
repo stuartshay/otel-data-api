@@ -1,4 +1,4 @@
-FROM locustio/locust:2.46.2
+FROM locustio/locust:2.46.3
 
 COPY locustfile.py /mnt/locust/locustfile.py
 COPY stress_test.py /mnt/locust/stress_test.py

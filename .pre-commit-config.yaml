@@ -25,7 +25,7 @@ repos:
         args: ['--fix', '--config', '.markdownlint.yaml']
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.1
+    rev: v0.16.2
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix, --line-length=120]

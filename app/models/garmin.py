@@ -85,6 +85,16 @@ class GarminActivity(BaseModel):
     uploaded_at: datetime | None = Field(default=None, description="UTC timestamp when the FIT file was uploaded")
     track_point_count: int | None = Field(default=None, description="Number of GPS track points in this activity")
     device: GarminDevice | None = Field(default=None, description="Recording device metadata")
+    is_modified: bool = Field(
+        default=False, description="True once this activity has been edited (e.g. trimmed) from Garmin's original"
+    )
+    modified_at: datetime | None = Field(default=None, description="UTC timestamp of the first modification, if any")
+    trim_status: str | None = Field(
+        default=None,
+        description="NULL under normal operation; trim_pending while Garmin Connect sync is in flight; "
+        "trim_failed if the last attempt errored (see trim_error)",
+    )
+    trim_error: str | None = Field(default=None, description="Error from the last failed Garmin Connect trim attempt")
 
     @classmethod
     def from_row(cls, row: Mapping[str, Any]) -> GarminActivity:
@@ -602,6 +612,17 @@ class GarminActivityManualUpdate(BaseModel):
                 }
             ]
         },
+    }
+
+
+class GarminActivityTrimRequest(BaseModel):
+    """Request body to trim trailing track points from a Garmin activity."""
+
+    cutoff_timestamp: datetime = Field(description="UTC timestamp; track points at or after this instant are removed")
+
+    model_config = {
+        "extra": "forbid",
+        "json_schema_extra": {"examples": [{"cutoff_timestamp": "2026-08-02T23:28:00+00:00"}]},
     }
 
 
